@@ -177,6 +177,46 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
     setResponseToDelete(null);
   };
 
+  // Quick course setting & Note modal for responses list
+  const [editingNoteResponse, setEditingNoteResponse] = useState<PlacementTest | null>(null);
+  const [noteResponseInput, setNoteResponseInput] = useState<string>('');
+
+  const handleOpenNoteModal = (test: PlacementTest) => {
+    setEditingNoteResponse(test);
+    setNoteResponseInput(test.comment || '');
+  };
+
+  const handleSaveNoteResponse = () => {
+    if (!editingNoteResponse) return;
+    const updated: PlacementTest = {
+      ...editingNoteResponse,
+      comment: noteResponseInput.trim(),
+    };
+    if (onUpdateTest) {
+      onUpdateTest(updated);
+    }
+    showToast(`Đã lưu ghi chú cho thí sinh ${editingNoteResponse.candidateName}!`);
+    if (selectedResponse && selectedResponse.id === editingNoteResponse.id) {
+      setSelectedResponse(updated);
+    }
+    setEditingNoteResponse(null);
+  };
+
+  const handleQuickSetCourse = (test: PlacementTest, courseName: 'Khóa 1' | 'Khóa 2') => {
+    const updated: PlacementTest = {
+      ...test,
+      recommendedCourse: courseName,
+      status: test.status === 'Không đạt' ? 'Đã có kết quả' : test.status,
+    };
+    if (onUpdateTest) {
+      onUpdateTest(updated);
+    }
+    showToast(`Đã chuyển xếp lớp cho ${test.candidateName} thành "${courseName}"!`);
+    if (selectedResponse && selectedResponse.id === test.id) {
+      setSelectedResponse(updated);
+    }
+  };
+
   // Customizable Placement Test Schedules (Persistent in localStorage, editable only by Admin)
   const [scheduleOptions, setScheduleOptions] = useState<string[]>(() => {
     try {
@@ -3103,13 +3143,43 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                         </td>
 
                         <td className="py-3 px-3">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            isFailed
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-purple-50 text-purple-800 border-purple-200'
-                          }`}>
-                            {test.recommendedCourse}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleQuickSetCourse(test, 'Khóa 1')}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                                  test.recommendedCourse === 'Khóa 1'
+                                    ? 'bg-purple-600 text-white border-purple-700 shadow-2xs'
+                                    : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                                }`}
+                                title="Xếp vào Khóa 1 (PRE)"
+                              >
+                                Khóa 1
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleQuickSetCourse(test, 'Khóa 2')}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                                  test.recommendedCourse === 'Khóa 2'
+                                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-2xs'
+                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                }`}
+                                title="Xếp vào Khóa 2 (INSPIRE)"
+                              >
+                                Khóa 2
+                              </button>
+                            </div>
+                            {test.comment && (
+                              <div
+                                onClick={() => handleOpenNoteModal(test)}
+                                className="text-[10px] text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 cursor-pointer truncate max-w-[130px]"
+                                title={`Ghi chú: ${test.comment} (bấm để sửa)`}
+                              >
+                                📝 {test.comment}
+                              </div>
+                            )}
+                          </div>
                         </td>
 
                         {/* NÚT THÊM VÀO LỚP SAU KHI CÓ ĐIỂM ĐẠT */}
@@ -3221,6 +3291,20 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                               className="px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-100 rounded-lg border border-slate-300"
                             >
                               Chi tiết
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenNoteModal(test)}
+                              className={`px-2 py-1 text-[11px] font-bold rounded-lg border flex items-center gap-1 transition-all ${
+                                test.comment
+                                  ? 'text-amber-800 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                                  : 'text-slate-700 bg-slate-50 hover:bg-amber-50 hover:text-amber-700 border-slate-300'
+                              }`}
+                              title="Thêm hoặc chỉnh sửa ghi chú"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Ghi chú</span>
+                              {test.comment && <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>}
                             </button>
                             <button
                               type="button"
@@ -4524,6 +4608,101 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                   <span>Lưu Thay Đổi Lịch Học</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NOTE / GHI CHÚ MODAL FOR RESPONSE */}
+      {editingNoteResponse && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Ghi chú kết quả bài thi</h3>
+                  <p className="text-xs text-slate-500">
+                    Thí sinh: <strong className="text-slate-800">{editingNoteResponse.candidateName}</strong> ({editingNoteResponse.code})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingNoteResponse(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Khóa học đề xuất & Nguyện vọng:
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingNoteResponse((prev) => (prev ? { ...prev, recommendedCourse: 'Khóa 1' } : null));
+                    }}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                      editingNoteResponse.recommendedCourse === 'Khóa 1'
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    Khóa 1 (PRE)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingNoteResponse((prev) => (prev ? { ...prev, recommendedCourse: 'Khóa 2' } : null));
+                    }}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                      editingNoteResponse.recommendedCourse === 'Khóa 2'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    Khóa 2 (INSPIRE)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Nội dung ghi chú & Lưu ý của giáo viên:
+                </label>
+                <textarea
+                  rows={4}
+                  value={noteResponseInput}
+                  onChange={(e) => setNoteResponseInput(e.target.value)}
+                  placeholder="Nhập ghi chú chi tiết về tình hình làm bài, nguyện vọng xếp lớp, thời gian học..."
+                  className="w-full p-3 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setEditingNoteResponse(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveNoteResponse}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Save className="w-4 h-4" />
+                <span>Lưu ghi chú</span>
+              </button>
             </div>
           </div>
         </div>
