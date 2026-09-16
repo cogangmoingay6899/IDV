@@ -1,0 +1,6 @@
+{
+  "name": "IELTS DƯƠNG VŨ - Quản lý Đào tạo & Điểm số",
+  "description": "Hệ thống quản lý IELTS DƯƠNG VŨ tại Hải Phòng: Quản lý khóa học, học phí, điểm danh, sổ liên lạc, xuất bảng điểm Zalo, giáo trình và học viên.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
