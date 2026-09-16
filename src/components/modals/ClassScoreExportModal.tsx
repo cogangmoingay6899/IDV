@@ -755,11 +755,11 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className={`${themeConfig.tableHeaderBg} border-b text-[11px] font-black uppercase tracking-wider`}>
-                        <th className="py-2.5 px-3 w-12 text-center">Hạng/STT</th>
-                        <th className="py-2.5 px-3 min-w-[140px]">Học Viên</th>
-                        <th className="py-2.5 px-2 text-center w-20">Trạng Thái</th>
+                        <th rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-3 w-12 text-center">Hạng/STT</th>
+                        <th rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[140px]">Học Viên</th>
+                        <th rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-2 text-center w-20">Trạng Thái</th>
                         {selectedSkills.map((sk) => (
-                          <th key={sk} className="py-2.5 px-2 text-center min-w-[70px]">
+                          <th key={sk} rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-2 text-center min-w-[70px]">
                             <div className="flex flex-col items-center">
                               <span>{sk}</span>
                               {skillTotalQuestions?.[sk] && (
@@ -771,7 +771,7 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
                           </th>
                         ))}
                         {enableOverallScore && (
-                          <th className="py-2.5 px-3 text-center w-24 bg-amber-400/10 text-amber-300">
+                          <th rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-3 text-center w-24 bg-amber-400/10 text-amber-300">
                             {overallScoreType === 'ielts_band' ? 'Band IELTS' : 'Điểm TB'}
                           </th>
                         )}
@@ -785,15 +785,15 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
                         ) : (
                           <th className="py-2.5 px-2 text-center w-20">BTVN</th>
                         )}
-                        <th className="py-2.5 px-2 text-center min-w-[100px] bg-amber-400/10 text-amber-300">Tiền Phạt</th>
+                        <th rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-2 text-center min-w-[100px] bg-amber-400/10 text-amber-300">Tiền Phạt</th>
                         {totalCalculatedPrevDebt > 0 && (
-                          <th className="py-2.5 px-2 text-center min-w-[100px] bg-rose-400/15 text-rose-300">Nợ Cũ</th>
+                          <th rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-2 text-center min-w-[100px] bg-rose-400/15 text-rose-300">Nợ Cũ</th>
                         )}
-                        <th className="py-2.5 px-2 text-center w-20">Quizlet</th>
+                        <th rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-2 text-center w-20">Quizlet</th>
                         {hasWritingSkill && (
-                          <th className="py-2.5 px-2 text-center w-20">Chép Phạt</th>
+                          <th rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-2 text-center w-20">Chép Phạt</th>
                         )}
-                        <th className="py-2.5 px-3 min-w-[130px]">Nhận Xét</th>
+                        <th rowSpan={selectedHomeworkItems && selectedHomeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-3 min-w-[130px]">Nhận Xét</th>
                       </tr>
 
                       {/* SECOND HEADER ROW FOR BTVN SUB-ITEMS */}

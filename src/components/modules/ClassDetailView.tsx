@@ -714,7 +714,10 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
     setStudentRows((prev) => {
       const currentRow = prev[studentId];
       if (!currentRow) return prev;
-      const currentMissing = currentRow.missingHomeworkItems || [];
+      let currentMissing = currentRow.missingHomeworkItems || [];
+      if (currentRow.homeworkStatus === 'Chưa làm' && currentMissing.length === 0) {
+        currentMissing = [...homeworkItems];
+      }
       let updatedMissing: string[];
       if (currentMissing.includes(item)) {
         updatedMissing = currentMissing.filter((i) => i !== item);
@@ -2072,13 +2075,13 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
-                    <th className="py-3 px-2 w-12 min-w-[48px] max-w-[48px] text-center bg-slate-100 font-bold sticky left-0 z-20">STT</th>
-                    <th className="py-3 px-3 min-w-[170px] max-w-[200px] bg-slate-100 font-bold sticky left-12 z-20 border-r-2 border-slate-300 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.08)]">Học viên</th>
-                    <th className="py-3 px-2 text-center w-48">Điểm danh</th>
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 w-12 min-w-[48px] max-w-[48px] text-center bg-slate-100 font-bold sticky left-0 z-20">STT</th>
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-3 min-w-[170px] max-w-[200px] bg-slate-100 font-bold sticky left-12 z-20 border-r-2 border-slate-300 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.08)]">Học viên</th>
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-48">Điểm danh</th>
 
                     {/* DYNAMIC SCORE COLUMNS FOR EACH SELECTED SKILL */}
                     {selectedSkills.map((sk) => (
-                      <th key={sk} className="py-2.5 px-2 text-center min-w-[105px]">
+                      <th key={sk} rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-2 text-center min-w-[105px]">
                         <div className="flex flex-col items-center gap-1 py-0.5">
                           <span className="font-bold text-slate-800 flex items-center gap-1">
                             <span>{SKILL_ICONS[sk] || '📝'}</span>
@@ -2104,7 +2107,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
 
                     {/* Calculated Average score or IELTS Band if enabled */}
                     {enableOverallScore && (
-                      <th className="py-3 px-2 text-center w-20 bg-purple-50/50">
+                      <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-20 bg-purple-50/50">
                         <div className="flex flex-col items-center text-purple-900 font-bold">
                           <span>{overallScoreType === 'ielts_band' ? 'Overall Band' : 'Điểm TB'}</span>
                           <span className="text-[9px] text-purple-600 font-normal">Tự tính</span>
@@ -2114,7 +2117,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
 
                     {/* Penalty Copies column if Viết is selected */}
                     {hasWritingSkill && (
-                      <th className="py-3 px-2 text-center w-28 bg-amber-50/50">
+                      <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-28 bg-amber-50/50">
                         <div className="flex flex-col items-center text-amber-900">
                           <span>Chép phạt</span>
                           <span className="text-[10px] text-amber-700 font-normal">(Số lần)</span>
@@ -2123,7 +2126,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                     )}
 
                     {/* Quizlet Column */}
-                    <th className="py-3 px-2 text-center w-36">
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-36">
                       <div className="flex flex-col items-center gap-1">
                         <span>Quizlet</span>
                         <div className="inline-flex items-center gap-1 font-normal text-[10px] bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-200/60">
@@ -2146,52 +2149,30 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                       </div>
                     </th>
 
-                    {/* Homework Column */}
-                    <th className="py-3 px-2 text-center min-w-[220px]">
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-800">BTVN</span>
+                    {/* Homework Column (Two-tier with colSpan) */}
+                    {homeworkItems.length > 0 ? (
+                      <th
+                        colSpan={homeworkItems.length}
+                        className="py-2 px-2 text-center bg-amber-100/90 text-amber-950 font-black text-xs border-l border-b border-amber-300/80 tracking-wide"
+                      >
+                        <div className="flex items-center justify-center gap-1.5 py-1">
+                          <span>BTVN (Đề mục {homeworkItems.length})</span>
                           <button
                             type="button"
                             onClick={() => setIsHwConfigModalOpen(true)}
-                            className="p-1 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-300 inline-flex items-center gap-1 shadow-2xs transition-all"
-                            title="Tùy chỉnh danh sách các đề mục BTVN (Nghe, Nói, Đọc, Viết, Chép phạt, Chữa bài...)"
+                            className="p-1 rounded bg-white hover:bg-amber-50 text-amber-800 border border-amber-300 inline-flex items-center shadow-2xs transition-all"
+                            title="Tùy chỉnh danh sách các đề mục BTVN"
                           >
-                            <Sliders className="w-3 h-3 text-amber-600" />
-                            <span>Đề mục ({homeworkItems.length})</span>
+                            <Sliders className="w-2.5 h-2.5 text-amber-600" />
                           </button>
                         </div>
-                        <div className="inline-flex items-center gap-1 font-normal text-[10px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
-                          <button
-                            type="button"
-                            onClick={() => handleSetAllHomework('Đã làm')}
-                            className="text-emerald-700 hover:underline font-bold"
-                            title="Đặt 100% học viên làm đủ tất cả các đề mục"
-                          >
-                            ✓ Đủ cả lớp
-                          </button>
-                          <span className="text-slate-300">•</span>
-                          <button
-                            type="button"
-                            onClick={() => handleSetAllHomework('Thiếu')}
-                            className="text-amber-700 hover:underline font-bold"
-                          >
-                            Thiếu
-                          </button>
-                          <span className="text-slate-300">•</span>
-                          <button
-                            type="button"
-                            onClick={() => handleSetAllHomework('Chưa làm')}
-                            className="text-rose-700 hover:underline font-bold"
-                          >
-                            Chưa
-                          </button>
-                        </div>
-                      </div>
-                    </th>
+                      </th>
+                    ) : (
+                      <th className="py-3 px-2 text-center w-24">BTVN</th>
+                    )}
 
                     {/* CỘT TỔNG TIỀN PHẠT BUỔI NÀY (Sau cột BTVN) */}
-                    <th className="py-3 px-2 text-center min-w-[120px] bg-amber-50/80 text-amber-950 font-bold border-l border-amber-200/60">
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center min-w-[120px] bg-amber-50/80 text-amber-950 font-bold border-l border-amber-200/60">
                       <div className="flex flex-col items-center gap-1">
                         <div className="flex items-center gap-1">
                           <Coins className="w-3.5 h-3.5 text-amber-600" />
@@ -2229,7 +2210,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                     </th>
 
                     {/* CỘT NỢ CHƯA NỘP CÁC BUỔI TRƯỚC */}
-                    <th className="py-3 px-2 text-center min-w-[130px] bg-rose-50/80 text-rose-950 font-bold border-l border-rose-200/70">
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center min-w-[130px] bg-rose-50/80 text-rose-950 font-bold border-l border-rose-200/70">
                       <div className="flex flex-col items-center gap-1">
                         <span>Nợ các buổi trước</span>
                         <span className="text-[10px] text-rose-900 font-mono font-black bg-white px-2 py-0.5 rounded-full border border-rose-300 shadow-2xs">
@@ -2264,11 +2245,22 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                     </th>
 
                     {/* Feedback Column */}
-                    <th className="py-3 px-3 min-w-[150px]">Nhận xét giáo viên</th>
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-3 min-w-[150px]">Nhận xét giáo viên</th>
 
                     {/* Zalo Single Send Column */}
-                    <th className="py-3 px-2 text-center w-24">Báo Zalo</th>
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-24">Báo Zalo</th>
                   </tr>
+
+                  {/* SECOND HEADER ROW FOR BTVN SUB-ITEMS */}
+                  {homeworkItems.length > 0 && (
+                    <tr className="bg-amber-50/80 border-b border-amber-200 text-[10px] font-extrabold text-amber-950">
+                      {homeworkItems.map((item) => (
+                        <th key={item} className="py-1 px-1 text-center min-w-[55px] border-l border-amber-200/60 font-black">
+                          {item}
+                        </th>
+                      ))}
+                    </tr>
+                  )}
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {classStudents.map((st, idx) => {
@@ -2426,68 +2418,40 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                         </td>
 
                         {/* Homework status: Granular Item Tracking (Nghe, Nói, Đọc, Viết, Chép phạt, Chữa bài...) */}
-                        <td className="py-2.5 px-2 text-center bg-slate-50/40">
-                          <div className="flex flex-col items-center justify-center gap-1.5 min-w-[190px]">
-                            {/* Main status quick buttons */}
-                            <div className="inline-flex items-center justify-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleSetStudentHwStatus(st.id, 'Đã làm')}
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                                  row.homeworkStatus === 'Đã làm'
-                                    ? 'bg-emerald-600 text-white shadow-xs'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                }`}
+                        {homeworkItems.length > 0 ? (
+                          homeworkItems.map((item) => {
+                            const isMissing = row.homeworkStatus === 'Chưa làm' || row.missingHomeworkItems?.includes(item);
+                            return (
+                              <td
+                                key={item}
+                                className="py-2.5 px-2 text-center border-l border-slate-100 bg-amber-50/10"
                               >
-                                ✓ Đủ
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSetStudentHwStatus(st.id, 'Thiếu')}
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                                  row.homeworkStatus === 'Thiếu'
-                                    ? 'bg-amber-500 text-white shadow-xs'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                }`}
-                              >
-                                ⚠️ Thiếu
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSetStudentHwStatus(st.id, 'Chưa làm')}
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
-                                  row.homeworkStatus === 'Chưa làm'
-                                    ? 'bg-rose-600 text-white shadow-xs'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                }`}
-                              >
-                                ✗ Chưa
-                              </button>
-                            </div>
-
-                            {/* Itemized chips: Click to toggle missing */}
-                            <div className="flex flex-wrap items-center justify-center gap-1 max-w-[240px]">
-                              {homeworkItems.map((item) => {
-                                const isMissing = row.missingHomeworkItems?.includes(item);
-                                return (
-                                  <button
-                                    key={item}
-                                    type="button"
-                                    onClick={() => handleToggleMissingHwItem(st.id, item)}
-                                    title={isMissing ? `Đang thiếu: ${item} (Bấm để chuyển sang ĐỦ)` : `Đã làm: ${item} (Bấm để đánh dấu THIẾU)`}
-                                    className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border transition-all cursor-pointer ${
-                                      isMissing
-                                        ? 'bg-rose-50 text-rose-700 border-rose-300 line-through font-bold shadow-2xs'
-                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:border-emerald-300'
-                                    }`}
-                                  >
-                                    {isMissing ? `✗ ${item}` : `✓ ${item}`}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </td>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleMissingHwItem(st.id, item)}
+                                  title={
+                                    isMissing
+                                      ? `Đang thiếu: ${item} (Bấm để chuyển sang ĐỦ)`
+                                      : `Đã làm: ${item} (Bấm để đánh dấu THIẾU)`
+                                  }
+                                  className="inline-flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+                                >
+                                  {isMissing ? (
+                                    <span className="inline-flex items-center justify-center text-rose-600 font-bold font-mono tracking-tighter text-sm">
+                                      (✘)
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-600 text-white font-black text-[11px] shadow-2xs border border-emerald-500">
+                                      ✓
+                                    </span>
+                                  )}
+                                </button>
+                              </td>
+                            );
+                          })
+                        ) : (
+                          <td className="py-2.5 px-2 text-center bg-slate-50/40 text-slate-400 font-semibold">-</td>
+                        )}
 
                         {/* CỘT TỔNG TIỀN PHẠT CHO TỪNG HỌC VIÊN */}
                         <td className="py-3 px-2 text-center bg-amber-50/30 border-l border-amber-100">
