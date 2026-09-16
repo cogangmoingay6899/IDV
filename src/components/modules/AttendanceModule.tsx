@@ -1759,7 +1759,7 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
                     <td className="py-3 px-2 text-center bg-amber-50/30 border-l border-amber-100">
                       <input
                         type="text"
-                        placeholder="0 đ"
+                        placeholder="0k"
                         value={row.penaltyFee || ''}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -1777,7 +1777,7 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
                       <div className="flex flex-col items-center gap-0.5">
                         <input
                           type="text"
-                          placeholder="0 đ"
+                          placeholder="0k"
                           value={row.previousDebt || ''}
                           onChange={(e) => {
                             const val = e.target.value;

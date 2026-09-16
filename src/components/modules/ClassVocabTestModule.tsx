@@ -708,7 +708,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     }
   };
 
-  const finishVocabTest = () => {
+  const finishVocabTest = async () => {
     if (!activeRunnerTest || isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
@@ -751,28 +751,36 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       submittedAt: new Date().toLocaleString('vi-VN'),
     };
 
-    // Update state tests list with submission
-    const collectionName = activeTestType === 'review' ? 'vocab_reviews' : 'vocab_tests';
-    const activeList = activeTestType === 'review' ? reviewTests : tests;
+    try {
+      // Update state tests list with submission
+      const collectionName = activeTestType === 'review' ? 'vocab_reviews' : 'vocab_tests';
+      const activeList = activeTestType === 'review' ? reviewTests : tests;
 
-    const updatedList = activeList.map((t) => {
-      if (t.id === activeRunnerTest.id) {
-        const updated = {
-          ...t,
-          submissions: [newSub, ...t.submissions],
-        };
-        saveDocument(collectionName, updated);
-        return updated;
-      }
-      return t;
-    });
+      const testToUpdate = activeList.find((t) => t.id === activeRunnerTest.id);
+      if (!testToUpdate) throw new Error('Không tìm thấy bài test');
 
-    if (activeTestType === 'review') setReviewTests(updatedList);
-    else setTests(updatedList);
-    setTestCompletedSubmission(newSub);
+      const updatedTest = {
+        ...testToUpdate,
+        submissions: [newSub, ...testToUpdate.submissions],
+      };
 
-    // Persist submission to Firestore
-    saveDocument('vocab_test_submissions', newSub);
+      // Persist to Firestore
+      await saveDocument(collectionName, updatedTest);
+      await saveDocument('vocab_test_submissions', newSub);
+
+      // Update state tests list ONLY on success
+      const updatedList = activeList.map((t) => (t.id === activeRunnerTest.id ? updatedTest : t));
+      
+      if (activeTestType === 'review') setReviewTests(updatedList);
+      else setTests(updatedList);
+      
+      setTestCompletedSubmission(newSub);
+    } catch (error) {
+      console.error('Error submitting test:', error);
+      showToast('❌ Lỗi khi lưu bài làm. Vui lòng thử lại!');
+      isSubmittingRef.current = false;
+      return;
+    }
 
     // Match student & class in center database
     const matchedStudent = students.find(

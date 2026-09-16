@@ -514,9 +514,9 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
     if (!val) return 0;
     if (typeof val === 'number') return val;
     const str = val.toString().trim().toLowerCase();
-    if (str === '0' || str === '0 đ' || str === '0đ' || str === '' || str === '-') return 0;
-    if (str.endsWith('k')) {
-      const n = parseFloat(str.replace('k', '').replace(/,/g, '.'));
+    if (str === '0' || str === '0 đ' || str === '0đ' || str === '0k' || str === '' || str === '-') return 0;
+    if (str.endsWith('k') || str.includes('k')) {
+      const n = parseFloat(str.replace('k', '').replace(/\./g, '').replace(/,/g, ''));
       return isNaN(n) ? 0 : n * 1000;
     }
     const digits = str.replace(/[^\d]/g, '');
@@ -533,7 +533,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   }, [classStudents, studentRows]);
 
   const formattedTotalPenaltyFee = useMemo(() => {
-    return totalCalculatedPenaltyFee > 0 ? `${totalCalculatedPenaltyFee.toLocaleString('vi-VN')} đ` : '0 đ';
+    return totalCalculatedPenaltyFee > 0 ? `${totalCalculatedPenaltyFee / 1000}k` : '0k';
   }, [totalCalculatedPenaltyFee]);
 
   const countStudentsWithPenalty = useMemo(() => {
@@ -549,7 +549,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   }, [classStudents, studentRows]);
 
   const formattedTotalPreviousDebt = useMemo(() => {
-    return totalCalculatedPreviousDebt > 0 ? `${totalCalculatedPreviousDebt.toLocaleString('vi-VN')} đ` : '0 đ';
+    return totalCalculatedPreviousDebt > 0 ? `${totalCalculatedPreviousDebt / 1000}k` : '0k';
   }, [totalCalculatedPreviousDebt]);
 
   const countStudentsWithPreviousDebt = useMemo(() => {
@@ -557,7 +557,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   }, [classStudents, studentRows]);
 
   const grandTotalReceivable = totalCalculatedPenaltyFee + totalCalculatedPreviousDebt;
-  const formattedGrandTotalReceivable = grandTotalReceivable > 0 ? `${grandTotalReceivable.toLocaleString('vi-VN')} đ` : '0 đ';
+  const formattedGrandTotalReceivable = grandTotalReceivable > 0 ? `${grandTotalReceivable / 1000}k` : '0k';
 
   // Sync session rows when date, class or skills change
   useEffect(() => {
@@ -588,12 +588,21 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
       });
 
       const initialPenalty = existing?.penaltyCopies !== undefined ? String(existing.penaltyCopies) : '0';
-      const initialPenaltyFee = existing?.penaltyFee !== undefined ? String(existing.penaltyFee) : '0 đ';
+      let initialPenaltyFee = '';
+      if (existing?.penaltyFee !== undefined) {
+        const pFeeStr = String(existing.penaltyFee);
+        if (pFeeStr !== '0 đ' && pFeeStr !== '0' && pFeeStr !== '0k' && pFeeStr !== '') {
+          initialPenaltyFee = pFeeStr;
+        }
+      }
 
       // Auto-detect previous debt: Check existing record, or prior attendance sessions, or student.balanceOwed
-      let initialPreviousDebt = '0 đ';
+      let initialPreviousDebt = '';
       if (existing?.previousDebt !== undefined) {
-        initialPreviousDebt = String(existing.previousDebt);
+        const pDebtStr = String(existing.previousDebt);
+        if (pDebtStr !== '0 đ' && pDebtStr !== '0' && pDebtStr !== '0k' && pDebtStr !== '') {
+          initialPreviousDebt = pDebtStr;
+        }
       } else {
         const priorRecords = attendanceRecords
           .filter(
@@ -610,10 +619,10 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
           const priorDebt = parsePenaltyAmount(lastRec.previousDebt);
           const sumDebt = priorPenalty + priorDebt;
           if (sumDebt > 0) {
-            initialPreviousDebt = `${sumDebt.toLocaleString('vi-VN')} đ`;
+            initialPreviousDebt = `${sumDebt / 1000}k`;
           }
         } else if (st.balanceOwed && st.balanceOwed > 0) {
-          initialPreviousDebt = `${st.balanceOwed.toLocaleString('vi-VN')} đ`;
+          initialPreviousDebt = `${st.balanceOwed / 1000}k`;
         }
       }
 
@@ -1095,8 +1104,8 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
     }
     const feedbackText = row?.feedback && row.feedback.trim() !== '' ? `💬 Nhận xét của giáo viên: ${row.feedback.trim()}\n` : '';
 
-    const penaltyFeeVal = row?.penaltyFee && row.penaltyFee !== '0 đ' && row.penaltyFee !== '0' && row.penaltyFee !== '' ? row.penaltyFee : null;
-    const previousDebtVal = row?.previousDebt && row.previousDebt !== '0 đ' && row.previousDebt !== '0' && row.previousDebt !== '' ? row.previousDebt : null;
+    const penaltyFeeVal = row?.penaltyFee && row.penaltyFee !== '0 đ' && row.penaltyFee !== '0' && row.penaltyFee !== '0k' && row.penaltyFee !== '' ? row.penaltyFee : null;
+    const previousDebtVal = row?.previousDebt && row.previousDebt !== '0 đ' && row.previousDebt !== '0' && row.previousDebt !== '0k' && row.previousDebt !== '' ? row.previousDebt : null;
 
     let penaltyInfo = '';
     const studentPenaltyAmt = parsePenaltyAmount(penaltyFeeVal);
@@ -1112,7 +1121,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
         penaltyInfo += `   • Nợ chưa nộp các buổi trước: ${previousDebtVal}\n`;
       }
       if (studentPenaltyAmt > 0 && studentDebtAmt > 0) {
-        penaltyInfo += `   ➔ TỔNG CỘNG PHẢI NỘP: ${studentTotalReceivable.toLocaleString('vi-VN')} đ\n`;
+        penaltyInfo += `   ➔ TỔNG CỘNG PHẢI NỘP: ${studentTotalReceivable / 1000}k\n`;
       }
       penaltyInfo += `⚠️ LƯU Ý QUAN TRỌNG: PH/HS chuyển khoản nộp phạt vào STK cá nhân của trợ lý, không chuyển khoản tiền nộp phạt vào STK công ty.\n`;
     }
@@ -1158,8 +1167,8 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
       const avg = calculateStudentAverage(row);
       const avgStr = avg !== '-' ? ` | ${overallScoreType === 'ielts_band' ? 'Band' : 'TB'}: ${avg}` : '';
       const penaltyStr = (hasWritingSkill && row?.penaltyCopies && Number(row.penaltyCopies) > 0) ? ` | Chép phạt: ${row.penaltyCopies} lần` : '';
-      const penaltyFeeStr = (row?.penaltyFee && row.penaltyFee !== '0 đ' && row.penaltyFee !== '0' && row.penaltyFee !== '') ? ` | Phạt buổi này: ${row.penaltyFee}` : '';
-      const debtStr = (row?.previousDebt && row.previousDebt !== '0 đ' && row.previousDebt !== '0' && row.previousDebt !== '') ? ` | Nợ cũ: ${row.previousDebt}` : '';
+      const penaltyFeeStr = (row?.penaltyFee && row.penaltyFee !== '0 đ' && row.penaltyFee !== '0' && row.penaltyFee !== '0k' && row.penaltyFee !== '') ? ` | Phạt buổi này: ${row.penaltyFee}` : '';
+      const debtStr = (row?.previousDebt && row.previousDebt !== '0 đ' && row.previousDebt !== '0' && row.previousDebt !== '0k' && row.previousDebt !== '') ? ` | Nợ cũ: ${row.previousDebt}` : '';
       let hwStr = 'Đủ';
       if (row?.homeworkStatus === 'Chưa làm') {
         hwStr = 'Chưa làm';
@@ -1732,14 +1741,14 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[11px] font-bold text-slate-600">Phạt buổi này:</span>
-                  {(['10.000 đ', '20.000 đ', '50.000 đ', '0 đ'] as const).map((amt) => (
+                  {(['10k', '20k', '50k', ''] as const).map((amt) => (
                     <button
                       key={amt}
                       type="button"
                       onClick={() => handleSetAllPenaltyFees(amt)}
                       className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-white text-amber-900 border border-amber-300 hover:bg-amber-100/80 shadow-2xs transition-all active:scale-95"
                     >
-                      {amt === '0 đ' ? 'Đặt lại 0đ' : `Gán ${amt}`}
+                      {amt === '' ? 'Xoá sạch' : `Gán ${amt}`}
                     </button>
                   ))}
                   <button
@@ -1759,7 +1768,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                             const fee = missingCount * 10000;
                             next[st.id] = {
                               ...next[st.id],
-                              penaltyFee: fee > 0 ? `${fee.toLocaleString('vi-VN')} đ` : '0 đ',
+                              penaltyFee: fee > 0 ? `${fee / 1000}k` : '',
                             };
                           }
                         });
@@ -1777,10 +1786,10 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                   <span className="text-[11px] font-bold text-rose-700">Nợ cũ:</span>
                   <button
                     type="button"
-                    onClick={() => handleSetAllPreviousDebts('0 đ')}
+                    onClick={() => handleSetAllPreviousDebts('')}
                     className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 transition-all"
                   >
-                    Xoá nợ cả lớp (0đ)
+                    Xoá trống cả lớp
                   </button>
                   <button
                     type="button"
@@ -1789,7 +1798,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                         const next = { ...prev };
                         classStudents.forEach((st) => {
                           if (next[st.id] && st.balanceOwed && st.balanceOwed > 0) {
-                            next[st.id] = { ...next[st.id], previousDebt: `${st.balanceOwed.toLocaleString('vi-VN')} đ` };
+                            next[st.id] = { ...next[st.id], previousDebt: `${st.balanceOwed / 1000}k` };
                           }
                         });
                         return next;
@@ -2184,15 +2193,15 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                         <div className="inline-flex items-center gap-1 font-normal text-[10px] bg-white px-1 py-0.5 rounded border border-amber-300">
                           <button
                             type="button"
-                            onClick={() => handleSetAllPenaltyFees('0 đ')}
+                            onClick={() => handleSetAllPenaltyFees('')}
                             className="text-slate-500 hover:underline font-bold"
                           >
-                            0đ
+                            Xóa
                           </button>
                           <span className="text-slate-300">•</span>
                           <button
                             type="button"
-                            onClick={() => handleSetAllPenaltyFees('20.000 đ')}
+                            onClick={() => handleSetAllPenaltyFees('20k')}
                             className="text-amber-700 hover:underline font-bold"
                           >
                             20k
@@ -2200,7 +2209,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                           <span className="text-slate-300">•</span>
                           <button
                             type="button"
-                            onClick={() => handleSetAllPenaltyFees('50.000 đ')}
+                            onClick={() => handleSetAllPenaltyFees('50k')}
                             className="text-amber-800 hover:underline font-bold"
                           >
                             50k
@@ -2219,15 +2228,15 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                         <div className="inline-flex items-center gap-1 font-normal text-[10px] bg-white px-1 py-0.5 rounded border border-rose-300">
                           <button
                             type="button"
-                            onClick={() => handleSetAllPreviousDebts('0 đ')}
+                            onClick={() => handleSetAllPreviousDebts('')}
                             className="text-slate-500 hover:underline font-bold"
                           >
-                            0đ
+                            Xóa
                           </button>
                           <span className="text-slate-300">•</span>
                           <button
                             type="button"
-                            onClick={() => handleSetAllPreviousDebts('20.000 đ')}
+                            onClick={() => handleSetAllPreviousDebts('20k')}
                             className="text-rose-700 hover:underline font-bold"
                           >
                             20k
@@ -2235,7 +2244,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                           <span className="text-slate-300">•</span>
                           <button
                             type="button"
-                            onClick={() => handleSetAllPreviousDebts('50.000 đ')}
+                            onClick={() => handleSetAllPreviousDebts('50k')}
                             className="text-rose-800 hover:underline font-bold"
                           >
                             50k
@@ -2457,7 +2466,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                         <td className="py-3 px-2 text-center bg-amber-50/30 border-l border-amber-100">
                           <input
                             type="text"
-                            placeholder="0 đ"
+                            placeholder="0k"
                             value={row.penaltyFee || ''}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -2475,7 +2484,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                           <div className="flex flex-col items-center gap-0.5">
                             <input
                               type="text"
-                              placeholder="0 đ"
+                              placeholder="0k"
                               value={row.previousDebt || ''}
                               onChange={(e) => {
                                 const val = e.target.value;
