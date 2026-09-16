@@ -521,7 +521,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
     }
     const digits = str.replace(/[^\d]/g, '');
     const n = parseInt(digits, 10);
-    return isNaN(n) ? 0 : n;
+    return isNaN(n) ? 0 : (n < 1000 ? n * 1000 : n);
   };
 
   // Auto-calculated total penalty amount based on assistant's inputs for students

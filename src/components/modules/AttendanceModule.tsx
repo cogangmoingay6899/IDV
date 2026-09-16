@@ -193,13 +193,13 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
     if (typeof val === 'number') return val;
     const str = val.toString().trim().toLowerCase();
     if (str === '0' || str === '0 đ' || str === '0đ' || str === '' || str === '-') return 0;
-    if (str.endsWith('k')) {
+    if (str.endsWith('k') || str.includes('k')) {
       const n = parseFloat(str.replace('k', '').replace(/,/g, '.'));
       return isNaN(n) ? 0 : n * 1000;
     }
     const digits = str.replace(/[^\d]/g, '');
     const n = parseInt(digits, 10);
-    return isNaN(n) ? 0 : n;
+    return isNaN(n) ? 0 : (n < 1000 ? n * 1000 : n);
   };
 
   // Auto-calculated total penalty amount based on assistant's inputs for students
