@@ -737,18 +737,36 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     const cleanClassName = runnerClassName.trim();
     const cleanPhone = runnerStudentPhone.trim();
 
+    // Match student & class in center database
+    const matchedStudent = students.find(
+      (s) =>
+        s.name.toLowerCase() === cleanStudentName.toLowerCase() ||
+        (cleanPhone && s.phone && s.phone === cleanPhone)
+    );
+
+    const allClassOptions = classes.length > 0 ? classes : (classGroup ? [classGroup] : []);
+    const matchedClass = allClassOptions.find(
+      (c) =>
+        c.name.toLowerCase().includes(cleanClassName.toLowerCase()) ||
+        c.id === classGroup?.id
+    );
+
+    const targetClassId = matchedClass ? matchedClass.id : (classGroup?.id || 'class-vocab-auto');
+
     const newSub: VocabTestSubmission = {
       id: `sub-${Date.now()}`,
       testId: activeRunnerTest.id,
+      studentId: matchedStudent?.id,
       studentName: cleanStudentName,
-      className: cleanClassName,
       studentPhone: cleanPhone,
+      className: cleanClassName,
+      classId: targetClassId,
       score: scoreOut10,
       correctCount,
       totalQuestions: totalQ,
       timeSpentSeconds,
       tabSwitchViolations: Math.max(tabSwitchCount, tabSwitchCountRef.current),
-      submittedAt: new Date().toLocaleString('vi-VN'),
+      submittedAt: new Date().toISOString(),
     };
 
     try {
@@ -781,23 +799,6 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       isSubmittingRef.current = false;
       return;
     }
-
-    // Match student & class in center database
-    const matchedStudent = students.find(
-      (s) =>
-        s.name.toLowerCase() === cleanStudentName.toLowerCase() ||
-        (cleanPhone && s.phone && s.phone === cleanPhone)
-    );
-
-    const allClassOptions = classes.length > 0 ? classes : (classGroup ? [classGroup] : []);
-    const matchedClass = allClassOptions.find(
-      (c) =>
-        c.name.toLowerCase().includes(cleanClassName.toLowerCase()) ||
-        c.id === classGroup?.id
-    );
-
-    const targetClassId = matchedClass ? matchedClass.id : (classGroup?.id || 'class-vocab-auto');
-    const targetClassName = cleanClassName || matchedClass?.name || classGroup?.name || 'Lớp Từ Vựng';
 
     // 1. Auto-save score to System Exam Score (Bảng Điểm Kiểm Tra)
     if (onAddExamScore) {
