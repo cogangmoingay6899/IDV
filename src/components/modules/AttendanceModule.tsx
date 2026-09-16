@@ -30,10 +30,14 @@ import {
   X,
   CreditCard,
   Coins,
+  Layers,
+  Sliders,
+  ListChecks,
 } from 'lucide-react';
 import { AttendanceRecord, ClassGroup, Student, AuthUser, Teacher, ExamScore } from '../../types';
 import { CreateTeacherModal } from '../modals/CreateTeacherModal';
 import { ClassScoreExportModal } from '../modals/ClassScoreExportModal';
+import { HomeworkConfigModal } from '../modals/HomeworkConfigModal';
 import { formatDateVN } from '../../utils/courseSchedule';
 
 interface AttendanceModuleProps {
@@ -79,9 +83,12 @@ export interface StudentRowState {
   penaltyBankAccount: string;
   feedback: string;
   homeworkStatus: 'Đã làm' | 'Thiếu' | 'Chưa làm';
+  missingHomeworkItems?: string[]; // Danh sách các đề mục BTVN bị thiếu (VD: Chép phạt, Chữa bài...)
   quizletStatus: 'Đã học' | 'Chưa học';
   note: string;
 }
+
+const DEFAULT_HOMEWORK_ITEMS = ['Nghe', 'Nói', 'Đọc', 'Viết', 'Chép phạt', 'Chữa bài'];
 
 export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
   classes,
@@ -138,6 +145,17 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [viewHistory, setViewHistory] = useState(false);
+
+  // Homework items state (default: Nghe, Nói, Đọc, Viết, Chép phạt, Chữa bài)
+  const [homeworkItems, setHomeworkItems] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('idv_homework_items');
+      return saved ? JSON.parse(saved) : DEFAULT_HOMEWORK_ITEMS;
+    } catch {
+      return DEFAULT_HOMEWORK_ITEMS;
+    }
+  });
+  const [isHwConfigModalOpen, setIsHwConfigModalOpen] = useState(false);
 
   // Zalo Message Modals
   const [selectedStudentForZalo, setSelectedStudentForZalo] = useState<Student | null>(null);
@@ -279,6 +297,7 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
 
       const initialPenaltyStk = existing?.penaltyBankAccount || '';
       const initialHw = (existing?.homeworkStatus as 'Đã làm' | 'Thiếu' | 'Chưa làm') || 'Đã làm';
+      const initialMissingHw = (existing?.missingHomeworkItems as string[]) || [];
       const initialQuizlet = (existing?.quizletStatus as 'Đã học' | 'Chưa học') || 'Đã học';
 
       if (existing?.skillTotalQuestions) {
@@ -299,6 +318,7 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
         penaltyBankAccount: initialPenaltyStk,
         feedback: existing?.teacherNote || '',
         homeworkStatus: initialHw,
+        missingHomeworkItems: initialMissingHw,
         quizletStatus: initialQuizlet,
         note: existing?.note || '',
       };
@@ -418,16 +438,99 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
     setTimeout(() => setToastMessage(null), 2000);
   };
 
+  const handleToggleMissingHwItem = (studentId: string, item: string) => {
+    setStudentRows((prev) => {
+      const currentRow = prev[studentId];
+      if (!currentRow) return prev;
+      const currentMissing = currentRow.missingHomeworkItems || [];
+      let updatedMissing: string[];
+      if (currentMissing.includes(item)) {
+        updatedMissing = currentMissing.filter((i) => i !== item);
+      } else {
+        updatedMissing = [...currentMissing, item];
+      }
+
+      let updatedStatus: 'Đã làm' | 'Thiếu' | 'Chưa làm' = 'Đã làm';
+      if (updatedMissing.length === 0) {
+        updatedStatus = 'Đã làm';
+      } else if (updatedMissing.length >= homeworkItems.length && homeworkItems.length > 0) {
+        updatedStatus = 'Chưa làm';
+      } else {
+        updatedStatus = 'Thiếu';
+      }
+
+      return {
+        ...prev,
+        [studentId]: {
+          ...currentRow,
+          missingHomeworkItems: updatedMissing,
+          homeworkStatus: updatedStatus,
+        },
+      };
+    });
+  };
+
+  const handleSetStudentHwStatus = (studentId: string, status: 'Đã làm' | 'Thiếu' | 'Chưa làm') => {
+    setStudentRows((prev) => {
+      const currentRow = prev[studentId];
+      if (!currentRow) return prev;
+      let missing: string[] = [];
+      if (status === 'Đã làm') {
+        missing = [];
+      } else if (status === 'Chưa làm') {
+        missing = [...homeworkItems];
+      } else if (status === 'Thiếu') {
+        missing =
+          currentRow.missingHomeworkItems && currentRow.missingHomeworkItems.length > 0
+            ? currentRow.missingHomeworkItems
+            : [homeworkItems[0] || 'Chữa bài'];
+      }
+      return {
+        ...prev,
+        [studentId]: {
+          ...currentRow,
+          homeworkStatus: status,
+          missingHomeworkItems: missing,
+        },
+      };
+    });
+  };
+
   const handleSetAllHomework = (status: 'Đã làm' | 'Thiếu' | 'Chưa làm') => {
     setStudentRows((prev) => {
       const next = { ...prev };
       classStudents.forEach((st) => {
         if (next[st.id]) {
-          next[st.id] = { ...next[st.id], homeworkStatus: status };
+          let missing: string[] = [];
+          if (status === 'Đã làm') {
+            missing = [];
+          } else if (status === 'Chưa làm') {
+            missing = [...homeworkItems];
+          } else if (status === 'Thiếu') {
+            missing = [homeworkItems[0] || 'Chữa bài'];
+          }
+          next[st.id] = {
+            ...next[st.id],
+            homeworkStatus: status,
+            missingHomeworkItems: missing,
+          };
         }
       });
       return next;
     });
+    setToastMessage(
+      status === 'Đã làm'
+        ? '✓ Đã đặt 100% học viên làm ĐỦ bài tập!'
+        : `Đã đánh dấu BTVN "${status}" cho cả lớp!`
+    );
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const handleSaveHomeworkItems = (newItems: string[]) => {
+    setHomeworkItems(newItems);
+    localStorage.setItem('idv_homework_items', JSON.stringify(newItems));
+    setToastMessage(`Đã cập nhật ${newItems.length} đề mục BTVN!`);
+    setTimeout(() => setToastMessage(null), 2500);
   };
 
   const handleSetAllQuizlet = (status: 'Đã học' | 'Chưa học') => {
@@ -524,6 +627,8 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
         previousDebt: row?.previousDebt || '0 đ',
         penaltyBankAccount: row?.penaltyBankAccount || penaltyBankAccount || '',
         skillTotalQuestions: skillTotalQuestions,
+        homeworkItems: homeworkItems,
+        missingHomeworkItems: row?.missingHomeworkItems || [],
         homeworkStatus: row?.homeworkStatus || 'Đã làm',
         quizletStatus: row?.quizletStatus || 'Đã học',
       };
@@ -603,7 +708,14 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
     }
 
     const quizletText = row?.quizletStatus === 'Đã học' ? '✓ Đã học đầy đủ' : '✗ Chưa học';
-    const homeworkText = row?.homeworkStatus === 'Đã làm' ? '✓ Đã làm bài tập' : row?.homeworkStatus === 'Thiếu' ? '⚠️ Làm thiếu bài' : '✗ Chưa làm bài tập';
+    let homeworkText = '';
+    if (row?.homeworkStatus === 'Chưa làm') {
+      homeworkText = '✗ Chưa làm bài tập';
+    } else if (row?.missingHomeworkItems && row.missingHomeworkItems.length > 0) {
+      homeworkText = `⚠️ Làm thiếu: ${row.missingHomeworkItems.join(', ')}`;
+    } else {
+      homeworkText = `✓ Đã làm đủ (${homeworkItems.join(', ')})`;
+    }
 
     // Teacher feedback: leave completely blank if not provided
     let teacherFeedbackSection = '';
@@ -636,6 +748,7 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏫 Lớp: ${selectedClass?.name} | Ngày: ${currentDate}
 📚 Kỹ năng kiểm tra: ${selectedSkills.map(sk => skillTotalQuestions[sk] ? `${sk} (Tổng ${skillTotalQuestions[sk]} câu)` : sk).join(', ')}
+📝 Đề mục BTVN: ${homeworkItems.join(', ')}
 📞 Hotline: 0798934698
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
@@ -651,7 +764,12 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
       });
       const scoresStr = scoresArr.length > 0 ? scoresArr.join(' | ') : 'Chưa nhập điểm';
       const penaltyStr = (hasWritingSkill && row?.penaltyCopies && Number(row.penaltyCopies) > 0) ? ` | Chép phạt: ${row.penaltyCopies} lần` : '';
-      const hwStr = row?.homeworkStatus || 'Đã làm';
+      let hwStr = 'Đủ';
+      if (row?.homeworkStatus === 'Chưa làm') {
+        hwStr = 'Chưa làm';
+      } else if (row?.missingHomeworkItems && row.missingHomeworkItems.length > 0) {
+        hwStr = `Thiếu (${row.missingHomeworkItems.join(', ')})`;
+      }
       const qzStr = row?.quizletStatus || 'Đã học';
       const parsedPenalty = parsePenaltyAmount(row?.penaltyFee);
       const parsedPrevDebt = parsePenaltyAmount(row?.previousDebt);
@@ -1120,6 +1238,83 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
           </div>
         </div>
 
+        {/* Multi-Homework Selection Bar (Like Skills Selection) */}
+        <div className="pt-3 border-t border-slate-100 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <ListChecks className="w-3.5 h-3.5 text-amber-600" />
+              <span>8. Chọn bài tập (BTVN) cần kiểm tra buổi này ({homeworkItems.length} mục):</span>
+            </span>
+            <div className="flex flex-wrap items-center gap-1 text-[11px]">
+              <span className="text-slate-400 font-medium">Gợi ý nhanh:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const items = ['Nghe', 'Viết'];
+                  setHomeworkItems(items);
+                  localStorage.setItem('idv_homework_items', JSON.stringify(items));
+                }}
+                className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg font-bold"
+              >
+                Nghe + Viết
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const items = ['Nghe', 'Nói', 'Đọc', 'Viết'];
+                  setHomeworkItems(items);
+                  localStorage.setItem('idv_homework_items', JSON.stringify(items));
+                }}
+                className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg font-bold"
+              >
+                4 Kỹ năng
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const items = DEFAULT_HOMEWORK_ITEMS;
+                  setHomeworkItems(items);
+                  localStorage.setItem('idv_homework_items', JSON.stringify(items));
+                }}
+                className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold"
+              >
+                Tất cả (6)
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {['Nghe', 'Nói', 'Đọc', 'Viết', 'Từ vựng', 'Chép phạt', 'Chữa bài'].map((item) => {
+              const isSelected = homeworkItems.includes(item);
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => {
+                    let next: string[];
+                    if (isSelected) {
+                      next = homeworkItems.filter((h) => h !== item);
+                    } else {
+                      next = [...homeworkItems, item];
+                    }
+                    setHomeworkItems(next);
+                    localStorage.setItem('idv_homework_items', JSON.stringify(next));
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-amber-500 text-amber-950 shadow-xs ring-2 ring-amber-300 font-extrabold'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <span className="text-xs">{isSelected ? '☑' : '☐'}</span>
+                  <span>{item}</span>
+                  {isSelected && <Check className="w-3 h-3 ml-0.5 text-amber-950 stroke-[3]" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Notice for Writing Skill with Penalty Repetitions */}
         {hasWritingSkill && (
           <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs animate-in fade-in">
@@ -1289,28 +1484,17 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
                   </div>
                 </th>
 
-                <th className="py-3 px-2 text-center w-36">
-                  <div className="flex flex-col items-center gap-1">
-                    <span>BTVN</span>
-                    <div className="inline-flex items-center gap-1 font-normal text-[10px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60">
-                      <button
-                        type="button"
-                        onClick={() => handleSetAllHomework('Đã làm')}
-                        className="text-emerald-700 hover:underline font-bold"
-                      >
-                        Đã làm
-                      </button>
-                      <span className="text-slate-300">•</span>
-                      <button
-                        type="button"
-                        onClick={() => handleSetAllHomework('Thiếu')}
-                        className="text-amber-700 hover:underline font-bold"
-                      >
-                        Thiếu
-                      </button>
-                    </div>
-                  </div>
-                </th>
+                {/* DYNAMIC BTVN ITEM GROUP HEADER */}
+                {homeworkItems.length > 0 ? (
+                  <th
+                    colSpan={homeworkItems.length}
+                    className="py-2.5 px-2 text-center bg-amber-100/90 text-amber-950 font-black text-xs border-l border-b border-amber-300/80 tracking-wide"
+                  >
+                    BTVN (Đề mục {homeworkItems.length})
+                  </th>
+                ) : (
+                  <th className="py-3 px-2 text-center w-24">BTVN</th>
+                )}
 
                 {/* CỘT TỔNG TIỀN PHẠT BUỔI NÀY (Sau cột BTVN) */}
                 <th className="py-3 px-2 text-center min-w-[115px] bg-amber-50/80 text-amber-950 font-bold border-l border-amber-200/60">
@@ -1385,6 +1569,17 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
                 <th className="py-3 px-3 min-w-[140px]">Nhận xét GV</th>
                 <th className="py-3 px-2 text-center w-16">Zalo</th>
               </tr>
+
+              {/* SECOND HEADER ROW FOR BTVN SUB-ITEMS */}
+              {homeworkItems.length > 0 && (
+                <tr className="bg-amber-50/80 border-b border-amber-200 text-[11px] font-extrabold text-amber-950">
+                  {homeworkItems.map((item) => (
+                    <th key={item} className="py-2 px-2 text-center min-w-[65px] border-l border-amber-200/60">
+                      {item}
+                    </th>
+                  ))}
+                </tr>
+              )}
             </thead>
             <tbody className="divide-y divide-slate-100">
               {classStudents.map((st, idx) => {
@@ -1531,43 +1726,34 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
                       </div>
                     </td>
 
-                    {/* Homework */}
-                    <td className="py-3 px-2 text-center">
-                      <div className="inline-flex items-center justify-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setStudentRows((prev) => ({
-                              ...prev,
-                              [st.id]: { ...prev[st.id], homeworkStatus: 'Đã làm' },
-                            }));
-                          }}
-                          className={`px-1.5 py-1 rounded text-[10px] font-bold ${
-                            row.homeworkStatus === 'Đã làm'
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          Làm
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setStudentRows((prev) => ({
-                              ...prev,
-                              [st.id]: { ...prev[st.id], homeworkStatus: 'Thiếu' },
-                            }));
-                          }}
-                          className={`px-1.5 py-1 rounded text-[10px] font-bold ${
-                            row.homeworkStatus === 'Thiếu'
-                              ? 'bg-amber-500 text-white'
-                              : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          Thiếu
-                        </button>
-                      </div>
-                    </td>
+                    {/* DYNAMIC BTVN CELLS PER SELECTED ITEM */}
+                    {homeworkItems.length > 0 ? (
+                      homeworkItems.map((item) => {
+                        const isMissing = row.missingHomeworkItems?.includes(item);
+                        return (
+                          <td key={item} className="py-2 px-2 text-center border-l border-slate-100">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMissingHwItem(st.id, item)}
+                              className="p-1 rounded transition-transform active:scale-95 inline-flex items-center justify-center focus:outline-none"
+                              title={isMissing ? `Đang thiếu "${item}" - Click để đánh dấu Đã làm` : `Đã làm "${item}" - Click để đánh dấu Thiếu`}
+                            >
+                              {isMissing ? (
+                                <span className="text-rose-600 font-extrabold text-sm font-mono tracking-tighter hover:scale-110 transition-transform select-none">
+                                  (✘)
+                                </span>
+                              ) : (
+                                <div className="w-6 h-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded flex items-center justify-center font-black text-xs shadow-xs border border-emerald-500 transition-transform">
+                                  <Check className="w-4 h-4 stroke-[3]" />
+                                </div>
+                              )}
+                            </button>
+                          </td>
+                        );
+                      })
+                    ) : (
+                      <td className="py-2 px-2 text-center text-slate-400 text-xs font-semibold">-</td>
+                    )}
 
                     {/* CỘT TỔNG TIỀN PHẠT CHO TỪNG HỌC VIÊN */}
                     <td className="py-3 px-2 text-center bg-amber-50/30 border-l border-amber-100">
@@ -1779,6 +1965,17 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
         </div>
       )}
 
+      {/* Modal Cấu hình Đề mục BTVN */}
+      {isHwConfigModalOpen && (
+        <HomeworkConfigModal
+          isOpen={isHwConfigModalOpen}
+          onClose={() => setIsHwConfigModalOpen(false)}
+          homeworkItems={homeworkItems}
+          onSaveHomeworkItems={handleSaveHomeworkItems}
+          onApplyAndSetAllDone={() => handleSetAllHomework('Đã làm')}
+        />
+      )}
+
       {/* Modal Xuất ảnh Bảng điểm & Gửi Zalo Cả Lớp */}
       {isClassZaloModalOpen && selectedClass && (
         <ClassScoreExportModal
@@ -1799,6 +1996,7 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
           skillTotalQuestions={skillTotalQuestions}
           totalPenaltyAmount={totalPenaltyAmount}
           penaltyBankAccount={penaltyBankAccount}
+          selectedHomeworkItems={homeworkItems}
         />
       )}
 

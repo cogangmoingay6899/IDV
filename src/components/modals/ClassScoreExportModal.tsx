@@ -42,6 +42,7 @@ interface ClassScoreExportModalProps {
   skillTotalQuestions?: Record<string, string>;
   totalPenaltyAmount?: string;
   penaltyBankAccount?: string;
+  selectedHomeworkItems?: string[];
 }
 
 type SortMode = 'score_desc' | 'default' | 'name_asc';
@@ -65,6 +66,7 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
   skillTotalQuestions = {},
   totalPenaltyAmount = '0 đ',
   penaltyBankAccount = '',
+  selectedHomeworkItems = [],
 }) => {
   const reportCardRef = useRef<HTMLDivElement>(null);
 
@@ -243,7 +245,19 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
       const scoresStr = scoresArr.length > 0 ? scoresArr.join(' | ') : 'Chưa có điểm';
       const avg = calculateStudentAverage(row);
       const avgStr = avg !== '-' ? ` | ${overallScoreType === 'ielts_band' ? 'Band' : 'ĐTB'}: ${avg}` : '';
-      const hwStr = row?.homeworkStatus || 'Đã làm';
+      
+      const activeItems = selectedHomeworkItems && selectedHomeworkItems.length > 0 ? selectedHomeworkItems : [];
+      const activeMissing = (row?.missingHomeworkItems || []).filter((i) => activeItems.includes(i));
+      let hwStr = 'Đã làm';
+      if (activeItems.length === 0) {
+        hwStr = '-';
+      } else if (row?.homeworkStatus === 'Chưa làm' || activeMissing.length >= activeItems.length) {
+        hwStr = 'Chưa làm';
+      } else if (activeMissing.length > 0) {
+        hwStr = `Thiếu (${activeMissing.join(', ')})`;
+      } else {
+        hwStr = `Đủ (${activeItems.join(', ')})`;
+      }
       const parsedPFee = parsePenaltyAmount(row?.penaltyFee);
       const parsedDebt = parsePenaltyAmount(row?.previousDebt);
       const studentTotalDue = parsedPFee + parsedDebt;
@@ -761,7 +775,16 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
                             {overallScoreType === 'ielts_band' ? 'Band IELTS' : 'Điểm TB'}
                           </th>
                         )}
-                        <th className="py-2.5 px-2 text-center w-20">BTVN</th>
+                        {selectedHomeworkItems && selectedHomeworkItems.length > 0 ? (
+                          <th
+                            colSpan={selectedHomeworkItems.length}
+                            className="py-2.5 px-2 text-center bg-amber-400/20 text-amber-200 font-extrabold text-xs border-b border-white/10"
+                          >
+                            BTVN (Đề mục {selectedHomeworkItems.length})
+                          </th>
+                        ) : (
+                          <th className="py-2.5 px-2 text-center w-20">BTVN</th>
+                        )}
                         <th className="py-2.5 px-2 text-center min-w-[100px] bg-amber-400/10 text-amber-300">Tiền Phạt</th>
                         {totalCalculatedPrevDebt > 0 && (
                           <th className="py-2.5 px-2 text-center min-w-[100px] bg-rose-400/15 text-rose-300">Nợ Cũ</th>
@@ -772,6 +795,17 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
                         )}
                         <th className="py-2.5 px-3 min-w-[130px]">Nhận Xét</th>
                       </tr>
+
+                      {/* SECOND HEADER ROW FOR BTVN SUB-ITEMS */}
+                      {selectedHomeworkItems && selectedHomeworkItems.length > 0 && (
+                        <tr className={`${themeConfig.tableHeaderBg} border-b border-white/10 text-[11px] font-extrabold tracking-wider`}>
+                          {selectedHomeworkItems.map((item) => (
+                            <th key={item} className="py-2 px-2 text-center min-w-[55px] text-amber-200">
+                              {item}
+                            </th>
+                          ))}
+                        </tr>
+                      )}
                     </thead>
                     <tbody className="divide-y divide-white/5 font-medium">
                       {sortedStudents.map((st, idx) => {
@@ -856,19 +890,36 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
                             )}
 
                             {/* BTVN */}
-                            <td className="py-2 px-2 text-center">
-                              <span
-                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                                  row?.homeworkStatus === 'Chưa làm'
-                                    ? 'bg-rose-500/20 text-rose-300'
-                                    : row?.homeworkStatus === 'Thiếu'
-                                    ? 'bg-amber-500/20 text-amber-300'
-                                    : 'bg-emerald-500/20 text-emerald-300'
-                                }`}
-                              >
-                                {row?.homeworkStatus || 'Đã làm'}
-                              </span>
-                            </td>
+                            {selectedHomeworkItems && selectedHomeworkItems.length > 0 ? (
+                              selectedHomeworkItems.map((item) => {
+                                const isMissing = row?.missingHomeworkItems?.includes(item);
+                                return (
+                                  <td key={item} className="py-2 px-2 text-center">
+                                    {isMissing ? (
+                                      <span className="inline-flex items-center justify-center font-black text-sm text-rose-400 font-mono tracking-tighter">
+                                        (✘)
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-600 text-white font-black text-xs shadow-2xs border border-emerald-500">
+                                        ✓
+                                      </span>
+                                    )}
+                                  </td>
+                                );
+                              })
+                            ) : (
+                              <td className="py-2 px-2 text-center">
+                                {row?.homeworkStatus === 'Chưa làm' || row?.homeworkStatus === 'Thiếu' ? (
+                                  <span className="inline-flex items-center justify-center font-black text-sm text-rose-400 font-mono tracking-tighter">
+                                    (✘)
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-600 text-white font-black text-xs shadow-2xs border border-emerald-500">
+                                    ✓
+                                  </span>
+                                )}
+                              </td>
+                            )}
 
                             {/* CỘT TỔNG TIỀN PHẠT NGAY SAU CỘT BTVN */}
                             <td className="py-2 px-2 text-center">

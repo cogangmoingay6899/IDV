@@ -236,6 +236,8 @@ export interface AttendanceRecord {
   previousDebt?: number | string; // Nợ chưa nộp các buổi trước (VNĐ)
   penaltyBankAccount?: string; // STK nộp phạt
   skillTotalQuestions?: Record<string, string | number>; // e.g. { 'Từ vựng': 30, 'Nghe': 40 }
+  homeworkItems?: string[]; // Danh sách đề mục BTVN (Nghe, Nói, Đọc, Viết, Chép phạt, Chữa bài...)
+  missingHomeworkItems?: string[]; // Danh sách đề mục học viên bị thiếu
   homeworkStatus?: 'Đã làm' | 'Chưa làm' | 'Thiếu';
   quizletStatus?: 'Đã học' | 'Chưa học';
 }
@@ -251,6 +253,7 @@ export interface TeachingSession {
   skillsTaught?: string[];
   lessonTopic: string;
   homeworkAssigned?: string;
+  homeworkItems?: string[];
   quizletAssigned?: string;
   studentScores: {
     studentId: string;
@@ -261,6 +264,8 @@ export interface TeachingSession {
     penaltyCopies?: number;
     feedback?: string;
     homeworkDone?: boolean;
+    homeworkItems?: string[];
+    missingHomeworkItems?: string[];
     homeworkStatus?: 'Đã làm' | 'Chưa làm' | 'Thiếu';
     quizletStatus?: 'Đã học' | 'Chưa học';
   }[];
