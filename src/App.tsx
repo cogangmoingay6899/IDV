@@ -1637,6 +1637,7 @@ export default function App() {
                 classes={classes}
                 students={students}
                 onAddTeacher={handleAddTeacher}
+                onUpdateClass={handleUpdateClass}
               />
             )}
 

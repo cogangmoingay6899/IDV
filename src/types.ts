@@ -126,6 +126,24 @@ export interface Teacher {
   status: 'Đang giảng dạy' | 'Nghỉ phép' | 'Tạm ngưng';
 }
 
+export interface TeacherSubstituteRecord {
+  id: string;
+  classId: string;
+  className: string;
+  classSchedule: string;
+  originalTeacherId?: string;
+  originalTeacherName: string;
+  substituteTeacherId: string;
+  substituteTeacherName: string;
+  date: string;
+  shift: string;
+  sessionNumber?: number;
+  reason?: string;
+  status: 'Đã lên lịch' | 'Đã hoàn thành' | 'Đã hủy';
+  notes?: string;
+  createdAt: string;
+}
+
 export interface LeadAdmission {
   id: string;
   code: string;

@@ -752,6 +752,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     );
 
     const targetClassId = matchedClass ? matchedClass.id : (classGroup?.id || 'class-vocab-auto');
+    const targetClassName = matchedClass?.name || cleanClassName || classGroup?.name || 'Lớp Học IELTS';
 
     const newSub: VocabTestSubmission = {
       id: `sub-${Date.now()}`,
