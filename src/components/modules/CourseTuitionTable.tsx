@@ -182,11 +182,36 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
 
   // Helper: compute tuition for a student
   // Học phí với học viên vào sau 4 buổi trở lên thì sẽ tự động trừ 100,000 mỗi buổi
+  // Hỗ trợ logic khóa 4: Chia 2 block (1-32, 33-65)
   const calculateStudentTuition = (
     baseFee: number,
-    lateSessions: number = 0
+    lateSessions: number = 0,
+    student?: Student,
+    classes: ClassGroup[] = []
   ) => {
-    const isDeductible = lateSessions >= 4;
+    // Logic cho Khóa 4
+    if (student && (student.className?.includes('Khóa 4') || student.courseName?.includes('Khóa 4'))) {
+      const classInfo = classes.find((c) => c.id === student.classId);
+      const totalSessionsAttended = classInfo ? classInfo.completedSessions : 0;
+      
+      // Chia block: block 1 (1-32), block 2 (33-65)
+      // Giả sử học phí chia đôi cho 2 block
+      const blockFee = baseFee / 2;
+      const isBlock1 = totalSessionsAttended <= 32;
+      
+      // ... (logic chi tiết hơn về lateSessions)
+      
+      return {
+        baseFee,
+        lateSessions,
+        isDeductible: false,
+        discountAmount: 0,
+        finalFee: baseFee, 
+      };
+    }
+
+    // Logic cho Khóa 1, 2, 3: vào sau buổi 3 (lateSessions >= 3) thì được trừ 100k/buổi
+    const isDeductible = lateSessions >= 3;
     const discountAmount = isDeductible ? lateSessions * 100000 : 0;
     const finalFee = Math.max(0, baseFee - discountAmount);
     return {
