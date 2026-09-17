@@ -130,6 +130,7 @@ import {
   saveDocument,
   saveBatchDocuments,
   deleteDocument,
+  incrementClassStudentCount,
 } from './lib/firestoreService';
 
 import {
@@ -664,14 +665,12 @@ export default function App() {
 
     // If assigned to a class, update class current student count
     if (newStudent.classId) {
-      setClasses((prev) => {
-        const updated = prev.map((c) =>
+      setClasses((prev) => 
+        prev.map((c) =>
           c.id === newStudent.classId ? { ...c, currentStudents: c.currentStudents + 1 } : c
-        );
-        const cls = updated.find((c) => c.id === newStudent.classId);
-        if (cls) saveDocument('classes', cls);
-        return updated;
-      });
+        )
+      );
+      incrementClassStudentCount(newStudent.classId, 1);
     }
 
     if (newStudent.balanceOwed === 0 || newStudent.tuitionStatus === 'Đã đóng đủ') {

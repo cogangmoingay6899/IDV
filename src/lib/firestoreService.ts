@@ -2,6 +2,9 @@ import {
   collection,
   doc,
   setDoc,
+  updateDoc,
+  arrayUnion,
+  increment,
   deleteDoc,
   onSnapshot,
   getDocs,
@@ -217,6 +220,40 @@ export async function fetchDocument<T>(
     console.error(`Error fetching document ${id} from ${collectionName}:`, err);
   }
   return null;
+}
+
+/**
+ * Atomically increments the student count of a class.
+ */
+export async function incrementClassStudentCount(classId: string, amount: number = 1) {
+  try {
+    const docRef = doc(db, 'classes', classId);
+    await updateDoc(docRef, {
+      currentStudents: increment(amount),
+    });
+  } catch (err) {
+    console.error(`Error incrementing student count for class ${classId}:`, err);
+    throw err;
+  }
+}
+
+/**
+ * Atomically adds a submission to the test's submissions array.
+ */
+export async function addSubmissionToTest(
+  collectionName: string,
+  testId: string,
+  submission: any
+) {
+  try {
+    const docRef = doc(db, collectionName, String(testId));
+    await updateDoc(docRef, {
+      submissions: arrayUnion(submission),
+    });
+  } catch (err) {
+    console.error(`Error adding submission to ${collectionName}:`, err);
+    throw err;
+  }
 }
 
 /**

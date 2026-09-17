@@ -27,7 +27,7 @@ import {
   Link as LinkIcon,
 } from 'lucide-react';
 import { VocabTest, VocabTestSubmission, VocabQuestion, ClassGroup, Student, ExamScore, AttendanceRecord, AuthUser } from '../../types';
-import { saveDocument, subscribeCollection, fetchDocument } from '../../lib/firestoreService';
+import { saveDocument, subscribeCollection, fetchDocument, addSubmissionToTest } from '../../lib/firestoreService';
 import {
   getPublicBaseUrl,
   setPublicBaseUrl,
@@ -770,28 +770,14 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     };
 
     try {
-      // Update state tests list with submission
-      const collectionName = activeTestType === 'review' ? 'vocab_reviews' : 'vocab_tests';
-      const activeList = activeTestType === 'review' ? reviewTests : tests;
-
-      const testToUpdate = activeList.find((t) => t.id === activeRunnerTest.id);
-      if (!testToUpdate) throw new Error('Không tìm thấy bài test');
-
-      const updatedTest = {
-        ...testToUpdate,
-        submissions: [newSub, ...testToUpdate.submissions],
-      };
-
       // Persist to Firestore
-      await saveDocument(collectionName, updatedTest);
+      const collectionName = activeTestType === 'review' ? 'vocab_reviews' : 'vocab_tests';
+      
+      // Use atomic array union to prevent race conditions
+      await addSubmissionToTest(collectionName, activeRunnerTest.id, newSub);
       await saveDocument('vocab_test_submissions', newSub);
 
-      // Update state tests list ONLY on success
-      const updatedList = activeList.map((t) => (t.id === activeRunnerTest.id ? updatedTest : t));
-      
-      if (activeTestType === 'review') setReviewTests(updatedList);
-      else setTests(updatedList);
-      
+      // The subscription will automatically update the local state
       setTestCompletedSubmission(newSub);
     } catch (error) {
       console.error('Error submitting test:', error);
