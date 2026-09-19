@@ -56,6 +56,7 @@ import { CreateTeacherModal } from '../modals/CreateTeacherModal';
 import { EditClassModal } from '../modals/EditClassModal';
 import { ClassScoreExportModal } from '../modals/ClassScoreExportModal';
 import { HomeworkConfigModal } from '../modals/HomeworkConfigModal';
+import { ClassFullScheduleModal } from '../modals/ClassFullScheduleModal';
 import { CourseTuitionTable } from './CourseTuitionTable';
 import {
   calculateCourseSchedule,
@@ -508,6 +509,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
     return ['Nghe', 'Nói', 'Đọc', 'Viết', 'Chép phạt', 'Chữa bài'];
   });
   const [isHwConfigModalOpen, setIsHwConfigModalOpen] = useState(false);
+  const [isFullScheduleModalOpen, setIsFullScheduleModalOpen] = useState(false);
 
   // Parse penalty amount helper
   const parsePenaltyAmount = (val?: string | number): number => {
@@ -1411,16 +1413,27 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 {classCourseSchedule.remainingDaysText}
               </div>
             </div>
-            {onUpdateClass && (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setIsEditModalOpen(true)}
-                className="px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-50 rounded-xl border border-purple-200 transition-colors"
-                title="Cập nhật buổi nghỉ hoặc thay đổi lịch học"
+                onClick={() => setIsFullScheduleModalOpen(true)}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+                title="Xem chi tiết toàn bộ 32-33 buổi học, mốc kiểm tra & tin nhắn Zalo"
               >
-                + Cập nhật ngày nghỉ
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Xem Toàn Bộ Lịch Trình</span>
               </button>
-            )}
+              {onUpdateClass && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="px-3 py-1.5 text-xs font-bold text-purple-700 hover:bg-purple-50 rounded-xl border border-purple-200 transition-colors"
+                  title="Cập nhật buổi nghỉ hoặc thay đổi lịch học"
+                >
+                  + Cập nhật ngày nghỉ
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -2857,9 +2870,21 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                                 {st.name.charAt(0)}
                               </div>
                               <div>
-                                <div className="font-extrabold text-slate-900">{st.name}</div>
-                                <div className="text-[10px] text-purple-700 font-mono font-bold">
-                                  {st.code}
+                                <div className="font-extrabold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                                  <span>{st.name}</span>
+                                  {(st.isExternalStudent || st.studentCategory === 'Học sinh ngoài') && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                                      🏷️ Học sinh ngoài
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-purple-700 font-mono font-bold flex items-center gap-1.5 flex-wrap">
+                                  <span>{st.code}</span>
+                                  {(st.customTuitionFee || (st.courseTuitionFee && st.courseTuitionFee !== classGroup.courseTuitionFee)) && (
+                                    <span className="text-[9px] font-sans font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                      HP riêng: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(st.customTuitionFee || st.courseTuitionFee || 0)}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -4353,6 +4378,13 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
         onClose={() => setIsHwConfigModalOpen(false)}
         currentItems={homeworkItems}
         onSave={handleSaveHomeworkItems}
+      />
+
+      {/* MODAL TOÀN BỘ LỊCH TRÌNH 32-33 BUỔI */}
+      <ClassFullScheduleModal
+        isOpen={isFullScheduleModalOpen}
+        onClose={() => setIsFullScheduleModalOpen(false)}
+        classGroup={classGroup}
       />
     </div>
   );

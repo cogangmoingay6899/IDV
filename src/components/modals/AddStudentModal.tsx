@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, UserPlus, GraduationCap, Phone, Mail, MapPin, Calendar, DollarSign } from 'lucide-react';
+import { X, UserPlus, GraduationCap, Phone, Mail, MapPin, Calendar, DollarSign, Sparkles, UserCheck } from 'lucide-react';
 import { Student, ClassGroup } from '../../types';
+import { detectCourseLevel } from '../../utils/courseSchedule';
 
 interface AddStudentModalProps {
   isOpen: boolean;
@@ -17,6 +18,11 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const initialClass = classes[0];
+  const initialIsK4 = initialClass
+    ? detectCourseLevel(initialClass.name || initialClass.courseName || '', initialClass.totalSessions || 32) === 'Khóa 4'
+    : false;
+
   const [formData, setFormData] = useState({
     name: '',
     dob: '2008-01-01',
@@ -26,14 +32,34 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     parentName: '',
     parentPhone: '',
     address: '',
-    classId: classes[0]?.id || '',
-    tuitionFee: 14500000,
-    paidAmount: 14500000,
+    classId: initialClass?.id || '',
+    tuitionFee: initialClass?.tuitionFee || 14500000,
+    paidAmount: initialClass?.tuitionFee || 14500000,
+    isExternalStudent: initialIsK4,
   });
+
+  const selectedClass = classes.find((c) => c.id === formData.classId);
+  const isSelectedK4 = selectedClass
+    ? detectCourseLevel(selectedClass.name || selectedClass.courseName || '', selectedClass.totalSessions || 32) === 'Khóa 4'
+    : false;
+
+  const handleClassChange = (newClassId: string) => {
+    const targetClass = classes.find((c) => c.id === newClassId);
+    const targetIsK4 = targetClass
+      ? detectCourseLevel(targetClass.name || targetClass.courseName || '', targetClass.totalSessions || 32) === 'Khóa 4'
+      : false;
+
+    setFormData((prev) => ({
+      ...prev,
+      classId: newClassId,
+      tuitionFee: targetClass?.tuitionFee || prev.tuitionFee,
+      paidAmount: targetClass?.tuitionFee || prev.paidAmount,
+      isExternalStudent: targetIsK4 ? true : prev.isExternalStudent,
+    }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const selectedClass = classes.find((c) => c.id === formData.classId);
     const balance = Math.max(0, formData.tuitionFee - formData.paidAmount);
 
     const newStudent: Student = {
@@ -54,6 +80,11 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
       joinDate: new Date().toISOString().split('T')[0],
       tuitionStatus: balance === 0 ? 'Đã đóng đủ' : 'Còn nợ',
       balanceOwed: balance,
+      isExternalStudent: formData.isExternalStudent,
+      studentCategory: formData.isExternalStudent ? 'Học sinh ngoài' : 'Thường',
+      customTuitionFee: formData.tuitionFee,
+      courseTuitionFee: formData.tuitionFee,
+      tuitionPayable: formData.tuitionFee,
     };
 
     onAddStudent(newStudent);
@@ -171,7 +202,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
             <label className="font-semibold text-slate-700 block mb-1">Xếp vào lớp học *</label>
             <select
               value={formData.classId}
-              onChange={(e) => setFormData({ ...formData, classId: e.target.value })}
+              onChange={(e) => handleClassChange(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-medium"
             >
               {classes.length === 0 ? (
@@ -191,16 +222,56 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
             )}
           </div>
 
+          {/* Đánh dấu Học sinh ngoài & Cho phép nhập học phí khác mặc định ở Khóa 4 */}
+          <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-xl space-y-1.5">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isExternalStudent}
+                onChange={(e) => setFormData({ ...formData, isExternalStudent: e.target.checked })}
+                className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500"
+              />
+              <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-amber-700" />
+                <span>Đánh dấu "Học sinh ngoài" {isSelectedK4 ? '(Đăng ký thẳng Khóa 4)' : ''}</span>
+              </span>
+            </label>
+            <p className="text-[10px] text-amber-800 ml-6 leading-relaxed">
+              Học viên ngoài đăng ký thẳng Khóa 4 (hoặc nguồn ngoài, không học từ Khóa 1-3). Hệ thống cho phép nhập mức học phí thỏa thuận riêng biệt khác với mức mặc định của lớp.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 p-3 bg-purple-50/50 rounded-xl border border-purple-100">
             <div>
-              <label className="font-semibold text-purple-900 block mb-1">Học phí khóa học (VNĐ)</label>
+              <label className="font-semibold text-purple-900 block mb-1">
+                Học phí khóa học (VNĐ) {isSelectedK4 ? '(Khóa 4: Nhập khác mặc định)' : ''}
+              </label>
               <input
                 type="number"
                 step="100000"
                 value={formData.tuitionFee}
                 onChange={(e) => setFormData({ ...formData, tuitionFee: Number(e.target.value) })}
-                className="w-full bg-white border border-slate-200 rounded-lg p-2 font-bold"
+                className="w-full bg-white border border-slate-200 rounded-lg p-2 font-bold text-purple-900"
               />
+              {isSelectedK4 && (
+                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                  <span className="text-[9px] text-slate-500 font-bold">Gợi ý:</span>
+                  {[14500000, 15500000, 16500000, 18000000].map((fee) => (
+                    <button
+                      key={fee}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, tuitionFee: fee })}
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition-colors ${
+                        formData.tuitionFee === fee
+                          ? 'bg-purple-700 text-white border-purple-700'
+                          : 'bg-white text-purple-800 border-purple-200 hover:bg-purple-50'
+                      }`}
+                    >
+                      {(fee / 1000000).toFixed(1)} tr
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="font-semibold text-purple-900 block mb-1">Số tiền đóng đợt này</label>
@@ -211,6 +282,9 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
                 onChange={(e) => setFormData({ ...formData, paidAmount: Number(e.target.value) })}
                 className="w-full bg-white border border-slate-200 rounded-lg p-2 font-bold text-emerald-700"
               />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Còn nợ: {Math.max(0, formData.tuitionFee - formData.paidAmount).toLocaleString('vi-VN')} đ
+              </p>
             </div>
           </div>
 

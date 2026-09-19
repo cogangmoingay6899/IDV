@@ -29,12 +29,16 @@ import {
   CalendarDays,
   Copy,
   Check,
+  CalendarCheck2,
+  Bell,
 } from 'lucide-react';
 import { Student, ClassGroup, Teacher, AttendanceRecord, ExamScore, CurriculumCourse, AuthUser, TuitionTransaction } from '../../types';
 import { ClassDetailView } from './ClassDetailView';
 import { EditClassModal } from '../modals/EditClassModal';
 import { ClassSpreadsheetGradebookModule } from './ClassSpreadsheetGradebookModule';
 import { ClassVocabTestModule } from './ClassVocabTestModule';
+import { CourseScheduleRemindersModal } from '../modals/CourseScheduleRemindersModal';
+import { ClassFullScheduleModal } from '../modals/ClassFullScheduleModal';
 import { formatDateVN, calculateClassEndInfo } from '../../utils/courseSchedule';
 
 interface StudentsModuleProps {
@@ -95,6 +99,11 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
   const [quickStudentSearch, setQuickStudentSearch] = useState('');
   const [droppedStudentSearch, setDroppedStudentSearch] = useState('');
   const [zaloToast, setZaloToast] = useState<string | null>(null);
+  const [isScheduleRemindersModalOpen, setIsScheduleRemindersModalOpen] = useState(false);
+  const [selectedClassForScheduleModal, setSelectedClassForScheduleModal] = useState<ClassGroup | null>(null);
+
+  const taAlertsCount = classes.filter((c) => calculateClassEndInfo(c).taAlertStatus === 'needed').length;
+  const inExamCount = classes.filter((c) => calculateClassEndInfo(c).examStatus === 'in_exam').length;
 
   const formatVND = (val?: number) => {
     if (val === undefined || isNaN(val)) return '0đ';
@@ -284,6 +293,27 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
           <span>Bài Test Từ Vựng Khóa 1, 2, 3, 4</span>
         </button>
 
+        <button
+          onClick={() => setIsScheduleRemindersModalOpen(true)}
+          className="px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-800 hover:to-indigo-800 text-white shadow-xs hover:shadow-md"
+        >
+          <CalendarCheck2 className="w-3.5 h-3.5 text-amber-300" />
+          <span>Lịch Nhắc Nhở &amp; Bế Giảng</span>
+          {taAlertsCount > 0 ? (
+            <span className="px-1.5 py-0.2 text-[10px] font-black bg-amber-400 text-amber-950 rounded-full animate-pulse">
+              {taAlertsCount} cần TA
+            </span>
+          ) : inExamCount > 0 ? (
+            <span className="px-1.5 py-0.2 text-[10px] font-black bg-indigo-300 text-indigo-950 rounded-full">
+              {inExamCount} đợt thi
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.2 text-[10px] font-semibold bg-white/20 text-purple-100 rounded-full">
+              Chuẩn 4 Khóa
+            </span>
+          )}
+        </button>
+
         {isCanViewSystemStudents && (
           <button
             onClick={() => setActiveTab('students')}
@@ -448,9 +478,12 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
                   >
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[11px] font-mono font-bold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-md group-hover:bg-purple-100 transition-colors">
                             {cls.code}
+                          </span>
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                            {endInfo.courseLevel} ({endInfo.totalSessions}b)
                           </span>
                           <span
                             className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
@@ -461,6 +494,18 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
                           >
                             {cls.status}
                           </span>
+                          {endInfo.taAlertStatus === 'needed' && (
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white flex items-center gap-1 animate-pulse shadow-xs">
+                              <Bell className="w-3 h-3" />
+                              <span>Nhắc TA (B.29)</span>
+                            </span>
+                          )}
+                          {endInfo.examStatus === 'in_exam' && (
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-600 text-white flex items-center gap-1 shadow-xs">
+                              <CalendarCheck2 className="w-3 h-3" />
+                              <span>{endInfo.examRuleBadge}</span>
+                            </span>
+                          )}
                         </div>
 
                         {onUpdateClass && (
@@ -530,18 +575,31 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-slate-100">
-                      {/* Schedule end date analysis card */}
-                      <div className="bg-slate-50 rounded-2xl p-2.5 mb-3 border border-slate-200/60 space-y-1">
+                      {/* Schedule end date & milestone analysis card */}
+                      <div className="bg-purple-50/50 rounded-2xl p-2.5 mb-3 border border-purple-200/60 space-y-1.5">
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-slate-500">
+                          <span className="text-slate-600">
                             Khai giảng: <strong className="text-slate-800 font-semibold">{endInfo.formattedStartDate}</strong>
                           </span>
-                          <span className="text-purple-700 font-bold">
-                            Bế giảng: {endInfo.formattedEndDate}
+                          <span className="text-purple-900 font-bold">
+                            Bế giảng: {endInfo.formattedEndDate} (Buổi {endInfo.totalSessions})
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="text-slate-600 font-medium">
+
+                        <div className="flex items-center justify-between text-[10px] pt-1 border-t border-purple-100 flex-wrap gap-1">
+                          <span className="font-bold text-indigo-700 flex items-center gap-1">
+                            <CalendarCheck2 className="w-3 h-3 text-indigo-600" />
+                            <span>Kiểm tra: Buổi {endInfo.examSessions.join(' & ')}</span>
+                          </span>
+                          <span className="text-purple-700 font-semibold">
+                            {endInfo.levelConfig.breakAfterCourseSessions > 0
+                              ? `Nghỉ 1 buổi lên ${endInfo.levelConfig.nextCourseName}`
+                              : 'Tốt nghiệp lộ trình'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                          <span>
                             {endInfo.totalDays} ngày (~{endInfo.totalWeeks} tuần)
                           </span>
                           <span className={`font-bold ${endInfo.isFinished ? 'text-slate-500' : 'text-emerald-700'}`}>
@@ -562,20 +620,36 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
                         <div className="bg-purple-600 h-1.5 rounded-full" style={{ width: `${progress}%` }}></div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100/80 text-xs">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedClassIdForSheet(cls.id);
-                            setActiveTab('sheet_gradebook');
-                          }}
-                          className="text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition-colors"
-                          title="Mở Sổ lớp & Bảng điểm dạng Google Sheet của lớp này"
-                        >
-                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Sổ lớp Sheet</span>
-                        </button>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100/80 text-xs gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedClassIdForSheet(cls.id);
+                              setActiveTab('sheet_gradebook');
+                            }}
+                            className="text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-colors"
+                            title="Mở Sổ lớp & Bảng điểm dạng Google Sheet của lớp này"
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Sổ lớp Sheet</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedClassForScheduleModal(cls);
+                            }}
+                            className="text-[11px] text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-colors"
+                            title="Xem chi tiết 32-33 buổi học, mốc kiểm tra & mẫu tin Zalo"
+                          >
+                            <CalendarCheck2 className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Lịch thi</span>
+                          </button>
+                        </div>
+
                         <span className="inline-flex items-center gap-1 font-bold text-purple-700 group-hover:translate-x-0.5 transition-transform text-xs">
                           <span>Vào lớp</span>
                           <ArrowRight className="w-3.5 h-3.5" />
@@ -1098,6 +1172,27 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
           }}
         />
       )}
+
+      {/* Modal: Comprehensive Schedule & Exam & End-of-Course Reminders for All Classes */}
+      <CourseScheduleRemindersModal
+        isOpen={isScheduleRemindersModalOpen}
+        onClose={() => setIsScheduleRemindersModalOpen(false)}
+        classes={classes}
+        onSelectClassDetail={(cls) => {
+          setIsScheduleRemindersModalOpen(false);
+          setSelectedClassDetail(cls);
+        }}
+      />
+
+      {/* Modal: Full 32/33 Sessions Schedule for a Single Class */}
+      {selectedClassForScheduleModal && (
+        <ClassFullScheduleModal
+          isOpen={selectedClassForScheduleModal !== null}
+          onClose={() => setSelectedClassForScheduleModal(null)}
+          classGroup={selectedClassForScheduleModal}
+        />
+      )}
+
       {/* Toast Notification */}
       {zaloToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 backdrop-blur-xs text-white text-xs font-semibold px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 border border-slate-700 animate-in fade-in slide-in-from-bottom-3">

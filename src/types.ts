@@ -48,7 +48,9 @@ export interface Student {
   avatar?: string;
   tuitionStatus: 'Đã đóng đủ' | 'Còn nợ' | 'Chưa đóng';
   balanceOwed: number;
-  studentCategory?: 'Thường' | 'Học lại' | 'Thêm mới';
+  studentCategory?: 'Thường' | 'Học lại' | 'Thêm mới' | 'Học sinh ngoài';
+  isExternalStudent?: boolean; // Đánh dấu học sinh ngoài (đăng ký thẳng Khóa 4, không học từ các khóa trước)
+  customTuitionFee?: number; // Học phí tùy chỉnh khác mặc định của khóa
   droppedClassId?: string;
   droppedClassName?: string;
   droppedDate?: string;

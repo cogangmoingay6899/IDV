@@ -32,6 +32,11 @@ export interface CourseLevelConfig {
   nextCourseKey?: CourseLevelKey;
   nextCourseName: string;
   description: string;
+  examRule: string;
+  breakRule: string;
+  taAlertSession: number;
+  taAlertRule: string;
+  endRule: string;
 }
 
 export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
@@ -45,6 +50,11 @@ export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
     nextCourseKey: 'Khóa 2',
     nextCourseName: 'INSPIRE',
     description: '32 buổi • Buổi 32 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 2 (INSPIRE)',
+    examRule: 'Kiểm tra cuối khóa vào Buổi thứ 32 (1 buổi thi tập trung)',
+    breakRule: 'Nghỉ 1 buổi trong lịch học trước khi khai giảng Khóa 2 (INSPIRE)',
+    taAlertSession: 29,
+    taAlertRule: 'Buổi 29: Nhắn tin Quản lý sắp xếp Trợ giảng (TA) chuẩn bị thi Buổi 32',
+    endRule: 'Bế giảng kết thúc khóa sau Buổi 32',
   },
   'Khóa 2': {
     key: 'Khóa 2',
@@ -56,6 +66,11 @@ export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
     nextCourseKey: 'Khóa 3',
     nextCourseName: 'DESIRE',
     description: '33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 3 (DESIRE)',
+    examRule: 'Kiểm tra cuối khóa vào Buổi thứ 32 & 33 (2 buổi: Đợt 1 Speaking/Writing & Đợt 2 Listening/Reading)',
+    breakRule: 'Nghỉ 1 buổi trong lịch học trước khi khai giảng Khóa 3 (DESIRE)',
+    taAlertSession: 29,
+    taAlertRule: 'Buổi 29: Nhắn tin Quản lý sắp xếp Trợ giảng (TA) chuẩn bị thi 2 buổi 32 & 33',
+    endRule: 'Bế giảng kết thúc khóa sau Buổi 33',
   },
   'Khóa 3': {
     key: 'Khóa 3',
@@ -67,6 +82,11 @@ export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
     nextCourseKey: 'Khóa 4',
     nextCourseName: 'LUYỆN ĐỀ DRILL',
     description: '33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 4 (LUYỆN ĐỀ DRILL)',
+    examRule: 'Kiểm tra cuối khóa vào Buổi thứ 32 & 33 (2 buổi: Đợt 1 Speaking/Writing & Đợt 2 Listening/Reading)',
+    breakRule: 'Nghỉ 1 buổi trong lịch học trước khi khai giảng Khóa 4 (LUYỆN ĐỀ DRILL)',
+    taAlertSession: 29,
+    taAlertRule: 'Buổi 29: Nhắn tin Quản lý sắp xếp Trợ giảng (TA) chuẩn bị thi 2 buổi 32 & 33',
+    endRule: 'Bế giảng kết thúc khóa sau Buổi 33',
   },
   'Khóa 4': {
     key: 'Khóa 4',
@@ -77,6 +97,11 @@ export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
     breakAfterCourseSessions: 0,
     nextCourseName: 'Tốt nghiệp / Thi chứng chỉ IELTS quốc tế',
     description: '32 buổi • Buổi 31 & 32 kiểm tra cuối khóa • Không nghỉ',
+    examRule: 'Kiểm tra Mock Test cuối khóa vào Buổi thứ 31 & 32 (2 buổi thi thử đề thật Forecast)',
+    breakRule: 'Không nghỉ • Hoàn thành toàn diện lộ trình IELTS',
+    taAlertSession: 29,
+    taAlertRule: 'Buổi 28 - 29: Nhắn tin Quản lý sắp xếp Trợ giảng (TA) chuẩn bị thi từ Buổi 31',
+    endRule: 'Bế giảng tốt nghiệp lộ trình sau Buổi 32',
   },
 };
 
@@ -374,11 +399,29 @@ export interface SessionScheduleItem {
   isExam: boolean;
   examLabel?: string;
   isSession29TAAlert: boolean;
+  taAlertLabel?: string;
+  isPreExamAlert?: boolean;
+  preExamAlertLabel?: string;
+  isFinalSession?: boolean;
   isOffDay?: boolean;
   offReason?: string;
 }
 
+export interface CourseMilestone {
+  id: string;
+  type: 'ta_reminder' | 'pre_exam' | 'exam' | 'course_end' | 'break' | 'next_course';
+  sessionNumber?: number;
+  date: string;
+  formattedDate: string;
+  dayOfWeekName?: string;
+  title: string;
+  description: string;
+  badgeColor: string;
+  isCompleted?: boolean;
+}
+
 export interface CalculatedCourseSchedule {
+  levelKey: CourseLevelKey;
   courseLevel: CourseLevelKey;
   config: CourseLevelConfig;
   startDate: string;
@@ -387,12 +430,22 @@ export interface CalculatedCourseSchedule {
   formattedEstimatedEndDate: string;
   session29Date: string;
   formattedSession29Date: string;
+  breakDate?: string;
+  formattedBreakDate?: string;
   nextCourseStartDate: string;
   formattedNextCourseStartDate: string;
   totalSessions: number;
   offDatesCount: number;
   offDates: string[];
   examSessions: number[];
+  examDates: {
+    sessionNumber: number;
+    date: string;
+    formattedDate: string;
+    dayOfWeekName: string;
+    label: string;
+  }[];
+  milestones: CourseMilestone[];
   breakSessionsCount: number;
   sessions: SessionScheduleItem[];
   scheduleDays: number[];
@@ -527,20 +580,50 @@ export function calculateCourseSchedule(
       } else {
         sessionCount++;
         const isExam = examSessions.includes(sessionCount);
-        const isSession29 = sessionCount === 29;
+        const isSession29 = detectedLevel === 'Khóa 4' ? (sessionCount === 28 || sessionCount === 29) : (sessionCount === 29);
+        const isPreExam = detectedLevel === 'Khóa 4' ? (sessionCount === 30) : (sessionCount === 31);
+        const isFinal = sessionCount === totalSessions;
 
         let examLabel: string | undefined;
         if (isExam) {
           if (detectedLevel === 'Khóa 1') {
-            examLabel = 'Kiểm tra cuối Khóa 1';
+            examLabel = 'Kiểm tra cuối Khóa 1 (PRE) - Đánh giá chuẩn đầu ra (Buổi 32)';
           } else if (detectedLevel === 'Khóa 2') {
-            examLabel = sessionCount === 32 ? 'Kiểm tra cuối Khóa 2 (Phần 1)' : 'Kiểm tra cuối Khóa 2 (Phần 2)';
+            examLabel = sessionCount === 32
+              ? 'Kiểm tra cuối Khóa 2 (INSPIRE) - Đợt 1 (Speaking & Writing)'
+              : 'Kiểm tra cuối Khóa 2 (INSPIRE) - Đợt 2 (Listening & Reading) & Bế giảng';
           } else if (detectedLevel === 'Khóa 3') {
-            examLabel = sessionCount === 32 ? 'Kiểm tra cuối Khóa 3 (Phần 1)' : 'Kiểm tra cuối Khóa 3 (Phần 2)';
+            examLabel = sessionCount === 32
+              ? 'Kiểm tra cuối Khóa 3 (DESIRE) - Đợt 1 (Speaking & Writing)'
+              : 'Kiểm tra cuối Khóa 3 (DESIRE) - Đợt 2 (Listening & Reading) & Bế giảng';
           } else if (detectedLevel === 'Khóa 4') {
-            examLabel = sessionCount === 31 ? 'Kiểm tra cuối Khóa 4 (Phần 1)' : 'Kiểm tra cuối Khóa 4 (Phần 2)';
+            examLabel = sessionCount === 31
+              ? 'Kiểm tra Mock Test Khóa 4 (DRILL) - Đợt 1 (Buổi 31)'
+              : 'Kiểm tra Mock Test Khóa 4 (DRILL) - Đợt 2 (Buổi 32) & Tốt nghiệp';
           } else {
             examLabel = `Kiểm tra cuối khóa (Buổi ${sessionCount})`;
+          }
+        }
+
+        let taAlertLabel: string | undefined;
+        if (isSession29) {
+          if (detectedLevel === 'Khóa 1') {
+            taAlertLabel = 'Buổi 29: Nhắn Quản lý sắp xếp Trợ giảng (TA) chuẩn bị thi Buổi 32';
+          } else if (detectedLevel === 'Khóa 4') {
+            taAlertLabel = 'Buổi 28-29: Nhắn Quản lý sắp xếp Trợ giảng (TA) sớm chuẩn bị thi từ Buổi 31';
+          } else {
+            taAlertLabel = 'Buổi 29: Nhắn Quản lý sắp xếp Trợ giảng (TA) chuẩn bị thi 2 buổi 32 & 33';
+          }
+        }
+
+        let preExamAlertLabel: string | undefined;
+        if (isPreExam) {
+          if (detectedLevel === 'Khóa 1') {
+            preExamAlertLabel = 'Nhắc chuẩn bị phòng thi & ôn tập cho đợt thi Buổi 32';
+          } else if (detectedLevel === 'Khóa 4') {
+            preExamAlertLabel = 'Nhắc chuẩn bị thi Mock Test 2 buổi 31 & 32';
+          } else {
+            preExamAlertLabel = 'Nhắc chuẩn bị thi 2 buổi 32 & 33 (Đợt 1 & Đợt 2)';
           }
         }
 
@@ -553,6 +636,10 @@ export function calculateCourseSchedule(
           isExam,
           examLabel,
           isSession29TAAlert: isSession29,
+          taAlertLabel,
+          isPreExamAlert: isPreExam,
+          preExamAlertLabel,
+          isFinalSession: isFinal,
         });
       }
     }
@@ -573,10 +660,12 @@ export function calculateCourseSchedule(
   let nextDate = addDays(currentDate, 1);
   let breakSlotsPassed = 0;
   const breakTarget = config.breakAfterCourseSessions;
+  let breakDateStr = '';
 
   while (breakSlotsPassed < breakTarget) {
     if (scheduleDays.includes(nextDate.getDay())) {
       breakSlotsPassed++;
+      breakDateStr = toDateString(nextDate);
     }
     nextDate = addDays(nextDate, 1);
   }
@@ -588,6 +677,99 @@ export function calculateCourseSchedule(
   const nextCourseStartDate = toDateString(nextDate);
 
   const scheduleDaysLabel = scheduleDays.map((d) => VIETNAMESE_DAYS[d]).join(' + ');
+
+  // Danh sách chi tiết các buổi kiểm tra
+  const examDates = sessions
+    .filter((s) => s.isExam)
+    .map((s) => ({
+      sessionNumber: s.sessionNumber,
+      date: s.date,
+      formattedDate: s.formattedDate,
+      dayOfWeekName: s.dayOfWeekName,
+      label: s.examLabel || `Kiểm tra Buổi ${s.sessionNumber}`,
+    }));
+
+  // Lập danh sách các mốc nhắc nhở & chuyển giao quan trọng (Milestones)
+  const milestones: CourseMilestone[] = [];
+
+  // Mốc 1: Nhắc xếp Trợ giảng (TA)
+  if (session29) {
+    milestones.push({
+      id: 'milestone-ta',
+      type: 'ta_reminder',
+      sessionNumber: 29,
+      date: session29.date,
+      formattedDate: session29.formattedDate,
+      dayOfWeekName: session29.dayOfWeekName,
+      title: detectedLevel === 'Khóa 4' ? 'Buổi 28-29: Nhắc xếp Trợ giảng (TA)' : 'Buổi 29: Nhắc xếp Trợ giảng (TA)',
+      description: detectedLevel === 'Khóa 4'
+        ? 'Giáo viên nhắn Quản lý sắp xếp TA chuẩn bị cho đợt thi Mock Test Buổi 31 & 32'
+        : detectedLevel === 'Khóa 1'
+        ? 'Giáo viên nhắn Quản lý sắp xếp TA chuẩn bị cho đợt thi Buổi 32'
+        : 'Giáo viên nhắn Quản lý sắp xếp TA chuẩn bị cho đợt thi 2 buổi 32 & 33',
+      badgeColor: 'amber',
+    });
+  }
+
+  // Mốc 2: Các buổi kiểm tra cuối khóa
+  examDates.forEach((ed) => {
+    milestones.push({
+      id: `milestone-exam-${ed.sessionNumber}`,
+      type: 'exam',
+      sessionNumber: ed.sessionNumber,
+      date: ed.date,
+      formattedDate: ed.formattedDate,
+      dayOfWeekName: ed.dayOfWeekName,
+      title: `Buổi ${ed.sessionNumber}: ${ed.label}`,
+      description: `Đánh giá năng lực theo chuẩn ${config.name}`,
+      badgeColor: 'indigo',
+    });
+  });
+
+  // Mốc 3: Bế giảng kết thúc khóa
+  if (lastSession) {
+    milestones.push({
+      id: 'milestone-end',
+      type: 'course_end',
+      sessionNumber: lastSession.sessionNumber,
+      date: lastSession.date,
+      formattedDate: lastSession.formattedDate,
+      dayOfWeekName: lastSession.dayOfWeekName,
+      title: `Buổi ${lastSession.sessionNumber}: Bế giảng kết thúc ${config.label}`,
+      description: config.endRule,
+      badgeColor: 'purple',
+    });
+  }
+
+  // Mốc 4: Nghỉ chuyển tiếp (nếu có)
+  if (breakDateStr) {
+    const breakDateObj = new Date(breakDateStr);
+    milestones.push({
+      id: 'milestone-break',
+      type: 'break',
+      date: breakDateStr,
+      formattedDate: formatDateVN(breakDateStr),
+      dayOfWeekName: VIETNAMESE_DAYS[breakDateObj.getDay()] || '',
+      title: 'Nghỉ 1 buổi chuyển tiếp giữa 2 khóa',
+      description: config.breakRule,
+      badgeColor: 'slate',
+    });
+  }
+
+  // Mốc 5: Khai giảng khóa tiếp theo
+  if (config.nextCourseName) {
+    const nextStartObj = new Date(nextCourseStartDate);
+    milestones.push({
+      id: 'milestone-next',
+      type: 'next_course',
+      date: nextCourseStartDate,
+      formattedDate: formatDateVN(nextCourseStartDate),
+      dayOfWeekName: VIETNAMESE_DAYS[nextStartObj.getDay()] || '',
+      title: `Khai giảng ${config.nextCourseName}`,
+      description: `Bắt đầu chương trình đào tạo tiếp theo trong lộ trình`,
+      badgeColor: 'emerald',
+    });
+  }
 
   // Soi xét lịch học tuần 2 buổi: Tính chính xác số ngày diễn ra khóa học
   const startPartsForDiff = validStartDate.split('-').map(Number);
@@ -619,6 +801,7 @@ export function calculateCourseSchedule(
   }
 
   return {
+    levelKey: detectedLevel,
     courseLevel: detectedLevel,
     config,
     startDate: validStartDate,
@@ -627,12 +810,16 @@ export function calculateCourseSchedule(
     formattedEstimatedEndDate: formatDateVN(estimatedEndDate),
     session29Date,
     formattedSession29Date: formatDateVN(session29Date),
+    breakDate: breakDateStr || undefined,
+    formattedBreakDate: breakDateStr ? formatDateVN(breakDateStr) : undefined,
     nextCourseStartDate,
     formattedNextCourseStartDate: formatDateVN(nextCourseStartDate),
     totalSessions,
     offDatesCount: offDates.length,
     offDates,
     examSessions,
+    examDates,
+    milestones,
     breakSessionsCount: config.breakAfterCourseSessions,
     sessions,
     scheduleDays,
@@ -651,11 +838,26 @@ export interface ClassEndInfo {
   formattedStartDate: string;
   endDate: string;
   formattedEndDate: string;
+  courseLevel: CourseLevelKey;
+  levelConfig: CourseLevelConfig;
   totalDays: number;
   totalWeeks: number;
   daysUntilEnd: number;
   isFinished: boolean;
+  totalSessions: number;
+  completedSessions: number;
   remainingSessions: number;
+  examSessions: number[];
+  examDates: { sessionNumber: number; date: string; formattedDate: string; label: string }[];
+  session29Date: string;
+  formattedSession29Date: string;
+  breakDate?: string;
+  formattedBreakDate?: string;
+  nextCourseStartDate: string;
+  formattedNextCourseStartDate: string;
+  taAlertStatus: 'needed' | 'passed' | 'upcoming';
+  examStatus: 'in_exam' | 'passed' | 'upcoming';
+  examRuleBadge: string;
   durationSummary: string;
   remainingDaysText: string;
 }
@@ -683,16 +885,52 @@ export function calculateClassEndInfo(classGroup: {
   const completed = classGroup.completedSessions || 0;
   const remainingSessions = Math.max(0, sched.totalSessions - completed);
 
+  // Trạng thái nhắc Trợ giảng
+  let taAlertStatus: 'needed' | 'passed' | 'upcoming' = 'upcoming';
+  if (completed >= 29) {
+    taAlertStatus = 'passed';
+  } else if (completed >= 27 && completed <= 29) {
+    taAlertStatus = 'needed';
+  }
+
+  // Trạng thái kiểm tra cuối khóa
+  const firstExamSession = sched.examSessions[0] || sched.totalSessions;
+  let examStatus: 'in_exam' | 'passed' | 'upcoming' = 'upcoming';
+  if (completed >= sched.totalSessions) {
+    examStatus = 'passed';
+  } else if (completed >= firstExamSession - 1) {
+    examStatus = 'in_exam';
+  }
+
+  const examRuleBadge = sched.examSessions.length === 1
+    ? `Thi B.${sched.examSessions[0]}`
+    : `Thi B.${sched.examSessions.join(' & ')}`;
+
   return {
     startDate: sched.startDate,
     formattedStartDate: sched.formattedStartDate,
     endDate: sched.estimatedEndDate,
     formattedEndDate: sched.formattedEstimatedEndDate,
+    courseLevel: sched.courseLevel,
+    levelConfig: sched.config,
     totalDays: sched.totalDays,
     totalWeeks: sched.totalWeeks,
     daysUntilEnd: sched.daysUntilEnd,
     isFinished: sched.isFinished,
+    totalSessions: sched.totalSessions,
+    completedSessions: completed,
     remainingSessions,
+    examSessions: sched.examSessions,
+    examDates: sched.examDates,
+    session29Date: sched.session29Date,
+    formattedSession29Date: sched.formattedSession29Date,
+    breakDate: sched.breakDate,
+    formattedBreakDate: sched.formattedBreakDate,
+    nextCourseStartDate: sched.nextCourseStartDate,
+    formattedNextCourseStartDate: sched.formattedNextCourseStartDate,
+    taAlertStatus,
+    examStatus,
+    examRuleBadge,
     durationSummary: sched.durationSummary,
     remainingDaysText: sched.remainingDaysText,
   };
@@ -700,21 +938,91 @@ export function calculateClassEndInfo(classGroup: {
 
 /**
  * Sinh mẫu tin nhắn Zalo chuẩn để giáo viên nhắn cho Quản lý trung tâm sắp xếp Trợ giảng (TA)
+ * Tự động phân loại chuẩn:
+ * - Khóa 1: Kiểm tra vào Buổi 32
+ * - Khóa 2 & 3: Kiểm tra vào Buổi 32 & 33
+ * - Khóa 4: Kiểm tra Mock Test vào Buổi 31 & 32
  */
 export function generateTAReminderZaloMessage(
   className: string,
   teacherName: string,
+  courseLevelInput: string = 'Khóa 1',
   sessionNumber: number = 29,
   sessionDateFormatted?: string
 ): string {
+  const detected = detectCourseLevel(courseLevelInput);
+  const cfg = COURSE_LEVEL_CONFIGS[detected];
+  const examText = cfg.examSessions.length === 1
+    ? `Buổi ${cfg.examSessions[0]}`
+    : `Buổi ${cfg.examSessions.join(' & ')}`;
+
   return `🔔 [IELTS DƯƠNG VŨ] - THÔNG BÁO SẮP XẾP TRỢ GIẢNG (TA)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Kính gửi: Quản lý Trung tâm IELTS DƯƠNG VŨ
 Giáo viên phụ trách: ${teacherName || 'Giáo viên'}
-Lớp học: ${className}
+Lớp học: ${className} (${cfg.label})
 
-Lớp đã giảng dạy đến Buổi ${sessionNumber} ${sessionDateFormatted ? `(Ngày: ${sessionDateFormatted})` : ''}.
-Theo quy chế đào tạo, em gửi thông báo để Quản lý trung tâm chuẩn bị và sắp xếp TRỢ GIẢNG (TA) hỗ trợ lớp chuẩn bị cho đợt thi kiểm tra chất lượng cuối khóa (Buổi 32 - 33).
+Lớp hiện đã giảng dạy đến Buổi ${sessionNumber} ${sessionDateFormatted ? `(Ngày: ${sessionDateFormatted})` : ''}.
+Theo quy chế đào tạo chuẩn của trung tâm:
+- Lớp sẽ bước vào đợt kiểm tra chất lượng cuối khóa vào ${examText}.
+- Giáo viên gửi thông báo để Quản lý trung tâm sắp xếp TRỢ GIẢNG (TA) hỗ trợ lớp chuẩn bị đề thi, coi thi và đồng hành cùng học viên trong đợt thi này.
 
 Trân trọng cảm ơn Quản lý!`;
+}
+
+/**
+ * Sinh mẫu tin nhắn Zalo gửi Học sinh / Phụ huynh thông báo lịch thi cuối khóa
+ */
+export function generateExamReminderZaloMessage(
+  className: string,
+  courseLevelInput: string,
+  scheduleStr: string,
+  examDatesInfo: { sessionNumber: number; formattedDate: string; label: string }[]
+): string {
+  const detected = detectCourseLevel(courseLevelInput);
+  const cfg = COURSE_LEVEL_CONFIGS[detected];
+  const examLines = examDatesInfo.length > 0
+    ? examDatesInfo.map((e) => `• Buổi ${e.sessionNumber} (${e.formattedDate}): ${e.label}`).join('\n')
+    : `• Buổi ${cfg.examSessions.join(' & ')} theo lịch học ${scheduleStr}`;
+
+  return `📢 [IELTS DƯƠNG VŨ] - THÔNG BÁO LỊCH KIỂM TRA ĐÁNH GIÁ CHẤT LƯỢNG CUỐI KHÓA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Kính gửi: Quý Phụ huynh và các bạn Học viên lớp ${className} (${cfg.label})
+Lịch học: ${scheduleStr}
+
+Trung tâm IELTS DƯƠNG VŨ xin thông báo lịch kiểm tra cuối khóa như sau:
+${examLines}
+
+📌 QUY ĐỊNH KỲ THI:
+1. Học viên có mặt đúng giờ trước ca thi 10 phút để ổn định vị trí.
+2. Chuẩn bị đầy đủ bút viết, tài liệu ôn tập và thiết bị nghe (nếu có).
+3. Kết quả bài kiểm tra là căn cứ đánh giá năng lực thực tế và xét điều kiện chuyển tiếp lên khóa học kế tiếp theo cam kết đào tạo.
+
+Chúc các bạn học viên ôn tập chu đáo và đạt kết quả cao nhất!`;
+}
+
+/**
+ * Sinh mẫu tin nhắn Zalo thông báo bế giảng và kế hoạch lên khóa mới
+ */
+export function generateCourseEndSummaryZaloMessage(
+  className: string,
+  courseLevelInput: string,
+  endDateFormatted: string,
+  breakDateFormatted?: string,
+  nextCourseStartDateFormatted?: string,
+  nextCourseName?: string
+): string {
+  const detected = detectCourseLevel(courseLevelInput);
+  const cfg = COURSE_LEVEL_CONFIGS[detected];
+
+  return `🎓 [IELTS DƯƠNG VŨ] - THÔNG BÁO BẾ GIẢNG & LÊN KHÓA MỚI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Kính gửi: Quý Phụ huynh và toàn thể Học viên lớp ${className} (${cfg.label})
+
+Trung tâm IELTS DƯƠNG VŨ xin thông báo kế hoạch kết thúc khóa học và lộ trình chuyển tiếp:
+- 📅 Ngày bế giảng kết thúc khóa: ${endDateFormatted}
+${breakDateFormatted ? `- ⏸️ Quy chế nghỉ chuyển giao: Nghỉ 1 buổi vào ngày ${breakDateFormatted} để trung tâm tổng hợp điểm số và chuẩn bị học liệu mới.` : '- 🚀 Khóa 4 không nghỉ: Học viên hoàn thành toàn bộ lộ trình và sẵn sàng cho kỳ thi IELTS quốc tế.'}
+${nextCourseStartDateFormatted ? `- 🌟 Khai giảng khóa mới (${nextCourseName || cfg.nextCourseName}): ${nextCourseStartDateFormatted}` : ''}
+
+Trân trọng chúc mừng sự nỗ lực và tiến bộ vượt bậc của các bạn học viên trong suốt khóa học vừa qua!`;
 }

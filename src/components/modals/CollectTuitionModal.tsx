@@ -103,6 +103,20 @@ export const CollectTuitionModal: React.FC<CollectTuitionModalProps> = ({
                 <span className="text-slate-500">Lớp học hiện tại:</span>
                 <strong className="text-slate-800">{selectedStudent.className}</strong>
               </div>
+              {(selectedStudent.isExternalStudent || selectedStudent.studentCategory === 'Học sinh ngoài') && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Phân loại học viên:</span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded">
+                    🏷️ Học sinh ngoài
+                  </span>
+                </div>
+              )}
+              {selectedStudent.customTuitionFee ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Học phí tùy chỉnh:</span>
+                  <strong className="text-purple-700">{formatVND(selectedStudent.customTuitionFee)}</strong>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Số tiền còn nợ:</span>
                 <strong className={selectedStudent.balanceOwed > 0 ? 'text-rose-600' : 'text-emerald-600'}>
