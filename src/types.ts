@@ -152,7 +152,7 @@ export interface LeadAdmission {
   name: string;
   phone: string;
   email: string;
-  source: 'Facebook Ads' | 'Google' | 'Giới thiệu' | 'Trực tiếp tại cơ sở' | 'TikTok';
+  source: 'Facebook Ads' | 'Google' | 'Giới thiệu' | 'Trực tiếp tại cơ sở' | 'TikTok' | 'Form Test Online';
   targetCourse: string;
   consultantName: string;
   stage: 'Tiếp cận mới' | 'Đã liên hệ' | 'Hẹn test đầu vào' | 'Hẹn học thử' | 'Chờ đóng phí' | 'Đã nhập học' | 'Hủy tư vấn';
@@ -187,6 +187,7 @@ export interface PlacementTest {
   status: 'Đã có kết quả' | 'Chờ chấm điểm' | 'Chờ làm bài' | 'Đã xếp lớp chờ' | 'Đã nhập học' | 'Không đạt';
   comment: string;
   sourceType?: 'form_online' | 'manual' | 'google_form_link';
+  submittedAt?: string;
   googleFormLink?: string;
   tabSwitchCount?: number;
   antiCheatLogs?: string[];

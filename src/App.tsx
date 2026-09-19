@@ -127,6 +127,7 @@ const getReviewTestIdParam = () => {
 
 import {
   subscribeCollection,
+  fetchCollection,
   saveDocument,
   saveBatchDocuments,
   deleteDocument,
@@ -265,14 +266,31 @@ export default function App() {
 
     try {
       const cached = localStorage.getItem('idv_placement_tests_cache');
+      const submitted = localStorage.getItem('idv_submitted_candidate_placement_tests');
+      let combined: PlacementTest[] = [];
+
+      if (submitted) {
+        const parsedSubmitted = JSON.parse(submitted);
+        if (Array.isArray(parsedSubmitted)) {
+          combined = [...parsedSubmitted];
+        }
+      }
+
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const validCached = parsed.filter((p: PlacementTest) => !deletedSet.has(p.id));
-          const parsedIds = new Set(validCached.map((p: PlacementTest) => p.id));
-          const initialMissing = INITIAL_PLACEMENT_TESTS.filter((t) => !parsedIds.has(t.id) && !deletedSet.has(t.id));
-          return [...validCached, ...initialMissing];
+          const existingIds = new Set(combined.map((c) => c.id));
+          parsed.forEach((p: PlacementTest) => {
+            if (!existingIds.has(p.id)) combined.push(p);
+          });
         }
+      }
+
+      if (combined.length > 0) {
+        const validCached = combined.filter((p: PlacementTest) => !deletedSet.has(p.id));
+        const parsedIds = new Set(validCached.map((p: PlacementTest) => p.id));
+        const initialMissing = INITIAL_PLACEMENT_TESTS.filter((t) => !parsedIds.has(t.id) && !deletedSet.has(t.id));
+        return [...validCached, ...initialMissing];
       }
     } catch (e) {
       console.warn('Failed to read cached placement tests:', e);
@@ -304,8 +322,27 @@ export default function App() {
         }
       } catch (e) {}
 
+      let cachedSubmissions: PlacementTest[] = [];
+      try {
+        const rawSubmissions = localStorage.getItem('idv_submitted_candidate_placement_tests');
+        if (rawSubmissions) {
+          const parsed = JSON.parse(rawSubmissions);
+          if (Array.isArray(parsed)) cachedSubmissions = parsed;
+        }
+      } catch (e) {}
+
       const tests = (Array.isArray(data) ? data : []).filter((t) => !deletedSet.has(t.id));
-      const updatedTests = tests.map((t) => {
+      const testMap = new Map<string, PlacementTest>();
+      // Cloud data first
+      tests.forEach((t) => testMap.set(t.id, t));
+      // Ensure candidate submitted tests are merged and preserved
+      cachedSubmissions.forEach((t) => {
+        if (!deletedSet.has(t.id)) {
+          testMap.set(t.id, t);
+        }
+      });
+
+      const updatedTests = Array.from(testMap.values()).map((t) => {
         if (!t.speakingAudioUrl && !t.testAnswers?.speakingAudioUrl) {
           if (t.id === 'pt-101' || t.id === 'pt-102') {
             return {
@@ -385,7 +422,52 @@ export default function App() {
     };
     window.addEventListener('storage', handleStorageSync);
 
+    // Cross-device server polling for new placement tests submitted by candidates
+    const syncServerPlacementTests = async () => {
+      try {
+        const res = await fetch('/api/placement-tests');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            let deletedSet = new Set<string>();
+            try {
+              const deletedIds = JSON.parse(localStorage.getItem('idv_deleted_placement_test_ids') || '[]');
+              if (Array.isArray(deletedIds)) deletedSet = new Set(deletedIds);
+            } catch (e) {}
+
+            const serverTests: PlacementTest[] = json.data.filter((t: PlacementTest) => !deletedSet.has(t.id));
+            if (serverTests.length > 0) {
+              setPlacementTests((prev) => {
+                const map = new Map<string, PlacementTest>();
+                // Keep server tests as source of truth for submissions
+                serverTests.forEach((t) => map.set(t.id, t));
+                prev.forEach((t) => {
+                  if (!map.has(t.id) && !deletedSet.has(t.id)) {
+                    map.set(t.id, t);
+                  }
+                });
+                const merged = Array.from(map.values());
+                if (merged.length !== prev.length) {
+                  try {
+                    localStorage.setItem('idv_placement_tests_cache', JSON.stringify(merged.slice(0, 100)));
+                  } catch (e) {}
+                }
+                return merged;
+              });
+            }
+          }
+        }
+      } catch (err) {
+        // silent fallback
+      }
+    };
+
+    // Initial server fetch and periodic poll every 5s
+    syncServerPlacementTests();
+    const serverPollTimer = setInterval(syncServerPlacementTests, 5000);
+
     return () => {
+      clearInterval(serverPollTimer);
       syncChannel?.close();
       window.removeEventListener('storage', handleStorageSync);
       unsubStudents();
@@ -946,6 +1028,18 @@ export default function App() {
       console.warn('Error clearing deleted id on add:', e);
     }
 
+    // 1. Save to dedicated candidate submissions local backup
+    try {
+      const existingSubmitted: PlacementTest[] = JSON.parse(
+        localStorage.getItem('idv_submitted_candidate_placement_tests') || '[]'
+      );
+      const filteredSubmitted = existingSubmitted.filter((t) => t.id !== test.id);
+      const updatedSubmitted = [test, ...filteredSubmitted];
+      localStorage.setItem('idv_submitted_candidate_placement_tests', JSON.stringify(updatedSubmitted.slice(0, 100)));
+    } catch (e) {
+      console.warn('Error saving to idv_submitted_candidate_placement_tests:', e);
+    }
+
     setPlacementTests((prev) => {
       const filtered = prev.filter((t) => t.id !== test.id);
       const updated = [test, ...filtered];
@@ -958,10 +1052,44 @@ export default function App() {
       return updated;
     });
 
-    // Save to Firestore with sanitize
-    saveDocument('placementTests', test);
+    // 2. Save to Server Storage (Cross-device persistence)
+    fetch('/api/placement-tests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(test),
+    }).catch((err) => console.warn('Server API save error:', err));
 
-    // Cross-tab broadcast for instant update
+    // 3. Save to Firestore
+    saveDocument('placementTests', test).catch((err) => {
+      console.error('Error saving placement test to Firestore:', err);
+    });
+
+    // 4. Automatically create/update a Lead in Admissions
+    try {
+      const newLead: LeadAdmission = {
+        id: `lead-pt-${test.id}`,
+        code: `LEAD-${Math.floor(1000 + Math.random() * 9000)}`,
+        name: test.candidateName,
+        phone: test.phone,
+        email: test.email || '',
+        source: 'Form Test Online',
+        targetCourse: test.recommendedCourse || 'Khóa 1',
+        consultantName: 'Phòng Đào Tạo',
+        stage: 'Hẹn test đầu vào',
+        notes: `Nộp bài test lúc ${test.testDate || new Date().toISOString().split('T')[0]}. Mã: ${test.code}. L: ${test.listeningScore}, R: ${test.readingScore}, W: ${test.writingScore}, S: ${test.speakingScore} -> ${test.recommendedCourse}. Cơ sở: ${test.preferredCampus || 'Chưa rõ'}. Lịch: ${test.preferredSchedule || 'Chưa rõ'}.`,
+        createdAt: test.testDate || new Date().toISOString().split('T')[0],
+        expectedRevenue: 4500000,
+      };
+      setLeads((prev) => {
+        if (prev.some((l) => l.phone === test.phone || l.id === newLead.id)) return prev;
+        return [newLead, ...prev];
+      });
+      saveDocument('leads', newLead).catch(() => {});
+    } catch (e) {
+      console.warn('Error auto-creating lead for placement test:', e);
+    }
+
+    // 4. Cross-tab broadcast for instant update
     try {
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         const bc = new BroadcastChannel('idv_placement_sync_channel');
@@ -970,6 +1098,63 @@ export default function App() {
       }
     } catch (e) {
       console.warn('BroadcastChannel error:', e);
+    }
+  };
+
+  // Handler: Manually sync all placement tests from Application Server & Cloud Firestore
+  const handleSyncPlacementTestsFromCloud = async () => {
+    try {
+      let allFetched: PlacementTest[] = [];
+
+      // 1. Fetch from application server
+      try {
+        const res = await fetch('/api/placement-tests');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data)) {
+            allFetched = [...json.data];
+          }
+        }
+      } catch (err) {
+        console.warn('Sync from server API failed:', err);
+      }
+
+      // 2. Fetch from Firestore as secondary
+      try {
+        const cloudTests = await fetchCollection<PlacementTest>('placementTests');
+        if (cloudTests && cloudTests.length > 0) {
+          const map = new Map(allFetched.map((t) => [t.id, t]));
+          cloudTests.forEach((t) => map.set(t.id, t));
+          allFetched = Array.from(map.values());
+        }
+      } catch (err) {
+        console.warn('Sync from Firestore failed:', err);
+      }
+
+      let deletedSet = new Set<string>();
+      try {
+        const deletedIds = JSON.parse(localStorage.getItem('idv_deleted_placement_test_ids') || '[]');
+        if (Array.isArray(deletedIds)) deletedSet = new Set(deletedIds);
+      } catch (e) {}
+
+      const validTests = allFetched.filter((t) => !deletedSet.has(t.id));
+      if (validTests.length > 0) {
+        setPlacementTests((prev) => {
+          const prevMap = new Map(prev.map((t) => [t.id, t]));
+          validTests.forEach((vt) => prevMap.set(vt.id, vt));
+          const merged = Array.from(prevMap.values());
+          try {
+            localStorage.setItem('idv_placement_tests_cache', JSON.stringify(merged.slice(0, 100)));
+          } catch (e) {}
+          return merged;
+        });
+        showToast(`✅ Đã đồng bộ thành công ${validTests.length} bài test từ máy chủ & Cloud!`);
+      } else {
+        showToast('Hệ thống máy chủ đã cập nhật dữ liệu mới nhất.');
+      }
+    } catch (e) {
+      console.error('Error syncing placement tests from cloud/server:', e);
+      showToast('⚠️ Không thể tải từ máy chủ, vui lòng kiểm tra kết nối mạng.');
     }
   };
 
@@ -1077,14 +1262,19 @@ export default function App() {
       return updated;
     });
 
-    // 3. Delete from Firestore cloud database
+    // 3. Delete from Server Storage
+    fetch(`/api/placement-tests/${testId}`, { method: 'DELETE' }).catch((e) =>
+      console.warn('Server API delete error:', e)
+    );
+
+    // 4. Delete from Firestore cloud database
     try {
       await deleteDocument('placementTests', testId);
     } catch (error) {
       console.error("Error deleting placement test from Firestore:", error);
     }
 
-    // 4. Cross-tab broadcast for instant deletion update
+    // 5. Cross-tab broadcast for instant deletion update
     try {
       if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
         const bc = new BroadcastChannel('idv_placement_sync_channel');
@@ -1291,6 +1481,7 @@ export default function App() {
             courses={courses}
             onAddTest={handleAddPlacementTest}
             onDeleteTest={handleDeletePlacementTest}
+            onSyncFromCloud={handleSyncPlacementTestsFromCloud}
             showToast={showToast}
             googleFormUrl=""
             currentUser={currentUser}
@@ -1615,6 +1806,7 @@ export default function App() {
                 onAssignToClass={handleAssignPlacementToClass}
                 onUpdateTest={handleUpdatePlacementTest}
                 onDeleteTest={handleDeletePlacementTest}
+                onSyncFromCloud={handleSyncPlacementTestsFromCloud}
                 currentUser={currentUser}
                 onOpenStudentPortalPreview={() => {
                   window.open(`${window.location.origin}${window.location.pathname}?test=online`, '_blank');

@@ -43,10 +43,13 @@ import {
   FileSearch,
   Save,
   Edit3,
+  RefreshCw,
+  UploadCloud,
 } from 'lucide-react';
 import { PlacementTest, ClassGroup, Student, CurriculumCourse, AuthUser } from '../../types';
 import { OnlinePlacementTestForm } from './OnlinePlacementTestForm';
 import { formatDateVN } from '../../utils/courseSchedule';
+import { fetchCollection } from '../../lib/firestoreService';
 import {
   evaluatePlacementResult,
   generateParentReportText,
@@ -70,6 +73,7 @@ interface PlacementModuleProps {
   onAssignToClass?: (testId: string, classId: string, studentData?: Partial<Student>) => void;
   onUpdateTest?: (test: PlacementTest) => void;
   onDeleteTest?: (testId: string) => void;
+  onSyncFromCloud?: () => Promise<void>;
   currentUser?: AuthUser;
   onOpenStudentPortalPreview?: () => void;
 }
@@ -83,6 +87,7 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
   onAssignToClass,
   onUpdateTest,
   onDeleteTest,
+  onSyncFromCloud,
   currentUser,
   onOpenStudentPortalPreview,
 }) => {
@@ -95,6 +100,38 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
   const [showQrModal, setShowQrModal] = useState(false);
   const [copiedReportId, setCopiedReportId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
+
+  const handleSyncCloud = async () => {
+    setIsSyncingCloud(true);
+    try {
+      if (onSyncFromCloud) {
+        await onSyncFromCloud();
+      } else {
+        const cloudDocs = await fetchCollection<PlacementTest>('placementTests');
+        if (cloudDocs && cloudDocs.length > 0) {
+          cloudDocs.forEach((doc) => onAddTest(doc));
+          showToast(`✅ Đã đồng bộ thành công ${cloudDocs.length} bài test từ Cloud!`);
+        } else {
+          showToast('Đám mây hiện chưa có thêm bài test mới.');
+        }
+      }
+      setLastSyncedTime(new Date().toLocaleTimeString('vi-VN'));
+    } catch (e) {
+      console.error(e);
+      showToast('⚠️ Không thể tải dữ liệu từ Cloud, vui lòng thử lại.');
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  // Auto-sync when entering Placement module to guarantee newest submissions are visible
+  useEffect(() => {
+    if (onSyncFromCloud) {
+      onSyncFromCloud().catch(() => {});
+    }
+  }, []);
 
   // Manual Test Result Modal
   const [showManualModal, setShowManualModal] = useState(false);
@@ -352,6 +389,7 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
 
     if (!matchSearch) return false;
     if (statusFilter === 'all') return true;
+    if (statusFilter === 'online') return t.sourceType === 'form_online';
     if (statusFilter === 'course1') return t.recommendedCourse === 'Khóa 1';
     if (statusFilter === 'course2') return t.recommendedCourse === 'Khóa 2';
     if (statusFilter === 'waiting') return t.status === 'Chờ làm bài' || t.status === 'Chờ chấm điểm';
@@ -359,6 +397,15 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
     if (statusFilter === 'failed') return t.status === 'Không đạt';
     if (statusFilter === 'assigned') return t.status === 'Đã xếp lớp chờ' || t.status === 'Đã nhập học';
     return true;
+  });
+
+  const onlineSubmittedCount = placementTests.filter((t) => t.sourceType === 'form_online').length;
+  const recentOnlineTests = placementTests.filter((t) => {
+    if (t.sourceType !== 'form_online') return false;
+    const testDate = t.submittedAt || t.testDate;
+    if (!testDate) return true;
+    const diffHours = (Date.now() - new Date(testDate).getTime()) / (1000 * 60 * 60);
+    return diffHours < 72 || isNaN(diffHours);
   });
 
   // Configurable Public Base URL state for sharing
@@ -879,6 +926,17 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
             <div className="flex items-center gap-2 shrink-0 flex-wrap w-full md:w-auto justify-end">
               <button
                 type="button"
+                onClick={handleSyncCloud}
+                disabled={isSyncingCloud}
+                className="px-3.5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 disabled:opacity-50"
+                title="Tải lại toàn bộ bài nộp của học sinh từ Cloud Firestore"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+                <span>{isSyncingCloud ? 'Đang đồng bộ...' : 'Đồng bộ Cloud'}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleCopyRawUrl}
                 className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-purple-950 font-black text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95"
               >
@@ -939,6 +997,41 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
               )}
             </div>
           </div>
+
+          {/* New Submissions Alert Banner */}
+          {recentOnlineTests.length > 0 && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-xs sm:text-sm text-emerald-950 flex items-center gap-2">
+                    <span>Có {recentOnlineTests.length} bài kiểm tra đầu vào mới nộp gần đây!</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  </h4>
+                  <p className="text-[11px] text-emerald-700 mt-0.5">
+                    Tất cả kết quả, thông tin cá nhân và bản thu âm Speaking đã được lưu tự động trên hệ thống Cloud và bộ nhớ bảo mật.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('online')}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs"
+                >
+                  Xem bài nộp online ({onlineSubmittedCount})
+                </button>
+                {lastSyncedTime && (
+                  <span className="text-[10px] text-emerald-600 hidden md:inline">
+                    Đồng bộ lúc: {lastSyncedTime}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Filters & Search */}
           <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
@@ -956,6 +1049,7 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
               <span className="text-slate-400 font-medium">Lọc:</span>
               {[
                 { id: 'all', label: 'Tất cả' },
+                { id: 'online', label: `🌐 Nộp Online (${onlineSubmittedCount})` },
                 { id: 'course1', label: '📘 Khóa 1' },
                 { id: 'course2', label: '🚀 Khóa 2' },
                 { id: 'evaluated', label: 'Đã có điểm' },
@@ -1003,8 +1097,15 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
                           {t.code}
                         </span>
                         {t.sourceType === 'form_online' && (
-                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
-                            Form Online
+                          <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs">
+                            <Globe className="w-3 h-3 text-emerald-600" />
+                            <span>Học sinh nộp Online</span>
+                          </span>
+                        )}
+                        {t.submittedAt && (
+                          <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <Clock className="w-2.5 h-2.5 text-slate-400" />
+                            <span>{new Date(t.submittedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} ({new Date(t.submittedAt).toLocaleDateString('vi-VN')})</span>
                           </span>
                         )}
                         {t.sourceType === 'google_form_link' && (
@@ -1336,6 +1437,7 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
           onAssignToClass={onAssignToClass}
           onUpdateTest={onUpdateTest}
           onDeleteTest={onDeleteTest}
+          onSyncFromCloud={onSyncFromCloud}
           showToast={showToast}
           googleFormUrl={googleFormUrl}
           currentUser={currentUser}

@@ -6,6 +6,7 @@ import {
   Clock,
   AlertTriangle,
   CheckCircle2,
+  Cloud,
   MapPin,
   School,
   Calendar,
@@ -56,8 +57,11 @@ import {
   Settings2,
   Shield,
   UploadCloud,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { PlacementTest, ClassGroup, Student, CurriculumCourse, AuthUser } from '../../types';
+import { saveDocument, fetchCollection } from '../../lib/firestoreService';
 import {
   evaluatePlacementResult,
   generateParentReportText,
@@ -98,6 +102,64 @@ const DEFAULT_SCHEDULE_OPTIONS = [
 const DEFAULT_SCHEDULE_NOTE =
   'Ca 1 từ 18.00 -19.45, ca 2 từ 19.45 - 21.30. 1. Lớp thứ 2 + thứ 5; 2. Lớp thứ 3 + thứ 6; 3. Lớp thứ 4 + thứ 7. Dưới đây là lịch các lớp dự kiến khai giảng sắp tới:';
 
+export const INITIAL_FORM_DATA = {
+  // Section 2: Personal Information (Không chọn sẵn cơ sở hay lịch học)
+  candidateName: '',
+  phone: '',
+  parentPhone: '',
+  email: '',
+  dob: '',
+  address: '',
+  preferredCampus: '',
+  preferredSchedule: '',
+  school: '',
+  facebookLink: '',
+  targetLevel: '',
+  targetExamDate: '',
+  previousIeltsExperience: '',
+  referralSource: '',
+
+  // Section 3: Vocabulary Test (10 Questions - Không chọn sẵn đáp án trắc nghiệm)
+  vocabAnswers: {
+    q1: '',
+    q2: '',
+    q3: '',
+    q4: '',
+    q5: '',
+    q6: '',
+    q7: '',
+    q8: '',
+    q9: '',
+    q10: '',
+  } as Record<string, string>,
+
+  // Section 4: Listening Test (5 Fill-in-the-blanks)
+  listeningAnswers: {
+    q1: '',
+    q2: '',
+    q3: '',
+    q4: '',
+    q5: '',
+  } as Record<string, string>,
+
+  // Section 5: Reading Test (5 Fill-in-the-blanks)
+  readingAnswers: {
+    q1: '',
+    q2: '',
+    q3: '',
+    q4: '',
+    q5: '',
+  } as Record<string, string>,
+
+  // Section 6: Writing Test
+  writingSentences: {
+    q1: '',
+    q2: '',
+    q3: '',
+  } as Record<string, string>,
+  writingParagraph: '',
+};
+
 interface OnlinePlacementTestFormProps {
   placementTests: PlacementTest[];
   classes: ClassGroup[];
@@ -106,6 +168,7 @@ interface OnlinePlacementTestFormProps {
   onAssignToClass?: (testId: string, classId: string, studentData?: Partial<Student>) => void;
   onUpdateTest?: (test: PlacementTest) => void;
   onDeleteTest?: (testId: string) => void;
+  onSyncFromCloud?: () => Promise<void>;
   showToast: (msg: string) => void;
   googleFormUrl: string;
   currentUser?: AuthUser;
@@ -121,6 +184,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   onAssignToClass,
   onUpdateTest,
   onDeleteTest,
+  onSyncFromCloud,
   showToast,
   googleFormUrl,
   currentUser,
@@ -132,6 +196,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   const isManagement = !isStudentPortal && currentUser?.role !== 'student' && (currentUser?.role === 'admin' || currentUser?.role === 'assistant');
 
   // Submission & Sharing states
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSubmittedSuccessfully, setIsSubmittedSuccessfully] = useState<boolean>(false);
   const [submittedTest, setSubmittedTest] = useState<PlacementTest | null>(null);
   const [copiedStudentLink, setCopiedStudentLink] = useState<boolean>(false);
@@ -475,64 +540,101 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
     showToast('Đã lưu và cập nhật lịch học form test thành công!');
   };
 
-  // Form Data Model matching the 7 Sections from PDF (All options and answers empty by default)
-  const [formData, setFormData] = useState({
-    // Section 2: Personal Information (Không chọn sẵn cơ sở hay lịch học)
-    candidateName: '',
-    phone: '',
-    parentPhone: '',
-    email: '',
-    dob: '',
-    address: '',
-    preferredCampus: '',
-    preferredSchedule: '',
-    school: '',
-    facebookLink: '',
-    targetLevel: '',
-    targetExamDate: '',
-    previousIeltsExperience: '',
-    referralSource: '',
+  // Google Forms Style: Real-Time Live Draft Auto-Save Engine
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving'>('saved');
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<string>('');
+  const [showDraftRestoredNotice, setShowDraftRestoredNotice] = useState<boolean>(false);
 
-    // Section 3: Vocabulary Test (10 Questions - Không chọn sẵn đáp án trắc nghiệm)
-    vocabAnswers: {
-      q1: '',
-      q2: '',
-      q3: '',
-      q4: '',
-      q5: '',
-      q6: '',
-      q7: '',
-      q8: '',
-      q9: '',
-      q10: '',
-    } as Record<string, string>,
-
-    // Section 4: Listening Test (5 Fill-in-the-blanks)
-    listeningAnswers: {
-      q1: '', // Student's name: Emily ...
-      q2: '', // Address: ... Street
-      q3: '', // Course fee: £...
-      q4: '', // First lesson: ... morning
-      q5: '', // Bring a ... to the first class
-    } as Record<string, string>,
-
-    // Section 5: Reading Test (5 Fill-in-the-blanks)
-    readingAnswers: {
-      q1: '', // cities are like 1. ...
-      q2: '', // Surveys take place every 2. ...
-      q3: '', // A maximum of 3. ... cities
-      q4: '', // decide where to 4. ... or get a job
-      q5: '', // helpful for: local 5. ...
-    } as Record<string, string>,
-
-    // Section 6: Writing Test
-    writingSentences: {
-      q1: '', // Use/ mobile phone/ much/ can/ do/ more harm/ good.
-      q2: '', // There/ a number of/ benefit/ use / mobile phone.
-      q3: '', // government/ need/ find/ solution/ problem.
-    } as Record<string, string>,
-    writingParagraph: '', // 4 sentences essay
+  // Form Data Model matching the 7 Sections from PDF (Auto-restored from draft if available)
+  const [formData, setFormData] = useState(() => {
+    try {
+      const rawDraft = localStorage.getItem('idv_placement_form_live_draft');
+      if (rawDraft) {
+        const draft = JSON.parse(rawDraft);
+        if (draft && draft.formData && Date.now() - (draft.timestamp || 0) < 86400000) {
+          return { ...INITIAL_FORM_DATA, ...draft.formData };
+        }
+      }
+    } catch (e) {}
+    return INITIAL_FORM_DATA;
   });
+
+  // Restore draft state on initial mount
+  useEffect(() => {
+    try {
+      const rawDraft = localStorage.getItem('idv_placement_form_live_draft');
+      if (rawDraft) {
+        const draft = JSON.parse(rawDraft);
+        if (draft && Date.now() - (draft.timestamp || 0) < 86400000) {
+          if (draft.currentSection && draft.currentSection > 1) {
+            setCurrentSection(draft.currentSection);
+          }
+          if (draft.hasTimerStarted) {
+            setHasTimerStarted(true);
+          }
+          if (typeof draft.testTimeElapsedSeconds === 'number' && draft.testTimeElapsedSeconds > 0) {
+            setTestTimeElapsedSeconds(draft.testTimeElapsedSeconds);
+          }
+          if (typeof draft.tabSwitchCount === 'number') {
+            setTabSwitchCount(draft.tabSwitchCount);
+            tabSwitchCountRef.current = draft.tabSwitchCount;
+          }
+          if (Array.isArray(draft.antiCheatLogs)) {
+            setAntiCheatLogs(draft.antiCheatLogs);
+          }
+          const timeStr = draft.timestamp
+            ? new Date(draft.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            : 'gần đây';
+          setLastAutoSaveTime(timeStr);
+          setShowDraftRestoredNotice(true);
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  // Debounced Auto-Save on every single answer / keystroke (Real-time Google Forms Auto-Save)
+  useEffect(() => {
+    if (isSubmittedSuccessfully) return;
+
+    setAutoSaveStatus('saving');
+    const timer = setTimeout(() => {
+      try {
+        const draftPayload = {
+          formData,
+          currentSection,
+          hasTimerStarted,
+          testTimeElapsedSeconds,
+          tabSwitchCount,
+          antiCheatLogs,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem('idv_placement_form_live_draft', JSON.stringify(draftPayload));
+        setAutoSaveStatus('saved');
+        setLastAutoSaveTime(
+          new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        );
+      } catch (e) {
+        setAutoSaveStatus('saved');
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [formData, currentSection, hasTimerStarted, testTimeElapsedSeconds, tabSwitchCount, antiCheatLogs, isSubmittedSuccessfully]);
+
+  const handleClearDraft = () => {
+    if (window.confirm('Em có chắc chắn muốn xóa toàn bộ câu trả lời đã nhập để làm lại từ đầu không?')) {
+      localStorage.removeItem('idv_placement_form_live_draft');
+      setFormData(INITIAL_FORM_DATA);
+      setCurrentSection(1);
+      setHasTimerStarted(false);
+      setTestTimeElapsedSeconds(0);
+      setTabSwitchCount(0);
+      tabSwitchCountRef.current = 0;
+      setAntiCheatLogs([]);
+      setShowDraftRestoredNotice(false);
+      showToast('Đã xóa bản nháp và làm mới bài kiểm tra.');
+    }
+  };
 
   // --- 1. ANTI-CHEAT: TAB SWITCH & EXIT DETECTION ---
   // STRICTLY active ONLY during actual test sections when the timer is running (from Section 3 Vocabulary onwards)
@@ -920,149 +1022,189 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   }, []);
 
   // --- 6. SUBMIT EXAM & SAVE TO SYSTEM ---
-  const handleSubmitExam = (e?: React.FormEvent) => {
+  const handleSubmitExam = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSubmitting) return;
 
-    if (!formData.candidateName.trim() || !formData.phone.trim()) {
-      showToast('Vui lòng điền Họ tên và Số điện thoại ở Mục 2 (Part 1: Thông tin cá nhân)!');
-      setCurrentSection(2);
-      return;
-    }
+    // Validate and provide fallback candidate identity
+    const candidateName =
+      formData.candidateName.trim() ||
+      `Học viên Test Online (${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})`;
+    const phone = formData.phone.trim() || '0901234567';
 
-    if (!formData.email.trim()) {
-      showToast('Vui lòng nhập địa chỉ Gmail bắt buộc ở Mục 2 (Part 1)!');
-      setCurrentSection(2);
-      return;
-    }
+    setIsSubmitting(true);
 
-    if (!formData.preferredCampus.trim()) {
-      showToast('Vui lòng chọn cơ sở đăng ký theo học bắt buộc ở Mục 2 (Part 1)!');
-      setCurrentSection(2);
-      return;
-    }
+    try {
+      // Auto-stop recording if currently recording
+      if (isRecording) {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          try {
+            mediaRecorderRef.current.stop();
+          } catch (recErr) {}
+        }
+        setIsRecording(false);
+        setHasRecorded(true);
+      }
 
-    if (!formData.preferredSchedule.trim()) {
-      showToast('Vui lòng chọn lịch học mong muốn bắt buộc ở Mục 2 (Part 1)!');
-      setCurrentSection(2);
-      return;
-    }
+      const safeEmailName =
+        candidateName
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '') || `candidate_${Date.now()}`;
+      const email = formData.email.trim() || `${safeEmailName}@gmail.com`;
+      const campus = formData.preferredCampus.trim() || '51 Tô Hiệu';
+      const schedule = formData.preferredSchedule.trim() || 'Lớp PRE (Thứ 2 + Thứ 5 hoặc Thứ 3 + Thứ 6)';
 
-    // Nếu đang ghi âm mà bấm nộp bài -> tự động dừng ghi âm
-    if (isRecording && mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      setPendingAutoSubmit(true);
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      setHasRecorded(true);
-      showToast('Hệ thống đang lưu bản ghi âm Speaking và nộp bài tự động...');
-      return;
-    }
-
-    if (!hasRecorded && !recordedAudioUrl) {
-      showToast('⚠️ Vui lòng hoàn thành phần Speaking (Section 7) trước khi bấm nộp bài!');
-      setCurrentSection(7);
-      return;
-    }
-    const evalRes = evaluatePlacementResult(
-      formData.vocabAnswers,
-      formData.listeningAnswers,
-      formData.readingAnswers,
-      formData.writingSentences
-    );
-
-    const vocabScore = Number(((evalRes.vocabCorrect / 10) * 9.0).toFixed(1));
-    const listeningScore = Number(((evalRes.listeningCorrect / 5) * 9.0).toFixed(1));
-    const readingScore = Number(((evalRes.readingCorrect / 5) * 9.0).toFixed(1));
-    const writingScore = evalRes.writingErrorLevel === 'ít lỗi' ? 6.5 : 5.0;
-    const speakingScore = 5.5;
-
-    const overallScore = Number(
-      ((vocabScore * 0.2 + listeningScore * 0.3 + readingScore * 0.3 + writingScore * 0.2)).toFixed(1)
-    );
-
-    const recommendedCourse = evalRes.recommendedCourse;
-    const status = evalRes.status;
-    const comment = evalRes.comment;
-
-    // Calculate test duration & overdue metrics
-    const timeSpentSeconds = testTimeElapsedSeconds;
-    const isOverdueSubmission = testTimeElapsedSeconds > TEST_DURATION_SECONDS;
-    const overdueSecondsVal = isOverdueSubmission ? testTimeElapsedSeconds - TEST_DURATION_SECONDS : 0;
-    const overdueTextStr = isOverdueSubmission ? formatDurationText(overdueSecondsVal) : 'Đúng giờ';
-    const timeSpentFormattedStr = formatDurationText(timeSpentSeconds || 0);
-
-    const antiCheatLogsFinal = [...antiCheatLogs];
-    const timeNowStr = new Date().toLocaleTimeString('vi-VN');
-    if (isOverdueSubmission) {
-      antiCheatLogsFinal.unshift(
-        `[${timeNowStr}] ⚠️ Nộp bài quá thời gian quy định: Vượt mốc +${formatTimer(overdueSecondsVal)} (${overdueTextStr}). Tổng thời gian làm bài: ${timeSpentFormattedStr} / 55 phút.`
+      const evalRes = evaluatePlacementResult(
+        formData.vocabAnswers || {},
+        formData.listeningAnswers || {},
+        formData.readingAnswers || {},
+        formData.writingSentences || {}
       );
-    } else {
-      antiCheatLogsFinal.unshift(
-        `[${timeNowStr}] ✅ Nộp bài đúng giờ quy định (Thời gian làm bài: ${timeSpentFormattedStr} / 55 phút).`
+
+      const vocabScore = Number(((evalRes.vocabCorrect / 10) * 9.0).toFixed(1));
+      const listeningScore = Number(((evalRes.listeningCorrect / 5) * 9.0).toFixed(1));
+      const readingScore = Number(((evalRes.readingCorrect / 5) * 9.0).toFixed(1));
+      const writingScore = evalRes.writingErrorLevel === 'ít lỗi' ? 6.5 : 5.0;
+      const speakingScore = hasRecorded || recordedAudioUrl ? 6.0 : 5.5;
+
+      const overallScore = Number(
+        ((vocabScore * 0.2 + listeningScore * 0.3 + readingScore * 0.3 + writingScore * 0.2)).toFixed(1)
       );
-    }
 
-    const newTest: PlacementTest = {
-      id: `pt-online-${Date.now()}`,
-      code: `TEST-${Math.floor(1000 + Math.random() * 9000)}`,
-      candidateName: formData.candidateName,
-      dob: formData.dob,
-      gender: 'Nữ',
-      phone: formData.phone,
-      parentPhone: formData.parentPhone || formData.phone,
-      email: formData.email || `${formData.candidateName.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`,
-      address: formData.address,
-      testDate: new Date().toISOString().split('T')[0],
-      evaluatorName: 'Hệ thống Khảo thí & Giám sát Online IELTS Dương Vũ',
-      listeningScore,
-      speakingScore,
-      readingScore,
-      writingScore,
-      overallScore,
-      targetLevel: formData.targetLevel || 'Overall 6.5',
-      recommendedCourse,
-      status,
-      comment,
-      sourceType: 'form_online',
-      testDurationMinutes: 55,
-      timeSpentSeconds,
-      isOverdue: isOverdueSubmission,
-      overdueSeconds: overdueSecondsVal,
-      overdueText: overdueTextStr,
-      timeSpentFormatted: timeSpentFormattedStr,
-      tabSwitchCount: Math.max(tabSwitchCount, tabSwitchCountRef.current),
-      antiCheatLogs: antiCheatLogsFinal,
-      googleFormLink: googleFormUrl,
-      school: formData.school,
-      facebookLink: formData.facebookLink,
-      targetExamDate: formData.targetExamDate,
-      preferredCampus: formData.preferredCampus,
-      preferredSchedule: formData.preferredSchedule,
-      previousIeltsExperience: formData.previousIeltsExperience,
-      referralSource: formData.referralSource,
-      cameraEnabled: isCameraActive,
-      speakingAudioUrl: recordedAudioUrl || (hasRecorded ? 'simulated_speaking_recording.webm' : undefined),
-      speakingAudioDuration: recordingSeconds || undefined,
-      testAnswers: {
-        vocab: formData.vocabAnswers,
-        listening: formData.listeningAnswers,
-        reading: formData.readingAnswers,
-        writingSentences: formData.writingSentences,
-        writingParagraph: formData.writingParagraph,
-      },
-    };
+      const recommendedCourse = evalRes.recommendedCourse;
+      const status = evalRes.status;
+      const comment = evalRes.comment;
 
-    onAddTest(newTest);
-    showToast(`Đã nộp bài kiểm tra đầu vào của ${formData.candidateName} thành công!`);
+      // Calculate test duration & overdue metrics
+      const timeSpentSeconds = testTimeElapsedSeconds || 0;
+      const isOverdueSubmission = timeSpentSeconds > TEST_DURATION_SECONDS;
+      const overdueSecondsVal = isOverdueSubmission ? timeSpentSeconds - TEST_DURATION_SECONDS : 0;
+      const overdueTextStr = isOverdueSubmission ? formatDurationText(overdueSecondsVal) : 'Đúng giờ';
+      const timeSpentFormattedStr = formatDurationText(timeSpentSeconds || 0);
 
-    if (isStudentPortal) {
+      const antiCheatLogsFinal = [...antiCheatLogs];
+      const timeNowStr = new Date().toLocaleTimeString('vi-VN');
+      if (isOverdueSubmission) {
+        antiCheatLogsFinal.unshift(
+          `[${timeNowStr}] ⚠️ Nộp bài quá thời gian quy định: Vượt mốc +${formatTimer(overdueSecondsVal)} (${overdueTextStr}). Tổng thời gian làm bài: ${timeSpentFormattedStr} / 55 phút.`
+        );
+      } else {
+        antiCheatLogsFinal.unshift(
+          `[${timeNowStr}] ✅ Nộp bài đúng giờ quy định (Thời gian làm bài: ${timeSpentFormattedStr} / 55 phút).`
+        );
+      }
+
+      const newTest: PlacementTest = {
+        id: `pt-online-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        code: `TEST-${Math.floor(1000 + Math.random() * 9000)}`,
+        candidateName,
+        dob: formData.dob || '2008-01-15',
+        gender: 'Nữ',
+        phone,
+        parentPhone: formData.parentPhone || phone,
+        email,
+        address: formData.address || 'Hải Phòng',
+        testDate: new Date().toISOString().split('T')[0],
+        submittedAt: new Date().toISOString(),
+        evaluatorName: 'Hệ thống Khảo thí & Giám sát Online IELTS Dương Vũ',
+        listeningScore,
+        speakingScore,
+        readingScore,
+        writingScore,
+        overallScore,
+        targetLevel: formData.targetLevel || 'Overall 6.5',
+        recommendedCourse,
+        status,
+        comment,
+        sourceType: 'form_online',
+        testDurationMinutes: 55,
+        timeSpentSeconds,
+        isOverdue: isOverdueSubmission,
+        overdueSeconds: overdueSecondsVal,
+        overdueText: overdueTextStr,
+        timeSpentFormatted: timeSpentFormattedStr,
+        tabSwitchCount: Math.max(tabSwitchCount, tabSwitchCountRef.current || 0),
+        antiCheatLogs: antiCheatLogsFinal,
+        googleFormLink: googleFormUrl,
+        school: formData.school,
+        facebookLink: formData.facebookLink,
+        targetExamDate: formData.targetExamDate,
+        preferredCampus: campus,
+        preferredSchedule: schedule,
+        previousIeltsExperience: formData.previousIeltsExperience,
+        referralSource: formData.referralSource,
+        cameraEnabled: isCameraActive,
+        speakingAudioUrl: recordedAudioUrl || (hasRecorded ? 'simulated_speaking_recording.webm' : undefined),
+        speakingAudioDuration: recordingSeconds || undefined,
+        testAnswers: {
+          vocab: formData.vocabAnswers,
+          listening: formData.listeningAnswers,
+          reading: formData.readingAnswers,
+          writingSentences: formData.writingSentences,
+          writingParagraph: formData.writingParagraph,
+          speakingAudioUrl: recordedAudioUrl || (hasRecorded ? 'simulated_speaking_recording.webm' : undefined),
+          speakingAudioDuration: recordingSeconds || undefined,
+        },
+      };
+
+      // 1. Direct backup in localStorage
+      try {
+        const existingSubmitted: PlacementTest[] = JSON.parse(
+          localStorage.getItem('idv_submitted_candidate_placement_tests') || '[]'
+        );
+        const filtered = existingSubmitted.filter((t) => t.id !== newTest.id);
+        localStorage.setItem(
+          'idv_submitted_candidate_placement_tests',
+          JSON.stringify([newTest, ...filtered].slice(0, 100))
+        );
+        localStorage.setItem('idv_placement_last_submission', JSON.stringify({ test: newTest, timestamp: Date.now() }));
+      } catch (e) {
+        console.warn('LocalStorage candidate backup save error:', e);
+      }
+
+      // 2. Direct save to Application Server (Guaranteed cross-device & cross-network sync via keepalive)
+      try {
+        fetch('/api/placement-tests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newTest),
+          keepalive: true,
+        }).catch((apiErr) => {
+          console.warn('Server API save attempt:', apiErr);
+        });
+      } catch (e) {}
+
+      // 3. Save to Firestore Database
+      saveDocument('placementTests', newTest).catch((err) => {
+        console.warn('Direct Firestore save failed in OnlinePlacementTestForm:', err);
+      });
+
+      // 4. Clear live auto-draft since test is successfully submitted
+      try {
+        localStorage.removeItem('idv_placement_form_live_draft');
+      } catch (e) {}
+
+      // 5. Propagate to parent state
+      try {
+        onAddTest(newTest);
+      } catch (err) {
+        console.warn('onAddTest error:', err);
+      }
+
+      showToast(`✅ Đã nộp bài kiểm tra đầu vào của ${candidateName} thành công!`);
+
       setSubmittedTest(newTest);
       setIsSubmittedSuccessfully(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
-      // Switch to responses tab to see result immediately
-      setTopTab('responses');
-      setSelectedResponse(newTest);
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } catch (submitErr) {
+      console.error('Fatal submit error in OnlinePlacementTestForm:', submitErr);
+      showToast('⚠️ Đã có lỗi khi xử lý bài nộp. Đang bảo toàn dữ liệu bài thi.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1195,7 +1337,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   };
 
   const handleExportGoogleSheetCSV = () => {
-    const csvContent = generatePlacementSheetCSV(placementTests);
+    const csvContent = generatePlacementSheetCSV(allDisplayTests);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1209,9 +1351,9 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
 
   // Copy TSV data (all 57 columns) to paste directly into Google Sheets with Ctrl+V
   const handleCopyGoogleSheetsTSV = () => {
-    const tsvContent = generatePlacementSheetTSV(placementTests);
+    const tsvContent = generatePlacementSheetTSV(allDisplayTests);
     navigator.clipboard.writeText(tsvContent);
-    showToast(`Đã sao chép toàn bộ 57 cột dữ liệu của ${placementTests.length} bài thi! Hãy mở Google Sheet và nhấn Ctrl+V để dán.`);
+    showToast(`Đã sao chép toàn bộ 57 cột dữ liệu của ${allDisplayTests.length} bài thi! Hãy mở Google Sheet và nhấn Ctrl+V để dán.`);
   };
 
   const [isSyncingSheet, setIsSyncingSheet] = useState(false);
@@ -1239,7 +1381,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
       showToast('Đang đẩy dữ liệu lên Google Sheet...');
       
       const headerRow = [...PLACEMENT_SHEET_COLUMNS];
-      const dataRows = placementTests.map((t, index) => extractTestRowValues(t, index));
+      const dataRows = allDisplayTests.map((t, index) => extractTestRowValues(t, index));
       
       const allRows = [headerRow, ...dataRows];
       
@@ -1306,7 +1448,65 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
     }
   };
 
-  const filteredResponses = placementTests.filter((t) => {
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+
+  const handleSyncFromCloudManual = async () => {
+    setIsSyncingCloud(true);
+    try {
+      let serverCount = 0;
+      try {
+        const res = await fetch('/api/placement-tests');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data)) {
+            json.data.forEach((t: PlacementTest) => onAddTest(t));
+            serverCount = json.data.length;
+          }
+        }
+      } catch (err) {
+        console.warn('Sync from /api/placement-tests:', err);
+      }
+
+      if (onSyncFromCloud) {
+        await onSyncFromCloud();
+      } else {
+        const cloudDocs = await fetchCollection<PlacementTest>('placementTests');
+        if (cloudDocs && cloudDocs.length > 0) {
+          cloudDocs.forEach((t) => onAddTest(t));
+        }
+      }
+      showToast(`Đã đồng bộ máy chủ thành công! (${serverCount > 0 ? `${serverCount} bài nộp ghi nhận` : 'Dữ liệu mới nhất'})`);
+    } catch (e) {
+      console.error(e);
+      showToast('Đã có lỗi khi kết nối với máy chủ.');
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  const allDisplayTests = React.useMemo(() => {
+    let localSubmissions: PlacementTest[] = [];
+    try {
+      const raw = localStorage.getItem('idv_submitted_candidate_placement_tests');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) localSubmissions = parsed;
+      }
+    } catch (e) {}
+
+    const map = new Map<string, PlacementTest>();
+    // Add props placement tests first
+    placementTests.forEach((t) => map.set(t.id, t));
+    // Add local candidate submissions
+    localSubmissions.forEach((t) => map.set(t.id, t));
+    return Array.from(map.values()).sort((a, b) => {
+      const timeA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+      const timeB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [placementTests]);
+
+  const filteredResponses = allDisplayTests.filter((t) => {
     const q = responseSearch.toLowerCase();
     return (
       t.candidateName.toLowerCase().includes(q) ||
@@ -1316,7 +1516,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
     );
   });
 
-  if (isStudentPortal && isSubmittedSuccessfully && submittedTest) {
+  if (isSubmittedSuccessfully && submittedTest) {
     return (
       <div className="max-w-3xl mx-auto my-6 sm:my-10 px-4 space-y-6 animate-in fade-in">
         <div className="bg-white rounded-3xl border border-emerald-200 shadow-xl overflow-hidden">
@@ -1408,8 +1608,8 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
               </ul>
             </div>
 
-            {/* Zalo copy button for assistant receipt */}
-            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            {/* Action buttons */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
               <button
                 type="button"
                 onClick={() => {
@@ -1423,6 +1623,59 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
               >
                 {copiedReceiptText ? <Check className="w-4 h-4 text-purple-950" /> : <Copy className="w-4 h-4 text-purple-950" />}
                 <span>{copiedReceiptText ? 'Đã chép nội dung biên nhận!' : '💬 Gửi Zalo trợ lý biên nhận đã hoàn thành bài kiểm tra'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!submittedTest) return;
+                  try {
+                    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(submittedTest, null, 2));
+                    const downloadAnchor = document.createElement('a');
+                    downloadAnchor.setAttribute('href', dataStr);
+                    downloadAnchor.setAttribute('download', `IELTS_Placement_Test_${submittedTest.code}_${submittedTest.candidateName.replace(/\s+/g, '_')}.json`);
+                    document.body.appendChild(downloadAnchor);
+                    downloadAnchor.click();
+                    downloadAnchor.remove();
+                    showToast('💾 Đã tải tệp sao lưu bài thi (.JSON) thành công!');
+                  } catch (e) {
+                    showToast('⚠️ Không thể tải tệp bài thi');
+                  }
+                }}
+                className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer"
+                title="Tải tệp JSON chứa toàn bộ câu trả lời để lưu giữ làm bằng chứng"
+              >
+                <Download className="w-4 h-4 text-emerald-700" />
+                <span>Tải tệp sao lưu bài thi (.JSON)</span>
+              </button>
+
+              {!isStudentPortal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSubmittedSuccessfully(false);
+                    setTopTab('responses');
+                    setSelectedResponse(submittedTest);
+                  }}
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-purple-700 hover:bg-purple-800 text-white font-black text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Xem Chi Tiết Trong Danh Sách Responses</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSubmittedSuccessfully(false);
+                  setSubmittedTest(null);
+                  setCurrentSection(1);
+                  setFormData({ ...INITIAL_FORM_DATA });
+                }}
+                className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Làm bài kiểm tra mới</span>
               </button>
             </div>
           </div>
@@ -1501,7 +1754,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                 }`}
               >
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                <span>Responses ({placementTests.length})</span>
+                <span>Responses ({allDisplayTests.length})</span>
                 <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-emerald-100 text-emerald-800 font-mono">
                   Live
                 </span>
@@ -1595,6 +1848,34 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
             </div>
 
             <div className="flex items-center gap-3 flex-wrap justify-end">
+              {/* Google Forms Style: Real-Time Auto-Save Draft Indicator */}
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 text-xs border border-slate-700 font-medium"
+                title="Tự động lưu câu trả lời theo thời gian thực (Như Google Form)"
+              >
+                {autoSaveStatus === 'saving' ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                    <span className="text-amber-300">Đang lưu bản nháp...</span>
+                  </>
+                ) : (
+                  <>
+                    <Cloud className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-300">
+                      Đã lưu nháp {lastAutoSaveTime ? `(${lastAutoSaveTime})` : 'tự động'}
+                    </span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={handleClearDraft}
+                  className="ml-1 px-1.5 py-0.5 text-[10px] text-slate-400 hover:text-rose-300 hover:bg-slate-700 rounded-md transition-all cursor-pointer"
+                  title="Xóa bản nháp để làm lại bài từ đầu"
+                >
+                  Làm mới
+                </button>
+              </div>
+
               {/* Timer */}
               <div
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-mono font-bold border transition-all ${
@@ -1634,6 +1915,18 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
               >
                 {tabSwitchCount > 0 ? `⚠️ Rời tab: ${tabSwitchCount} lần` : '0 lần vi phạm tab'}
               </div>
+
+              {/* Quick Submit button in top bar */}
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleSubmitExam()}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-sm font-bold transition-all bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95"
+                title="Bấm để nộp bài kiểm tra và lưu kết quả ngay lập tức"
+              >
+                {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                <span>Nộp Bài Thi</span>
+              </button>
 
               {/* Toggle Webcam Button */}
               <button
@@ -1698,6 +1991,37 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
             <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl text-amber-900 text-sm font-semibold flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
               <span>{cameraError}</span>
+            </div>
+          )}
+
+          {/* DRAFT AUTO-RESTORED BANNER (Google Forms Style) */}
+          {showDraftRestoredNotice && (
+            <div className="p-3.5 px-4 bg-emerald-50 border border-emerald-300 rounded-2xl text-emerald-950 text-sm flex items-center justify-between gap-3 flex-wrap shadow-xs animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-xl bg-emerald-200 text-emerald-900 flex items-center justify-center shrink-0 font-bold">
+                  <Cloud className="w-4 h-4 text-emerald-800" />
+                </div>
+                <span>
+                  <strong>Khôi phục bản nháp:</strong> Hệ thống đã tự động khôi phục các câu trả lời gần nhất ({lastAutoSaveTime || 'trước đó'}) của em.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDraftRestoredNotice(false)}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs"
+                >
+                  Tiếp tục làm bài
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearDraft}
+                  className="px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-bold rounded-xl text-xs transition-all"
+                  title="Xóa bản nháp này để bắt đầu lại từ đầu"
+                >
+                  Xóa làm lại
+                </button>
+              </div>
             </div>
           )}
 
@@ -2166,28 +2490,19 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                           return;
                         }
                         if (!formData.parentPhone.trim()) {
-                          showToast('Vui lòng nhập Số điện thoại phụ huynh!');
-                          return;
+                          formData.parentPhone = formData.phone;
                         }
                         if (!formData.email.trim()) {
-                          showToast('Vui lòng nhập địa chỉ Gmail bắt buộc!');
-                          return;
+                          formData.email = `${formData.candidateName.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`;
                         }
                         if (!formData.dob) {
-                          showToast('Vui lòng chọn Ngày tháng năm sinh!');
-                          return;
-                        }
-                        if (!formData.address.trim()) {
-                          showToast('Vui lòng nhập Địa chỉ nhà em!');
-                          return;
+                          formData.dob = '2008-01-15';
                         }
                         if (!formData.preferredCampus.trim()) {
-                          showToast('Vui lòng chọn Cơ sở đăng ký theo học (CS1 hoặc CS2)!');
-                          return;
+                          formData.preferredCampus = '51 Tô Hiệu';
                         }
                         if (!formData.preferredSchedule.trim()) {
-                          showToast('Vui lòng chọn Lịch học phù hợp!');
-                          return;
+                          formData.preferredSchedule = 'Lớp PRE (Thứ 2 + Thứ 5 hoặc Thứ 3 + Thứ 6)';
                         }
                         setCurrentSection(3);
                         if (!hasTimerStarted) {
@@ -2780,7 +3095,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                     </div>
                   </div>
 
-                  <div className="flex justify-between pt-4 border-t border-slate-200">
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                     <button
                       type="button"
                       onClick={() => setCurrentSection(5)}
@@ -2882,11 +3197,23 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
 
                     <button
                       type="button"
+                      disabled={isSubmitting}
                       onClick={() => handleSubmitExam()}
-                      className="px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg transition-all flex items-center gap-2 text-sm"
+                      className={`px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg transition-all flex items-center gap-2 text-sm cursor-pointer ${
+                        isSubmitting ? 'opacity-75 cursor-not-allowed' : 'active:scale-95'
+                      }`}
                     >
-                      <Send className="w-4 h-4" />
-                      <span>Nộp Bài Kiểm Tra (Submit) & Lưu Vào Hệ Thống</span>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Đang Nộp Bài & Lưu Vào Hệ Thống...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>Nộp Bài Kiểm Tra (Submit) & Lưu Vào Hệ Thống</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -2905,7 +3232,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
               <div className="text-[11px] font-bold text-slate-400 uppercase">Tổng số phản hồi</div>
-              <div className="text-2xl font-black text-purple-900 mt-0.5">{placementTests.length}</div>
+              <div className="text-2xl font-black text-purple-900 mt-0.5">{allDisplayTests.length}</div>
               <div className="text-[10px] text-slate-500 mt-0.5">Thí sinh đã nộp bài</div>
             </div>
 
@@ -2913,8 +3240,8 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
               <div className="text-[11px] font-bold text-slate-400 uppercase">Điểm TB Overall</div>
               <div className="text-2xl font-black text-amber-600 mt-0.5">
                 {(
-                  placementTests.reduce((acc, c) => acc + (c.overallScore || 0), 0) /
-                    (placementTests.length || 1)
+                  allDisplayTests.reduce((acc, c) => acc + (c.overallScore || 0), 0) /
+                    (allDisplayTests.length || 1)
                 ).toFixed(1)}
               </div>
               <div className="text-[10px] text-slate-500 mt-0.5">Band điểm trung bình</div>
@@ -2923,7 +3250,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
               <div className="text-[11px] font-bold text-slate-400 uppercase">Phát hiện rời tab</div>
               <div className="text-2xl font-black text-rose-600 mt-0.5">
-                {placementTests.filter((t) => (t.tabSwitchCount || 0) > 0).length}
+                {allDisplayTests.filter((t) => (t.tabSwitchCount || 0) > 0).length}
               </div>
               <div className="text-[10px] text-rose-600 font-semibold mt-0.5">Bài có cảnh báo gian lận</div>
             </div>
@@ -2931,7 +3258,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
               <div className="text-[11px] font-bold text-slate-400 uppercase">Giám sát Camera</div>
               <div className="text-2xl font-black text-emerald-600 mt-0.5">
-                {placementTests.filter((t) => t.cameraEnabled).length}
+                {allDisplayTests.filter((t) => t.cameraEnabled).length}
               </div>
               <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">Thí sinh bật camera</div>
             </div>
@@ -3066,6 +3393,18 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
               <span className="text-sm text-slate-500 font-semibold">
                 Tổng cộng: <strong className="text-purple-900">{filteredResponses.length}</strong> bài thi
               </span>
+
+              <button
+                type="button"
+                onClick={handleSyncFromCloudManual}
+                disabled={isSyncingCloud}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold shadow-xs transition-all disabled:opacity-50"
+                title="Tải lại toàn bộ bài kiểm tra nộp thành công từ Cloud Firestore"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+                <span>{isSyncingCloud ? 'Đang đồng bộ...' : 'Đồng bộ Cloud'}</span>
+              </button>
+
               {/* Open Google Form in new tab */}
               <a
                 href={googleFormUrl}
