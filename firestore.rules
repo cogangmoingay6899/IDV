@@ -1,60 +1,58 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+
+    // Helper functions for validation & security
+    function isValidId(docId) {
+      return docId is string && docId.size() > 0 && docId.size() <= 128;
     }
 
+    // Students collection (Student info & tuition payment tracking)
     match /students/{studentId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isValidId(studentId);
     }
-    match /classes/{classId} {
-      allow read, write: if true;
-    }
-    match /teachers/{teacherId} {
-      allow read, write: if true;
-    }
-    match /leads/{leadId} {
-      allow read, write: if true;
-    }
+
+    // Placement Tests collection (Online entrance test results)
     match /placementTests/{testId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isValidId(testId);
     }
-    match /trialStudents/{trialId} {
-      allow read, write: if true;
+
+    // Vocabulary tests collection
+    match /vocab_tests/{testId} {
+      allow read: if true;
+      allow write: if isValidId(testId);
     }
-    match /attendance/{attendanceId} {
-      allow read, write: if true;
+
+    // Vocabulary reviews & periodic test results
+    match /vocab_reviews/{testId} {
+      allow read: if true;
+      allow write: if isValidId(testId);
     }
-    match /transactions/{txId} {
-      allow read, write: if true;
+
+    // Classes collection
+    match /classes/{classId} {
+      allow read: if true;
+      allow write: if isValidId(classId);
     }
-    match /contactNotes/{noteId} {
-      allow read, write: if true;
+
+    // Teachers collection
+    match /teachers/{teacherId} {
+      allow read: if true;
+      allow write: if isValidId(teacherId);
     }
-    match /milestoneEvaluations/{evaluationId} {
-      allow read, write: if true;
+
+    // Periodic test results & score records
+    match /test_results/{resultId} {
+      allow read: if true;
+      allow write: if isValidId(resultId);
     }
-    match /exams/{examId} {
-      allow read, write: if true;
-    }
-    match /courses/{courseId} {
-      allow read, write: if true;
-    }
-    match /kpis/{kpiId} {
-      allow read, write: if true;
-    }
-    match /inventory/{itemId} {
-      allow read, write: if true;
-    }
-    match /class_spreadsheets/{sheetId} {
-      allow read, write: if true;
-    }
-    match /vocab_tests/{vocabTestId} {
-      allow read, write: if true;
-    }
-    match /vocab_reviews/{vocabReviewId} {
-      allow read, write: if true;
+
+    // Default catch-all rule
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

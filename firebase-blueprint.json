@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Student profile with personal info, enrolled class, tuition status, and academic progress",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique student ID" },
+        "code": { "type": "string", "description": "Student code e.g. HV-1001" },
+        "name": { "type": "string", "description": "Full name of the student" },
+        "dob": { "type": "string", "description": "Date of birth YYYY-MM-DD" },
+        "phone": { "type": "string", "description": "Student phone number" },
+        "parentPhone": { "type": "string", "description": "Parent phone number" },
+        "email": { "type": "string", "description": "Email address" },
+        "address": { "type": "string", "description": "Home address or area" },
+        "targetBand": { "type": "string", "description": "Target IELTS band score" },
+        "classId": { "type": "string", "description": "Assigned class ID" },
+        "tuitionStatus": { "type": "string", "description": "Tuition payment status (paid, partial, unpaid, overdue)" },
+        "totalTuition": { "type": "number", "description": "Total tuition fee amount" },
+        "paidTuition": { "type": "number", "description": "Amount of tuition paid so far" },
+        "lastPaymentDate": { "type": "string", "description": "ISO date of latest payment" },
+        "notes": { "type": "string", "description": "Administrative notes" },
+        "joinedDate": { "type": "string", "description": "Enrollment date" },
+        "status": { "type": "string", "description": "Active, reserved, or finished" }
+      },
+      "required": ["id", "name", "phone"]
+    },
+    "PlacementTest": {
+      "title": "PlacementTest",
+      "description": "Candidate placement test submission with scores across 4 skills, audio recording, anti-cheat audit logs, and course recommendation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique test submission ID" },
+        "code": { "type": "string", "description": "Test code e.g. TEST-1001" },
+        "candidateName": { "type": "string", "description": "Candidate full name" },
+        "phone": { "type": "string", "description": "Phone number" },
+        "email": { "type": "string", "description": "Candidate email" },
+        "dob": { "type": "string", "description": "Date of birth" },
+        "testDate": { "type": "string", "description": "Date test was taken" },
+        "submittedAt": { "type": "string", "description": "Timestamp of submission" },
+        "listeningScore": { "type": "number", "description": "Listening score (0-9)" },
+        "readingScore": { "type": "number", "description": "Reading score (0-9)" },
+        "writingScore": { "type": "number", "description": "Writing score (0-9)" },
+        "speakingScore": { "type": "number", "description": "Speaking score (0-9)" },
+        "overallScore": { "type": "number", "description": "Overall calculated band score" },
+        "targetLevel": { "type": "string", "description": "Target level" },
+        "recommendedCourse": { "type": "string", "description": "Recommended IELTS course" },
+        "status": { "type": "string", "description": "Grading status" },
+        "comment": { "type": "string", "description": "Teacher assessment notes" },
+        "timeSpentSeconds": { "type": "number", "description": "Total seconds taken" },
+        "isOverdue": { "type": "boolean", "description": "Whether test exceeded 55 mins" },
+        "tabSwitchCount": { "type": "number", "description": "Number of anti-cheat tab switches" },
+        "preferredCampus": { "type": "string", "description": "Campus branch" },
+        "preferredSchedule": { "type": "string", "description": "Schedule preference" }
+      },
+      "required": ["id", "candidateName", "phone"]
+    },
+    "VocabTest": {
+      "title": "VocabTest",
+      "description": "Vocabulary and periodic test set with word definitions, question units, and student submission histories",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique test set ID" },
+        "title": { "type": "string", "description": "Title of vocab test or periodic review" },
+        "unit": { "type": "string", "description": "Unit name or course module" },
+        "level": { "type": "string", "description": "Target IELTS band level" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "totalQuestions": { "type": "number", "description": "Total question count" },
+        "timeLimitMinutes": { "type": "number", "description": "Time limit in minutes" }
+      },
+      "required": ["id", "title"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "Classroom schedule, teacher assignment, room, and capacity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique class ID" },
+        "name": { "type": "string", "description": "Class name" },
+        "level": { "type": "string", "description": "Target course level" },
+        "teacherId": { "type": "string", "description": "Assigned teacher ID" },
+        "schedule": { "type": "string", "description": "Day and time schedule" },
+        "tuitionFee": { "type": "number", "description": "Tuition fee per course" },
+        "maxStudents": { "type": "number", "description": "Maximum capacity" },
+        "currentStudents": { "type": "number", "description": "Enrolled count" }
+      },
+      "required": ["id", "name"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Teacher profile and contact info",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique teacher ID" },
+        "name": { "type": "string", "description": "Teacher name" },
+        "email": { "type": "string", "description": "Email address" },
+        "phone": { "type": "string", "description": "Phone number" },
+        "ieltsScore": { "type": "string", "description": "IELTS overall achievement" }
+      },
+      "required": ["id", "name"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Collection of enrolled students and their tuition status"
+    },
+    "/placementTests/{testId}": {
+      "schema": { "$ref": "#/entities/PlacementTest" },
+      "description": "Collection of entrance placement test results"
+    },
+    "/vocab_tests/{testId}": {
+      "schema": { "$ref": "#/entities/VocabTest" },
+      "description": "Collection of vocabulary exercises and periodic tests"
+    },
+    "/vocab_reviews/{testId}": {
+      "schema": { "$ref": "#/entities/VocabTest" },
+      "description": "Collection of periodic review tests and historical score tracking"
+    },
+    "/classes/{classId}": {
+      "schema": { "$ref": "#/entities/Class" },
+      "description": "Collection of IELTS classes and tuition pricing"
+    },
+    "/teachers/{teacherId}": {
+      "schema": { "$ref": "#/entities/Teacher" },
+      "description": "Collection of teachers and instructors"
+    }
+  }
+}
