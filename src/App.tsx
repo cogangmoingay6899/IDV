@@ -693,10 +693,14 @@ export default function App() {
   };
 
   // Handler: Create Class
-  const handleCreateClass = (newClass: ClassGroup, selectedStudentIds?: string[]) => {
+  const handleCreateClass = (
+    newClass: ClassGroup,
+    selectedStudentIds?: string[],
+    newPastedStudents?: { name: string; phone?: string; note?: string }[]
+  ) => {
     let studentCount = 0;
     if (selectedStudentIds && selectedStudentIds.length > 0) {
-      studentCount = selectedStudentIds.length;
+      studentCount += selectedStudentIds.length;
       setStudents((prev) => {
         const updated = prev.map((s) =>
           selectedStudentIds.includes(s.id)
@@ -713,6 +717,42 @@ export default function App() {
         if (enrolled.length > 0) saveBatchDocuments('students', enrolled);
         return updated;
       });
+    }
+
+    if (newPastedStudents && newPastedStudents.length > 0) {
+      studentCount += newPastedStudents.length;
+      const createdStudents: Student[] = newPastedStudents.map((item, idx) => {
+        const cleanName = item.name.trim();
+        const randId = `st-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
+        const codeNum = (students.length + idx + 1).toString().padStart(3, '0');
+        const studentCode = `IDV-HV${codeNum}`;
+
+        return {
+          id: randId,
+          code: studentCode,
+          name: cleanName,
+          dob: '2008-01-01',
+          gender: 'Nam' as const,
+          phone: item.phone || '',
+          email: `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'hocvien'}${codeNum}@gmail.com`,
+          parentName: '',
+          parentPhone: item.phone || '',
+          address: newClass.branch || 'Hải Phòng',
+          classId: newClass.id,
+          className: newClass.name,
+          courseName: newClass.courseName,
+          status: 'Đang học' as const,
+          joinDate: newClass.startDate || new Date().toISOString().split('T')[0],
+          tuitionStatus: 'Chưa đóng' as const,
+          balanceOwed: newClass.tuitionFee || 14500000,
+          customTuitionFee: newClass.tuitionFee || 14500000,
+          courseTuitionFee: newClass.tuitionFee || 14500000,
+          tuitionPayable: newClass.tuitionFee || 14500000,
+        };
+      });
+
+      setStudents((prev) => [...createdStudents, ...prev]);
+      saveBatchDocuments('students', createdStudents);
     }
 
     const finalClass = { ...newClass, currentStudents: studentCount };
@@ -732,6 +772,8 @@ export default function App() {
         return updated;
       });
     }
+
+    showToast(`Đã tạo thành công lớp ${newClass.name} với ${studentCount} học viên!`);
   };
 
   // Handler: Update Class (Edit name, course, teacher, schedule, etc.)
@@ -1344,6 +1386,46 @@ export default function App() {
     showToast('Đã xóa sạch toàn bộ danh sách lớp học trên toàn hệ thống (Firestore, Server & Bộ nhớ)!');
   };
 
+  const handleDeleteStudent = async (studentId: string) => {
+    const targetStudent = students.find((s) => s.id === studentId);
+    const targetName = targetStudent?.name || 'Học viên';
+    const classId = targetStudent?.classId;
+
+    // 1. Record to deleted student IDs in localStorage blacklist
+    try {
+      const existingDeleted: string[] = JSON.parse(localStorage.getItem('idv_deleted_student_ids') || '[]');
+      if (!existingDeleted.includes(studentId)) {
+        existingDeleted.push(studentId);
+      }
+      localStorage.setItem('idv_deleted_student_ids', JSON.stringify(existingDeleted));
+    } catch (e) {
+      console.warn('LocalStorage student delete error:', e);
+    }
+
+    // 2. Immediately update state
+    setStudents((prev) => prev.filter((s) => s.id !== studentId));
+
+    // 3. If student belongs to a class, decrease the class's currentStudents count
+    if (classId) {
+      setClasses((prev) => {
+        const updated = prev.map((c) =>
+          c.id === classId
+            ? { ...c, currentStudents: Math.max(0, (c.currentStudents || 1) - 1) }
+            : c
+        );
+        const affectedClass = updated.find((c) => c.id === classId);
+        if (affectedClass) saveDocument('classes', affectedClass);
+        return updated;
+      });
+    }
+
+    // 4. Delete from Firestore & VPS storage
+    await deleteDocument('students', studentId);
+
+    // 5. Toast notification
+    showToast(`Đã xóa học viên ${targetName} khỏi hệ thống!`);
+  };
+
   const handleDeletePlacementTest = async (testId: string) => {
     // 1. Record to deleted IDs set in localStorage to prevent initial/cached resurrection
     try {
@@ -1850,6 +1932,7 @@ export default function App() {
             currentUser={currentUser}
             onDeleteClass={handleDeleteClass}
             onClearAllClasses={handleClearAllClasses}
+            onDeleteStudent={handleDeleteStudent}
           />
         )}
 

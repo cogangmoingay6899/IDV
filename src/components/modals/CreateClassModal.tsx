@@ -41,9 +41,17 @@ interface CreateClassModalProps {
   courses: CurriculumCourse[];
   students?: Student[];
   defaultBranch?: string;
-  onAddClass: (newClass: ClassGroup, selectedStudentIds?: string[]) => void;
+  onAddClass: (
+    newClass: ClassGroup,
+    selectedStudentIds?: string[],
+    newPastedStudents?: { name: string; phone?: string; note?: string }[]
+  ) => void;
   onAddBatchClasses?: (classes: ClassGroup[]) => void;
-  onSave?: (newClass: ClassGroup, selectedStudentIds?: string[]) => void;
+  onSave?: (
+    newClass: ClassGroup,
+    selectedStudentIds?: string[],
+    newPastedStudents?: { name: string; phone?: string; note?: string }[]
+  ) => void;
 }
 
 export const CreateClassModal: React.FC<CreateClassModalProps> = ({
@@ -64,6 +72,8 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
   const [offDates, setOffDates] = useState<string[]>([]);
   const [newOffDateInput, setNewOffDateInput] = useState<string>('');
   const [missedPastSessions, setMissedPastSessions] = useState<number>(0);
+  const [pastedStudentsRawText, setPastedStudentsRawText] = useState<string>('');
+  const [excludedPastedIndices, setExcludedPastedIndices] = useState<number[]>([]);
 
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
@@ -146,6 +156,53 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
   const handleRemoveOffDate = (dateToRemove: string) => {
     setOffDates(offDates.filter((d) => d !== dateToRemove));
   };
+
+  // Parse batch pasted students text
+  const parsedPastedStudents = useMemo(() => {
+    if (!pastedStudentsRawText.trim()) return [];
+    const lines = pastedStudentsRawText.split(/[\n;]/).map((l) => l.trim()).filter(Boolean);
+    const result: { name: string; phone?: string; note?: string; originalIndex: number }[] = [];
+
+    lines.forEach((line, idx) => {
+      // Clean leading bullet points, numbers e.g. "1.", "1/", "1 -", "-", "+"
+      let clean = line.replace(/^[\d]+[\.\)\/\-\:\s]+/, '').replace(/^[\-\+\*•]\s*/, '').trim();
+      if (!clean) return;
+
+      // Skip common table headers if user copied them
+      const lower = clean.toLowerCase();
+      if (
+        lower.startsWith('họ và tên') ||
+        lower.startsWith('họ tên') ||
+        lower.startsWith('tên học sinh') ||
+        lower.startsWith('stt') ||
+        lower.startsWith('danh sách')
+      ) {
+        return;
+      }
+
+      // Detect phone number if included in line (e.g. "0912345678", "(0988776655)", "+84912345678")
+      let phone = '';
+      const phoneMatch = clean.match(/(?:(?:\+84|0)[1-9][0-9]{8,9})/);
+      if (phoneMatch) {
+        phone = phoneMatch[0];
+        clean = clean.replace(phone, '').replace(/[\(\)\-\:\,]/g, ' ').trim();
+      }
+
+      // Remove extra multiple spaces
+      clean = clean.replace(/\s+/g, ' ').trim();
+
+      if (clean.length >= 2) {
+        result.push({
+          name: clean,
+          phone: phone || undefined,
+          note: 'Tạo nhanh từ danh sách dán hàng loạt',
+          originalIndex: idx,
+        });
+      }
+    });
+
+    return result.filter((_, i) => !excludedPastedIndices.includes(i));
+  }, [pastedStudentsRawText, excludedPastedIndices]);
 
   // Filter students who are waiting for class placement or on reserve
   const waitingStudents = students.filter(
@@ -254,6 +311,8 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
       }
     }
 
+    const totalStudentCount = selectedStudentIds.length + parsedPastedStudents.length;
+
     const newClass: ClassGroup = {
       id: `cls-${Date.now()}`,
       code: formData.code.trim().toUpperCase(),
@@ -273,17 +332,17 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
       endDate: calculatedSchedule.estimatedEndDate || formData.endDate,
       totalSessions: Number(formData.totalSessions),
       completedSessions: finalCompletedSessions,
-      maxStudents: Number(formData.maxStudents),
-      currentStudents: selectedStudentIds.length,
+      maxStudents: Math.max(Number(formData.maxStudents), totalStudentCount || 15),
+      currentStudents: totalStudentCount,
       tuitionFee: Number(formData.tuitionFee),
       status: formData.status,
       offDates: finalOffDates,
     };
 
     if (onAddClass) {
-      onAddClass(newClass, selectedStudentIds);
+      onAddClass(newClass, selectedStudentIds, parsedPastedStudents);
     } else if (onSave) {
-      onSave(newClass, selectedStudentIds);
+      onSave(newClass, selectedStudentIds, parsedPastedStudents);
     }
     onClose();
   };
@@ -922,6 +981,102 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
             </div>
           </div>
 
+          {/* Row 7.5: Dán nhanh danh sách học sinh (Paste hàng loạt tên học viên) */}
+          <div className="bg-gradient-to-br from-indigo-50/90 via-purple-50/70 to-slate-50 p-4 rounded-2xl border border-indigo-200 shadow-2xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <UserPlus className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <label className="font-extrabold text-indigo-950 text-xs flex items-center gap-1.5">
+                    <span>📋 Dán nhanh danh sách học sinh (Paste hàng loạt)</span>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
+                      Tiện ích mới
+                    </span>
+                  </label>
+                  <span className="text-[11px] text-slate-500">
+                    Paste danh sách tên học viên từ Excel, Zalo, Word để tạo hồ sơ nhanh & xếp lớp tự động
+                  </span>
+                </div>
+              </div>
+
+              {parsedPastedStudents.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1 shadow-2xs">
+                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <span>Đã nhận diện: <strong>{parsedPastedStudents.length}</strong> học viên</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPastedStudentsRawText('');
+                      setExcludedPastedIndices([]);
+                    }}
+                    className="text-[10px] font-bold text-rose-600 hover:text-rose-800 bg-white hover:bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Xóa ô dán
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <textarea
+                rows={4}
+                value={pastedStudentsRawText}
+                onChange={(e) => {
+                  setPastedStudentsRawText(e.target.value);
+                  setExcludedPastedIndices([]);
+                }}
+                placeholder="Dán danh sách tên học sinh vào đây (mỗi học sinh 1 dòng hoặc cách nhau bởi dấu phẩy, có thể kèm SĐT)...&#10;Ví dụ:&#10;1. Nguyễn Minh Anh&#10;2. Trần Quốc Bảo - 0987654321&#10;3. Lê Thu Hà&#10;4. Phạm Đức Minh"
+                className="w-full text-xs font-medium bg-white border border-indigo-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 leading-relaxed placeholder:text-slate-400"
+              />
+              <div className="flex items-center justify-between text-[11px] text-indigo-700 mt-1">
+                <span>💡 Tự động lọc bỏ số thứ tự (1, 2, 3..), dấu gạch đầu dòng và trích xuất số điện thoại nếu có.</span>
+                <span className="text-slate-500">Thông tin chi tiết (ngày sinh, phụ huynh, học phí) có thể cập nhật sau.</span>
+              </div>
+            </div>
+
+            {/* Live Preview of Parsed Students */}
+            {parsedPastedStudents.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-indigo-200/60 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700">
+                    Danh sách học viên sẽ được tạo mới & ghi danh vào lớp ({parsedPastedStudents.length}):
+                  </span>
+                  <span className="text-[10px] text-slate-400 italic">Bấm dấu × để bỏ bớt nếu dán nhầm</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-white/80 rounded-xl border border-indigo-100">
+                  {parsedPastedStudents.map((st, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-200/80 text-indigo-900 rounded-lg text-xs font-semibold group hover:bg-indigo-100 transition-colors"
+                    >
+                      <span className="w-4 h-4 rounded-full bg-indigo-200 text-indigo-800 text-[10px] font-black flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <span>{st.name}</span>
+                      {st.phone && (
+                        <span className="text-[10px] font-mono text-indigo-600 bg-white px-1 rounded">
+                          {st.phone}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setExcludedPastedIndices([...excludedPastedIndices, i])}
+                        className="text-indigo-400 hover:text-rose-600 ml-0.5 p-0.5 rounded cursor-pointer transition-colors"
+                        title="Bỏ học sinh này khỏi danh sách"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Row 8: Danh sách học sinh chờ xếp lớp / chờ khóa sau (Thu gọn / Mở rộng để dễ cuộn & không che khuất phía trên) */}
           <div className="bg-purple-50/70 p-3.5 sm:p-4 rounded-2xl border border-purple-200/80 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1058,7 +1213,13 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
         <div className="shrink-0 bg-slate-50 border-t border-slate-200 px-5 py-3.5 sm:px-6 flex items-center justify-between gap-3 shadow-xs">
           <div className="text-[11px] text-slate-500 font-medium hidden sm:flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>Cuộn chuột hoặc lướt chạm để xem đầy đủ các thông tin</span>
+            {(selectedStudentIds.length + parsedPastedStudents.length) > 0 ? (
+              <span className="font-bold text-purple-900">
+                Sĩ số ban đầu: <strong>{selectedStudentIds.length + parsedPastedStudents.length} học viên</strong> ({parsedPastedStudents.length} dán mới, {selectedStudentIds.length} từ danh sách chờ)
+              </span>
+            ) : (
+              <span>Cuộn chuột hoặc lướt chạm để xem đầy đủ các thông tin</span>
+            )}
           </div>
           <div className="flex items-center gap-2.5 ml-auto">
             <button
@@ -1073,7 +1234,11 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
               className="px-6 py-2.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white rounded-xl font-bold shadow-md shadow-purple-600/20 flex items-center gap-1.5 transition-all cursor-pointer text-xs"
             >
               <Plus className="w-4 h-4" />
-              <span>Tạo Lớp Học</span>
+              <span>
+                Tạo Lớp Học
+                {(selectedStudentIds.length + parsedPastedStudents.length) > 0 &&
+                  ` (${selectedStudentIds.length + parsedPastedStudents.length} HV)`}
+              </span>
             </button>
           </div>
         </div>

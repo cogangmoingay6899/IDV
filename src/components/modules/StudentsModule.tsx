@@ -65,6 +65,7 @@ interface StudentsModuleProps {
   currentUser?: AuthUser;
   onDeleteClass?: (classId: string) => void;
   onClearAllClasses?: () => void;
+  onDeleteStudent?: (studentId: string) => void;
 }
 
 export const StudentsModule: React.FC<StudentsModuleProps> = ({
@@ -90,6 +91,7 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
   currentUser,
   onDeleteClass,
   onClearAllClasses,
+  onDeleteStudent,
 }) => {
   const [activeTab, setActiveTab] = useState<'classes' | 'sheet_gradebook' | 'students' | 'vocab_tests'>('classes');
   const [selectedClassIdForSheet, setSelectedClassIdForSheet] = useState<string | undefined>(undefined);
@@ -106,6 +108,8 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
   const [zaloToast, setZaloToast] = useState<string | null>(null);
   const [isScheduleRemindersModalOpen, setIsScheduleRemindersModalOpen] = useState(false);
   const [selectedClassForScheduleModal, setSelectedClassForScheduleModal] = useState<ClassGroup | null>(null);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+  const [isDeletingStudent, setIsDeletingStudent] = useState(false);
 
   const taAlertsCount = classes.filter((c) => calculateClassEndInfo(c).taAlertStatus === 'needed').length;
   const inExamCount = classes.filter((c) => calculateClassEndInfo(c).examStatus === 'in_exam').length;
@@ -832,6 +836,18 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
                             Lớp
                           </button>
                         )}
+
+                        {/* Delete Student Button (Only for Manager / Admin) */}
+                        {isManager && (
+                          <button
+                            type="button"
+                            onClick={() => setStudentToDelete(st)}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                            title="Xóa học viên khỏi hệ thống (Chỉ Quản lý)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1022,6 +1038,7 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
                   <th className="py-3 px-4 text-center">Đòi Phí Qua Zalo</th>
                   <th className="py-3 px-4">Ngày tham gia</th>
                   <th className="py-3 px-4">Tình trạng</th>
+                  <th className="py-3 px-4 text-center">Xóa (Quản lý)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1155,13 +1172,30 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
                           {s.status}
                         </span>
                       </td>
+                      <td className="py-3.5 px-4 text-center">
+                        {isManager ? (
+                          <button
+                            type="button"
+                            onClick={() => setStudentToDelete(s)}
+                            className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-rose-200/60 rounded-xl transition-all inline-flex items-center gap-1 font-bold text-[11px] cursor-pointer shadow-2xs"
+                            title="Xóa học viên khỏi toàn bộ hệ thống (Chỉ Quản lý)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Xóa</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-300 font-medium italic">
+                            Chỉ Quản lý
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
 
                 {filteredStudents.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
                       <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
                         <Users className="w-6 h-6" />
                       </div>
@@ -1372,6 +1406,78 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>{isClearingAllClasses ? 'Đang xóa sạch...' : `Xác nhận xóa hết ${classes.length} lớp`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Xác nhận xóa HỌC VIÊN khỏi toàn bộ hệ thống (Dành riêng cho Quản lý) */}
+      {studentToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-rose-200 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Xác nhận xóa học viên?</h3>
+                <p className="text-xs text-rose-600 font-semibold">Quyền hạn: Quản lý trung tâm (Admin)</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-3 leading-relaxed">
+              Bạn có chắc chắn muốn xóa học viên <strong className="text-slate-900">{studentToDelete.name}</strong> (<span className="font-mono text-purple-700">{studentToDelete.code}</span>) khỏi toàn bộ hệ thống?
+            </p>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs space-y-1.5 mb-4">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Lớp hiện tại:</span>
+                <strong className="text-slate-800">{studentToDelete.className || 'Chưa xếp lớp'}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Số điện thoại:</span>
+                <strong className="text-slate-800">{studentToDelete.phone || 'Chưa cập nhật'}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Trạng thái học phí:</span>
+                <span className={studentToDelete.tuitionStatus === 'Đã đóng đủ' ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
+                  {studentToDelete.tuitionStatus} {studentToDelete.balanceOwed > 0 ? `(Nợ ${formatVND(studentToDelete.balanceOwed)})` : ''}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-800 mb-5 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>Học viên sẽ bị xóa vĩnh viễn khỏi danh sách toàn hệ thống và cơ sở dữ liệu. Thao tác này không thể hoàn tác.</span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={isDeletingStudent}
+                onClick={() => setStudentToDelete(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingStudent}
+                onClick={async () => {
+                  if (!onDeleteStudent || !studentToDelete) return;
+                  setIsDeletingStudent(true);
+                  try {
+                    await onDeleteStudent(studentToDelete.id);
+                  } finally {
+                    setIsDeletingStudent(false);
+                    setStudentToDelete(null);
+                  }
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 rounded-xl transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{isDeletingStudent ? 'Đang xóa học viên...' : 'Xác nhận xóa vĩnh viễn'}</span>
               </button>
             </div>
           </div>

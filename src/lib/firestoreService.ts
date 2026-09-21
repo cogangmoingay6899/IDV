@@ -154,6 +154,12 @@ export function subscribeCollection<T extends { id: string }>(
                 const setDel = new Set(deletedIds);
                 firestoreItems = firestoreItems.filter((c: any) => !setDel.has(c.id));
               }
+            } else if (collectionName === 'students') {
+              const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_student_ids') || '[]');
+              if (deletedIds.length > 0) {
+                const setDel = new Set(deletedIds);
+                firestoreItems = firestoreItems.filter((s: any) => !setDel.has(s.id));
+              }
             }
 
             cachedCollections.set(collectionName, firestoreItems);
