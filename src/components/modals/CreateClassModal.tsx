@@ -63,6 +63,9 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
   const [selectedSchedulePreset, setSelectedSchedulePreset] = useState<string>('t2_t5_ca1');
   const [offDates, setOffDates] = useState<string[]>([]);
   const [newOffDateInput, setNewOffDateInput] = useState<string>('');
+  const [missedPastSessions, setMissedPastSessions] = useState<number>(0);
+
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   const [formData, setFormData] = useState({
     code: `IDV-L74`,
@@ -93,6 +96,14 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
       selectedCourseLevel
     );
   }, [formData.startDate, formData.schedule, formData.totalSessions, offDates, selectedCourseLevel]);
+
+  const pastScheduledSessions = useMemo(() => {
+    return calculatedSchedule.sessions.filter((s) => s.date <= todayStr);
+  }, [calculatedSchedule.sessions, todayStr]);
+
+  const pastScheduledCount = pastScheduledSessions.length;
+  const isPastStart = formData.startDate < todayStr;
+  const studiedPastSessions = isPastStart ? Math.max(0, pastScheduledCount - Number(missedPastSessions || 0)) : 0;
 
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>(
     teachers[0]?.name ? [teachers[0].name] : ['Tâm Vương']
@@ -229,6 +240,20 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
     const finalTeacherName =
       finalTeachers.length > 0 ? finalTeachers.join(', ') : formData.teacherName.trim() || 'Chưa phân công';
 
+    let finalOffDates = [...offDates];
+    let finalCompletedSessions = 0;
+    if (isPastStart) {
+      finalCompletedSessions = studiedPastSessions;
+      if (missedPastSessions > 0) {
+        const pastDatesToOff = pastScheduledSessions.slice(0, Number(missedPastSessions)).map((s) => s.date);
+        for (const d of pastDatesToOff) {
+          if (!finalOffDates.includes(d)) {
+            finalOffDates.push(d);
+          }
+        }
+      }
+    }
+
     const newClass: ClassGroup = {
       id: `cls-${Date.now()}`,
       code: formData.code.trim().toUpperCase(),
@@ -247,12 +272,12 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
       startDate: formData.startDate,
       endDate: calculatedSchedule.estimatedEndDate || formData.endDate,
       totalSessions: Number(formData.totalSessions),
-      completedSessions: 0,
+      completedSessions: finalCompletedSessions,
       maxStudents: Number(formData.maxStudents),
       currentStudents: selectedStudentIds.length,
       tuitionFee: Number(formData.tuitionFee),
       status: formData.status,
-      offDates: offDates,
+      offDates: finalOffDates,
     };
 
     if (onAddClass) {
@@ -714,6 +739,45 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Past Start Date & Missed Sessions Configuration */}
+          {isPastStart && (
+            <div className="bg-amber-50/90 border border-amber-300 p-4 rounded-2xl space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-black text-xs text-amber-950 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-amber-700" />
+                  <span>Khai giảng trong quá khứ ({formData.startDate}): Đã qua {pastScheduledCount} buổi theo lịch</span>
+                </span>
+                <span className="text-[11px] font-bold text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-full">
+                  Cập nhật tiến độ tự động
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1 text-xs">
+                    Số buổi đã nghỉ trong quá khứ (lễ, nghỉ phép...)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={pastScheduledCount}
+                    value={missedPastSessions}
+                    onChange={(e) => setMissedPastSessions(Math.max(0, Math.min(pastScheduledCount, Number(e.target.value))))}
+                    className="w-full bg-white border border-amber-300 rounded-xl p-2 font-bold text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                  />
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-amber-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-semibold text-slate-500 block">Số buổi đã học đến hiện tại:</span>
+                    <span className="text-sm font-black text-purple-700">{studiedPastSessions} buổi / {pastScheduledCount} buổi đã lịch</span>
+                  </div>
+                  <span className="text-xs font-black bg-purple-100 text-purple-900 px-3 py-1 rounded-lg">
+                    Tự gán
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Calculated Projected Schedule & Estimated End Date Card */}
           <div className="bg-gradient-to-br from-indigo-900 to-purple-900 text-white p-4 sm:p-5 rounded-2xl shadow-sm space-y-3">
