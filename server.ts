@@ -233,6 +233,17 @@ async function startServer() {
     }
   });
 
+  // 5b. DELETE / CLEAR ENTIRE collection
+  app.delete('/api/storage/:collection', (req, res) => {
+    try {
+      const colName = req.params.collection;
+      saveCollectionData(colName, [], true);
+      res.json({ success: true, message: `Purged all data in collection ${colName}` });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Server storage error' });
+    }
+  });
+
   // 6. BACKUP & EXPORT ALL DATA (Full database export in 1 click)
   app.get('/api/storage-backup/export', (req, res) => {
     try {

@@ -462,6 +462,59 @@ export async function deleteDocument(collectionName: string, id: string): Promis
 }
 
 /**
+ * Permanently purges all documents in a collection from Firestore, VPS, and Local cache.
+ */
+export async function clearCollection(collectionName: string): Promise<void> {
+  // 1. Clear local memory cache & localStorage
+  cachedCollections.set(collectionName, []);
+  try {
+    localStorage.setItem(`vps_col_${collectionName}`, JSON.stringify([]));
+    if (collectionName === 'classes') {
+      localStorage.removeItem('idv_deleted_class_ids');
+    }
+  } catch (e) {}
+
+  // 2. Notify all local listeners
+  const listeners = activeListeners.get(collectionName);
+  if (listeners) {
+    listeners.forEach((cb) => {
+      try {
+        cb([]);
+      } catch (err) {}
+    });
+  }
+
+  // 3. Broadcast to all open tabs
+  if (broadcastBus) {
+    try {
+      broadcastBus.postMessage({ collection: collectionName, data: [] });
+    } catch (e) {}
+  }
+
+  // 4. Batch delete all documents in Firestore
+  try {
+    const colRef = collection(db, collectionName);
+    const snap = await getDocs(colRef);
+    if (!snap.empty) {
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      console.log(`✅ [Firebase Firestore] Cleared all ${snap.size} documents in ${collectionName}`);
+    }
+  } catch (err) {
+    console.warn(`⚠️ [Firebase Firestore] Clear collection error on ${collectionName}:`, err);
+  }
+
+  // 5. Clear VPS backend storage
+  try {
+    fetch(`/api/storage/${encodeURIComponent(collectionName)}?_t=${Date.now()}`, {
+      method: 'DELETE',
+      headers: { 'Cache-Control': 'no-cache' },
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+/**
  * Atomically increments the student count of a class.
  */
 export async function incrementClassStudentCount(classId: string, amount: number = 1) {

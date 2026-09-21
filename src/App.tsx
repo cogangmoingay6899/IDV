@@ -131,6 +131,7 @@ import {
   saveDocument,
   saveBatchDocuments,
   deleteDocument,
+  clearCollection,
   incrementClassStudentCount,
 } from './lib/firestoreService';
 
@@ -1310,6 +1311,12 @@ export default function App() {
     showToast(`Đã xóa thành công ${targetName}!`);
   };
 
+  const handleClearAllClasses = async () => {
+    setClasses([]);
+    await clearCollection('classes');
+    showToast('Đã xóa sạch toàn bộ danh sách lớp học trên toàn hệ thống (Firestore, Server & Bộ nhớ)!');
+  };
+
   const handleDeletePlacementTest = async (testId: string) => {
     // 1. Record to deleted IDs set in localStorage to prevent initial/cached resurrection
     try {
@@ -1815,6 +1822,7 @@ export default function App() {
             onOpenQuickTuition={() => setIsTuitionModalOpen(true)}
             currentUser={currentUser}
             onDeleteClass={handleDeleteClass}
+            onClearAllClasses={handleClearAllClasses}
           />
         )}
 
