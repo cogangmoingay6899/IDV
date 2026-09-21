@@ -252,7 +252,20 @@ export default function App() {
 
   // Primary Business Entities State (Clean default empty data)
   const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
-  const [classes, setClasses] = useState<ClassGroup[]>(INITIAL_CLASSES);
+  const [classes, setClasses] = useState<ClassGroup[]>(() => {
+    try {
+      const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
+      const setDeleted = new Set(deletedIds);
+      const cached = localStorage.getItem('vps_col_classes');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((c) => !setDeleted.has(c.id));
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
   const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
   const [leads, setLeads] = useState<LeadAdmission[]>(INITIAL_LEADS);
   const [placementTests, setPlacementTests] = useState<PlacementTest[]>(() => {
@@ -310,7 +323,17 @@ export default function App() {
   // Real-time Cloud Database (Firebase Firestore) Sync across all devices
   useEffect(() => {
     const unsubStudents = subscribeCollection('students', INITIAL_STUDENTS, setStudents);
-    const unsubClasses = subscribeCollection('classes', INITIAL_CLASSES, setClasses);
+    const unsubClasses = subscribeCollection('classes', [], (items) => {
+      try {
+        const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
+        if (deletedIds.length > 0) {
+          const setDeleted = new Set(deletedIds);
+          setClasses(items.filter((c) => !setDeleted.has(c.id)));
+          return;
+        }
+      } catch (e) {}
+      setClasses(items);
+    });
     const unsubTeachers = subscribeCollection('teachers', INITIAL_TEACHERS, setTeachers);
     const unsubLeads = subscribeCollection('leads', INITIAL_LEADS, setLeads);
     const unsubPlacement = subscribeCollection('placementTests', INITIAL_PLACEMENT_TESTS, (data) => {
@@ -1262,6 +1285,31 @@ export default function App() {
     saveDocument('placementTests', updatedTest);
   };
 
+  const handleDeleteClass = async (classId: string) => {
+    const target = classes.find((c) => c.id === classId);
+    const targetName = target ? target.name : 'lớp học';
+
+    // 1. Record to deleted IDs set in localStorage to prevent any resurrection
+    try {
+      const existingDeleted: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
+      if (!existingDeleted.includes(classId)) {
+        existingDeleted.push(classId);
+      }
+      localStorage.setItem('idv_deleted_class_ids', JSON.stringify(existingDeleted));
+    } catch (e) {
+      console.warn('LocalStorage delete error for class:', e);
+    }
+
+    // 2. Optimistically update local state immediately
+    setClasses((prev) => prev.filter((c) => c.id !== classId));
+
+    // 3. Delete from Firebase Firestore & VPS
+    await deleteDocument('classes', classId);
+
+    // 4. Show friendly toast confirmation
+    showToast(`Đã xóa thành công ${targetName}!`);
+  };
+
   const handleDeletePlacementTest = async (testId: string) => {
     // 1. Record to deleted IDs set in localStorage to prevent initial/cached resurrection
     try {
@@ -1766,6 +1814,7 @@ export default function App() {
             onUpdateStudent={handleUpdateStudent}
             onOpenQuickTuition={() => setIsTuitionModalOpen(true)}
             currentUser={currentUser}
+            onDeleteClass={handleDeleteClass}
           />
         )}
 

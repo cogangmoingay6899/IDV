@@ -155,12 +155,29 @@ export function subscribeCollection<T extends { id: string }>(
                 } catch (err) {}
               });
             }
-          } else if (initialData && initialData.length > 0) {
-            // Seed Firestore with initial records on very first boot
-            console.log(`[Firebase Firestore] Seeding initial data for ${collectionName}...`);
-            saveBatchDocuments(collectionName, initialData).catch((err) => {
-              console.warn(`[Firebase Firestore] Seeding error for ${collectionName}:`, err);
-            });
+          } else {
+            // Snapshot is empty: emit empty array and do NOT seed classes
+            cachedCollections.set(collectionName, []);
+            try {
+              localStorage.setItem(`vps_col_${collectionName}`, JSON.stringify([]));
+            } catch (e) {}
+
+            const currentListeners = activeListeners.get(collectionName);
+            if (currentListeners) {
+              currentListeners.forEach((cb) => {
+                try {
+                  cb([]);
+                } catch (err) {}
+              });
+            }
+
+            if (collectionName !== 'classes' && initialData && initialData.length > 0) {
+              // Seed Firestore with initial records only if NOT classes
+              console.log(`[Firebase Firestore] Seeding initial data for ${collectionName}...`);
+              saveBatchDocuments(collectionName, initialData).catch((err) => {
+                console.warn(`[Firebase Firestore] Seeding error for ${collectionName}:`, err);
+              });
+            }
           }
         },
         (error) => {
