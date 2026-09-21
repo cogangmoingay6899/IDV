@@ -458,9 +458,30 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const isSubmittingRef = useRef<boolean>(false);
   const tabSwitchCountRef = useRef<number>(0);
 
-  // Filter tests by selected course level & active test type
+  // Helper to extract numeric lesson number for natural sorting (1, 2, ..., 10, 11, ..., 100, 101, ..., 120)
+  const extractLessonNumber = (test: VocabTest): number => {
+    if (test.unitName) {
+      const match = test.unitName.match(/\d+/);
+      if (match) return parseInt(match[0], 10);
+    }
+    if (test.title) {
+      const match = test.title.match(/\d+/);
+      if (match) return parseInt(match[0], 10);
+    }
+    if (test.id) {
+      const matches = test.id.match(/\d+/g);
+      if (matches && matches.length > 0) {
+        return parseInt(matches[matches.length - 1], 10);
+      }
+    }
+    return 0;
+  };
+
+  // Filter tests by selected course level & active test type with natural numerical sorting
   const activeTestsList = activeTestType === 'review' ? reviewTests : tests;
-  const filteredTests = activeTestsList.filter((t) => t.courseLevel === selectedCourseLevel);
+  const filteredTests = activeTestsList
+    .filter((t) => t.courseLevel === selectedCourseLevel)
+    .sort((a, b) => extractLessonNumber(a) - extractLessonNumber(b));
 
   // Configurable Public Base URL state for sharing
   const [publicBaseUrl, setLocalPublicBaseUrl] = useState<string>(() => getPublicBaseUrl());
