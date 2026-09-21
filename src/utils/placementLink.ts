@@ -61,8 +61,9 @@ export function getZaloShareMessage(testUrl: string): string {
 }
 
 export function getVocabZaloShareMessage(testTitle: string, courseLevel: string, unitName: string, testUrl: string, timePerQ = 20): string {
+  const displayTitle = testTitle.includes(courseLevel) ? testTitle : `${testTitle} (${courseLevel})`;
   return `📝 [IELTS DƯƠNG VŨ] KÍNH GỬI QUÝ PHỤ HUYNH & HỌC SINH:
-📌 TÊN BÀI TEST TỪ VỰNG: ${testTitle} (${courseLevel} - ${unitName})
+📌 TÊN BÀI TEST TỪ VỰNG: ${displayTitle}
 🔗 LINK LÀM BÀI CHÍNH THỨC: ${testUrl}
 
 📌 Hướng dẫn & Quy định làm bài:
@@ -80,8 +81,9 @@ export function getReviewTestShareUrl(testId: string, customBase?: string): stri
 }
 
 export function getReviewZaloShareMessage(testTitle: string, courseLevel: string, unitName: string, testUrl: string, timePerQ = 20): string {
+  const displayTitle = testTitle.includes(courseLevel) ? testTitle : `${testTitle} (${courseLevel})`;
   return `📝 [IELTS DƯƠNG VŨ] KÍNH GỬI HỌC SINH - BÀI ÔN TẬP KIẾN THỨC:
-📌 TÊN BÀI TEST: ${testTitle} (${courseLevel} - ${unitName})
+📌 TÊN BÀI TEST: ${displayTitle}
 🔗 LINK LÀM BÀI CHÍNH THỨC: ${testUrl}
 
 📌 Hướng dẫn & Quy định làm bài:

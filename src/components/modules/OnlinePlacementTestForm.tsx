@@ -1625,30 +1625,6 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                 <span>{copiedReceiptText ? 'Đã chép nội dung biên nhận!' : '💬 Gửi Zalo trợ lý biên nhận đã hoàn thành bài kiểm tra'}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (!submittedTest) return;
-                  try {
-                    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(submittedTest, null, 2));
-                    const downloadAnchor = document.createElement('a');
-                    downloadAnchor.setAttribute('href', dataStr);
-                    downloadAnchor.setAttribute('download', `IELTS_Placement_Test_${submittedTest.code}_${submittedTest.candidateName.replace(/\s+/g, '_')}.json`);
-                    document.body.appendChild(downloadAnchor);
-                    downloadAnchor.click();
-                    downloadAnchor.remove();
-                    showToast('💾 Đã tải tệp sao lưu bài thi (.JSON) thành công!');
-                  } catch (e) {
-                    showToast('⚠️ Không thể tải tệp bài thi');
-                  }
-                }}
-                className="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95 cursor-pointer"
-                title="Tải tệp JSON chứa toàn bộ câu trả lời để lưu giữ làm bằng chứng"
-              >
-                <Download className="w-4 h-4 text-emerald-700" />
-                <span>Tải tệp sao lưu bài thi (.JSON)</span>
-              </button>
-
               {!isStudentPortal && (
                 <button
                   type="button"
@@ -1663,20 +1639,6 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                   <span>Xem Chi Tiết Trong Danh Sách Responses</span>
                 </button>
               )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSubmittedSuccessfully(false);
-                  setSubmittedTest(null);
-                  setCurrentSection(1);
-                  setFormData({ ...INITIAL_FORM_DATA });
-                }}
-                className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Làm bài kiểm tra mới</span>
-              </button>
             </div>
           </div>
         </div>

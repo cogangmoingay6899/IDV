@@ -39,10 +39,10 @@ import {
 
 // Preset Initial Vocab Tests: Pre-create 31 lessons for each of the 4 courses (Khóa 1, 2, 3, 4) with unique links & anti-cheat
 const COURSE_CONFIGS = [
-  { level: 'Khóa 1', prefix: 'k1', name: 'Foundation & Daily Life' },
-  { level: 'Khóa 2', prefix: 'k2', name: 'Pre-Intermediate Collocations' },
-  { level: 'Khóa 3', prefix: 'k3', name: 'Intermediate Academic Vocab' },
-  { level: 'Khóa 4', prefix: 'k4', name: 'Advanced IELTS Expert Vocab' },
+  { level: 'Khóa 1', prefix: 'k1', name: 'Khóa 1' },
+  { level: 'Khóa 2', prefix: 'k2', name: 'Khóa 2' },
+  { level: 'Khóa 3', prefix: 'k3', name: 'Khóa 3' },
+  { level: 'Khóa 4', prefix: 'k4', name: 'Khóa 4' },
 ];
 
 const generatedTests: VocabTest[] = [];
@@ -128,9 +128,9 @@ COURSE_CONFIGS.forEach(course => {
 
     generatedTests.push({
       id: testId,
-      title: `Test Từ Vựng Bài ${lessonNum} - ${course.level}: ${course.name}`,
+      title: `Test Từ Vựng Bài ${lessonNum} - ${course.level}`,
       courseLevel: course.level as any,
-      unitName: `Bài ${lessonNum}: Chủ đề học thuật & Giao tiếp Buổi ${lessonNum}`,
+      unitName: `Bài ${lessonNum}`,
       timePerQuestionSeconds: 20,
       createdDate: '2026-09-10',
       isActive: true,
@@ -157,10 +157,10 @@ export const INITIAL_VOCAB_TESTS: VocabTest[] = generatedTests;
 
 // Preset Initial Review Tests: Pre-create 31 review lessons for each of the 4 courses (Khóa 1, 2, 3, 4)
 const REVIEW_COURSE_CONFIGS = [
-  { level: 'Khóa 1', prefix: 'rev-k1', name: 'Ôn tập tổng hợp & Kiến thức nền tảng Khóa 1' },
-  { level: 'Khóa 2', prefix: 'rev-k2', name: 'Ôn tập Collocations & Cấu trúc câu Khóa 2' },
-  { level: 'Khóa 3', prefix: 'rev-k3', name: 'Ôn tập Academic Reading & Writing Task 2 Khóa 3' },
-  { level: 'Khóa 4', prefix: 'rev-k4', name: 'Ôn tập Chuyên sâu IELTS Advanced Band 7.5+ Khóa 4' },
+  { level: 'Khóa 1', prefix: 'rev-k1', name: 'Khóa 1' },
+  { level: 'Khóa 2', prefix: 'rev-k2', name: 'Khóa 2' },
+  { level: 'Khóa 3', prefix: 'rev-k3', name: 'Khóa 3' },
+  { level: 'Khóa 4', prefix: 'rev-k4', name: 'Khóa 4' },
 ];
 
 const generatedReviewTests: VocabTest[] = [];
@@ -172,27 +172,27 @@ REVIEW_COURSE_CONFIGS.forEach(course => {
     let sampleQuestions: VocabQuestion[] = [
       {
         id: `${testId}-q1`,
-        word: `Review Question 1 (Buổi ${lessonNum} - ${course.level})`,
-        meaning: `Đáp án ôn tập kiến thức chuẩn Buổi ${lessonNum} - ${course.level}`,
-        options: [`Đáp án ôn tập kiến thức chuẩn Buổi ${lessonNum} - ${course.level}`, 'Phương án B', 'Phương án C', 'Phương án D'],
+        word: `Review Question 1 (Bài ${lessonNum} - ${course.level})`,
+        meaning: `Đáp án ôn tập kiến thức chuẩn Bài ${lessonNum} - ${course.level}`,
+        options: [`Đáp án ôn tập kiến thức chuẩn Bài ${lessonNum} - ${course.level}`, 'Phương án B', 'Phương án C', 'Phương án D'],
         correctOptionIndex: 0,
         questionType: 'multiple_choice',
         timeLimitSeconds: 15,
       },
       {
         id: `${testId}-q2`,
-        word: `Review Question 2 (Buổi ${lessonNum} - ${course.level})`,
-        meaning: `Đáp án ôn tập kiến thức chuẩn Buổi ${lessonNum} - ${course.level}`,
-        options: [`Đáp án ôn tập kiến thức chuẩn Buổi ${lessonNum} - ${course.level}`, 'Phương án B', 'Phương án C', 'Phương án D'],
+        word: `Review Question 2 (Bài ${lessonNum} - ${course.level})`,
+        meaning: `Đáp án ôn tập kiến thức chuẩn Bài ${lessonNum} - ${course.level}`,
+        options: [`Đáp án ôn tập kiến thức chuẩn Bài ${lessonNum} - ${course.level}`, 'Phương án B', 'Phương án C', 'Phương án D'],
         correctOptionIndex: 0,
         questionType: 'multiple_choice',
         timeLimitSeconds: 15,
       },
       {
         id: `${testId}-q3`,
-        word: `Review Question 3 (Buổi ${lessonNum} - ${course.level})`,
-        meaning: `Đáp án ôn tập kiến thức chuẩn Buổi ${lessonNum} - ${course.level}`,
-        options: [`Đáp án ôn tập kiến thức chuẩn Buổi ${lessonNum} - ${course.level}`, 'Phương án B', 'Phương án C', 'Phương án D'],
+        word: `Review Question 3 (Bài ${lessonNum} - ${course.level})`,
+        meaning: `Đáp án ôn tập kiến thức chuẩn Bài ${lessonNum} - ${course.level}`,
+        options: [`Đáp án ôn tập kiến thức chuẩn Bài ${lessonNum} - ${course.level}`, 'Phương án B', 'Phương án C', 'Phương án D'],
         correctOptionIndex: 0,
         questionType: 'type_input',
         timeLimitSeconds: 20,
@@ -201,9 +201,9 @@ REVIEW_COURSE_CONFIGS.forEach(course => {
 
     generatedReviewTests.push({
       id: testId,
-      title: `Test Ôn Tập Buổi ${lessonNum} - ${course.level}: ${course.name}`,
+      title: `Test Ôn Tập Bài ${lessonNum} - ${course.level}`,
       courseLevel: course.level as any,
-      unitName: `Ôn tập Kiến thức Buổi ${lessonNum} (${course.level})`,
+      unitName: `Bài ${lessonNum}`,
       timePerQuestionSeconds: 20,
       createdDate: '2026-09-10',
       isActive: true,
@@ -227,6 +227,40 @@ REVIEW_COURSE_CONFIGS.forEach(course => {
 });
 
 export const INITIAL_REVIEW_TESTS: VocabTest[] = generatedReviewTests;
+
+// Helper to strip lesson topic names or obsolete course titles
+const sanitizeVocabTest = (test: VocabTest): VocabTest => {
+  let cleanTitle = (test.title || '').split(':')[0].trim();
+  cleanTitle = cleanTitle.replace(/Buổi/gi, 'Bài');
+
+  let cleanUnit = test.unitName ? test.unitName.split(':')[0].trim() : '';
+  cleanUnit = cleanUnit.replace(/Ôn tập Kiến thức Buổi/gi, 'Bài').replace(/Buổi/gi, 'Bài').replace(/\(.*?\)/g, '').trim();
+
+  if (!cleanUnit) {
+    const match = cleanTitle.match(/(?:Bài|Lesson)\s*(\d+)/i);
+    if (match) {
+      cleanUnit = `Bài ${match[1]}`;
+    } else {
+      cleanUnit = 'Bài 1';
+    }
+  }
+
+  const qTypeSanitized = (test.questions || []).map((q) => {
+    const qType = q.questionType || 'multiple_choice';
+    return {
+      ...q,
+      questionType: qType,
+      timeLimitSeconds: q.timeLimitSeconds || (qType === 'multiple_choice' ? 10 : 20),
+    };
+  });
+
+  return {
+    ...test,
+    title: cleanTitle,
+    unitName: cleanUnit,
+    questions: qTypeSanitized,
+  };
+};
 
 interface ClassVocabTestModuleProps {
   classGroup?: ClassGroup;
@@ -267,47 +301,17 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const [activeTestType, setActiveTestType] = useState<'vocab' | 'review'>('vocab');
   const [selectedCourseLevel, setSelectedCourseLevel] = useState<'Khóa 1' | 'Khóa 2' | 'Khóa 3' | 'Khóa 4'>('Khóa 1');
   const [tests, setTests] = useState<VocabTest[]>(() =>
-    INITIAL_VOCAB_TESTS.map((test) => ({
-      ...test,
-      questions: (test.questions || []).map((q) => {
-        const qType = q.questionType || 'multiple_choice';
-        return {
-          ...q,
-          questionType: qType,
-          timeLimitSeconds: q.timeLimitSeconds || (qType === 'multiple_choice' ? 10 : 20),
-        };
-      }),
-    }))
+    INITIAL_VOCAB_TESTS.map((test) => sanitizeVocabTest(test))
   );
 
   const [reviewTests, setReviewTests] = useState<VocabTest[]>(() =>
-    INITIAL_REVIEW_TESTS.map((test) => ({
-      ...test,
-      questions: (test.questions || []).map((q) => {
-        const qType = q.questionType || 'multiple_choice';
-        return {
-          ...q,
-          questionType: qType,
-          timeLimitSeconds: q.timeLimitSeconds || (qType === 'multiple_choice' ? 10 : 20),
-        };
-      }),
-    }))
+    INITIAL_REVIEW_TESTS.map((test) => sanitizeVocabTest(test))
   );
   
   // Real-time synchronization for vocab tests from Firestore
   useEffect(() => {
     const unsub = subscribeCollection<VocabTest>('vocab_tests', INITIAL_VOCAB_TESTS, (data) => {
-      const mappedData = data.map((test) => ({
-        ...test,
-        questions: (test.questions || []).map((q) => {
-          const qType = q.questionType || 'multiple_choice';
-          return {
-            ...q,
-            questionType: qType,
-            timeLimitSeconds: q.timeLimitSeconds || (qType === 'multiple_choice' ? 10 : 20),
-          };
-        }),
-      }));
+      const mappedData = data.map((test) => sanitizeVocabTest(test));
       setTests(mappedData);
     });
     return () => unsub();
@@ -316,17 +320,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   // Real-time synchronization for review tests from Firestore
   useEffect(() => {
     const unsub = subscribeCollection<VocabTest>('vocab_reviews', INITIAL_REVIEW_TESTS, (data) => {
-      const mappedData = data.map((test) => ({
-        ...test,
-        questions: (test.questions || []).map((q) => {
-          const qType = q.questionType || 'multiple_choice';
-          return {
-            ...q,
-            questionType: qType,
-            timeLimitSeconds: q.timeLimitSeconds || (qType === 'multiple_choice' ? 10 : 20),
-          };
-        }),
-      }));
+      const mappedData = data.map((test) => sanitizeVocabTest(test));
       setReviewTests(mappedData);
     });
     return () => unsub();
@@ -518,10 +512,12 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   // Create or Update test handler
   const handleCreateTest = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTestForm.title.trim() || !newTestForm.unitName.trim()) {
-      showToast('⚠️ Vui lòng nhập đầy đủ Tiêu đề bài test và Tên bài học!');
+    if (!newTestForm.title.trim()) {
+      showToast('⚠️ Vui lòng nhập Tiêu đề bài test!');
       return;
     }
+
+    const finalUnitName = newTestForm.unitName.trim() || 'Bài 1';
 
     if (customizedQuestions.length === 0) {
       showToast('⚠️ Vui lòng nhập hoặc kiểm tra danh sách câu hỏi!');
@@ -538,7 +534,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
           return {
             ...t,
             title: newTestForm.title,
-            unitName: newTestForm.unitName,
+            unitName: finalUnitName,
             courseLevel: newTestForm.courseLevel,
             timePerQuestionSeconds: newTestForm.timePerQuestionSeconds,
             questions: customizedQuestions,
@@ -564,7 +560,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
         classId: classGroup?.id,
         className: classGroup?.name,
         courseLevel: newTestForm.courseLevel,
-        unitName: newTestForm.unitName,
+        unitName: finalUnitName,
         timePerQuestionSeconds: newTestForm.timePerQuestionSeconds,
         questions: customizedQuestions,
         createdDate: new Date().toISOString().split('T')[0],
@@ -1474,10 +1470,10 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   }
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold"
                 >
-                  <option value="Khóa 1">Khóa 1 (Foundation)</option>
-                  <option value="Khóa 2">Khóa 2 (Pre-Intermediate)</option>
-                  <option value="Khóa 3">Khóa 3 (Intermediate 6.5+)</option>
-                  <option value="Khóa 4">Khóa 4 (Advanced 7.5+)</option>
+                  <option value="Khóa 1">Khóa 1</option>
+                  <option value="Khóa 2">Khóa 2</option>
+                  <option value="Khóa 3">Khóa 3</option>
+                  <option value="Khóa 4">Khóa 4</option>
                 </select>
               </div>
 
@@ -1496,11 +1492,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
               </div>
 
               <div className="sm:col-span-2">
-                <label className="text-slate-700 block mb-1">Tiêu đề bài test từ vựng:</label>
+                <label className="text-slate-700 block mb-1">Tiêu đề bài test:</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Test Từ Vựng Unit 1 - Khóa 1: Daily Habits"
+                  placeholder="Ví dụ: Test Từ Vựng Bài 1 - Khóa 1"
                   value={newTestForm.title}
                   onChange={(e) => setNewTestForm({ ...newTestForm, title: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold"
@@ -1508,11 +1504,10 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
               </div>
 
               <div className="sm:col-span-2">
-                <label className="text-slate-700 block mb-1">Tên bài học / Chủ đề:</label>
+                <label className="text-slate-700 block mb-1">Mã/Tên bài (Tùy chọn):</label>
                 <input
                   type="text"
-                  required
-                  placeholder="Ví dụ: Bài 1: Environment & Education"
+                  placeholder="Ví dụ: Bài 1"
                   value={newTestForm.unitName}
                   onChange={(e) => setNewTestForm({ ...newTestForm, unitName: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-bold"
