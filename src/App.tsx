@@ -1304,15 +1304,42 @@ export default function App() {
     // 2. Optimistically update local state immediately
     setClasses((prev) => prev.filter((c) => c.id !== classId));
 
-    // 3. Delete from Firebase Firestore & VPS
+    // 3. Unassign students from this deleted class so they don't try to sync back
+    setStudents((prev) => {
+      const affected = prev.filter((s) => s.classId === classId);
+      if (affected.length === 0) return prev;
+      const updated = prev.map((s) =>
+        s.classId === classId
+          ? {
+              ...s,
+              classId: '',
+              className: 'Chưa xếp lớp (Lớp đã xóa)',
+            }
+          : s
+      );
+      const changed = updated.filter((s) => s.classId === '' && affected.some((a) => a.id === s.id));
+      if (changed.length > 0) saveBatchDocuments('students', changed);
+      return updated;
+    });
+
+    // 4. Delete from Firebase Firestore & VPS
     await deleteDocument('classes', classId);
 
-    // 4. Show friendly toast confirmation
+    // 5. Show friendly toast confirmation
     showToast(`Đã xóa thành công ${targetName}!`);
   };
 
   const handleClearAllClasses = async () => {
     setClasses([]);
+    setStudents((prev) => {
+      const updated = prev.map((s) => ({
+        ...s,
+        classId: '',
+        className: 'Chưa xếp lớp',
+      }));
+      saveBatchDocuments('students', updated);
+      return updated;
+    });
     await clearCollection('classes');
     showToast('Đã xóa sạch toàn bộ danh sách lớp học trên toàn hệ thống (Firestore, Server & Bộ nhớ)!');
   };

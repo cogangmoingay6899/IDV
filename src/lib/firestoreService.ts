@@ -90,8 +90,14 @@ export function subscribeCollection<T extends { id: string }>(
     const cached = localStorage.getItem(`vps_col_${collectionName}`);
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        initialItems = parsed;
+      if (Array.isArray(parsed)) {
+        if (collectionName === 'classes') {
+          const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
+          const setDel = new Set(deletedIds);
+          initialItems = parsed.filter((c: any) => !setDel.has(c.id));
+        } else {
+          initialItems = parsed;
+        }
       }
     }
   } catch (e) {}
@@ -137,10 +143,18 @@ export function subscribeCollection<T extends { id: string }>(
         colRef,
         (snapshot) => {
           if (!snapshot.empty) {
-            const firestoreItems: T[] = snapshot.docs.map((d) => ({
+            let firestoreItems: T[] = snapshot.docs.map((d) => ({
               id: d.id,
               ...d.data(),
             })) as T[];
+
+            if (collectionName === 'classes') {
+              const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
+              if (deletedIds.length > 0) {
+                const setDel = new Set(deletedIds);
+                firestoreItems = firestoreItems.filter((c: any) => !setDel.has(c.id));
+              }
+            }
 
             cachedCollections.set(collectionName, firestoreItems);
             try {
@@ -433,6 +447,13 @@ export async function deleteDocument(collectionName: string, id: string): Promis
   cachedCollections.set(collectionName, filtered);
   try {
     localStorage.setItem(`vps_col_${collectionName}`, JSON.stringify(filtered));
+    if (collectionName === 'classes') {
+      const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
+      if (!deletedIds.includes(stringId)) {
+        deletedIds.push(stringId);
+        localStorage.setItem('idv_deleted_class_ids', JSON.stringify(deletedIds));
+      }
+    }
   } catch (e) {}
 
   const listeners = activeListeners.get(collectionName);
@@ -442,6 +463,13 @@ export async function deleteDocument(collectionName: string, id: string): Promis
         cb(filtered);
       } catch (err) {}
     });
+  }
+
+  // Broadcast to other open browser tabs
+  if (broadcastBus) {
+    try {
+      broadcastBus.postMessage({ collection: collectionName, data: filtered });
+    } catch (e) {}
   }
 
   // 2. Delete from Firestore
