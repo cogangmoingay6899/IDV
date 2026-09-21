@@ -27,7 +27,7 @@ import {
   Link as LinkIcon,
 } from 'lucide-react';
 import { VocabTest, VocabTestSubmission, VocabQuestion, ClassGroup, Student, ExamScore, AttendanceRecord, AuthUser } from '../../types';
-import { saveDocument, subscribeCollection, fetchDocument, addSubmissionToTest } from '../../lib/firestoreService';
+import { saveDocument, subscribeCollection, fetchDocument, addSubmissionToTest, fetchCollection } from '../../lib/firestoreService';
 import {
   getPublicBaseUrl,
   setPublicBaseUrl,
@@ -48,7 +48,8 @@ const COURSE_CONFIGS = [
 const generatedTests: VocabTest[] = [];
 
 COURSE_CONFIGS.forEach(course => {
-  for (let lessonNum = 1; lessonNum <= 31; lessonNum++) {
+  const maxLessons = course.prefix === 'k4' ? 120 : 31;
+  for (let lessonNum = 1; lessonNum <= maxLessons; lessonNum++) {
     const testId = `vt-${course.prefix}-${lessonNum < 10 ? '0' + lessonNum : lessonNum}`;
     
     let sampleQuestions: VocabQuestion[] = [
@@ -166,7 +167,8 @@ const REVIEW_COURSE_CONFIGS = [
 const generatedReviewTests: VocabTest[] = [];
 
 REVIEW_COURSE_CONFIGS.forEach(course => {
-  for (let lessonNum = 1; lessonNum <= 31; lessonNum++) {
+  const maxLessons = course.prefix === 'rev-k4' ? 120 : 31;
+  for (let lessonNum = 1; lessonNum <= maxLessons; lessonNum++) {
     const testId = `${course.prefix}-${lessonNum < 10 ? '0' + lessonNum : lessonNum}`;
     
     let sampleQuestions: VocabQuestion[] = [
@@ -311,8 +313,17 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   // Real-time synchronization for vocab tests from Firestore
   useEffect(() => {
     const unsub = subscribeCollection<VocabTest>('vocab_tests', INITIAL_VOCAB_TESTS, (data) => {
-      const mappedData = data.map((test) => sanitizeVocabTest(test));
+      const existingIds = new Set(data.map((t) => t.id));
+      const missingPresets = INITIAL_VOCAB_TESTS.filter((t) => !existingIds.has(t.id));
+      const fullData = missingPresets.length > 0 ? [...data, ...missingPresets] : data;
+      const mappedData = fullData.map((test) => sanitizeVocabTest(test));
       setTests(mappedData);
+
+      if (missingPresets.length > 0) {
+        missingPresets.forEach((test) => {
+          saveDocument('vocab_tests', test).catch(() => {});
+        });
+      }
     });
     return () => unsub();
   }, []);
@@ -320,14 +331,24 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   // Real-time synchronization for review tests from Firestore
   useEffect(() => {
     const unsub = subscribeCollection<VocabTest>('vocab_reviews', INITIAL_REVIEW_TESTS, (data) => {
-      const mappedData = data.map((test) => sanitizeVocabTest(test));
+      const existingIds = new Set(data.map((t) => t.id));
+      const missingPresets = INITIAL_REVIEW_TESTS.filter((t) => !existingIds.has(t.id));
+      const fullData = missingPresets.length > 0 ? [...data, ...missingPresets] : data;
+      const mappedData = fullData.map((test) => sanitizeVocabTest(test));
       setReviewTests(mappedData);
+
+      if (missingPresets.length > 0) {
+        missingPresets.forEach((test) => {
+          saveDocument('vocab_reviews', test).catch(() => {});
+        });
+      }
     });
     return () => unsub();
   }, []);
 
   // Modals & Active Test States
   const [activeLeaderboardTest, setActiveLeaderboardTest] = useState<VocabTest | null>(null);
+  const [leaderboardClassFilter, setLeaderboardClassFilter] = useState<string>('all');
   const [activeRunnerTest, setActiveRunnerTest] = useState<VocabTest | null>(null);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
@@ -732,6 +753,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     const cleanStudentName = runnerStudentName.trim();
     const cleanClassName = runnerClassName.trim();
     const cleanPhone = runnerStudentPhone.trim();
+    const classDigits = cleanClassName.match(/\d+/g)?.[0];
 
     // Match student & class in center database
     const matchedStudent = students.find(
@@ -741,14 +763,20 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     );
 
     const allClassOptions = classes.length > 0 ? classes : (classGroup ? [classGroup] : []);
-    const matchedClass = allClassOptions.find(
-      (c) =>
-        c.name.toLowerCase().includes(cleanClassName.toLowerCase()) ||
-        c.id === classGroup?.id
-    );
+    const matchedClass = allClassOptions.find((c) => {
+      const cName = c.name.toLowerCase();
+      const cId = c.id.toLowerCase();
+      const inputName = cleanClassName.toLowerCase();
+      if (!inputName) return false;
+      if (cName.includes(inputName) || inputName.includes(cName) || cId.includes(inputName)) return true;
+      if (classDigits) {
+        if (cName.includes(classDigits) || cId.includes(classDigits)) return true;
+      }
+      return false;
+    });
 
-    const targetClassId = matchedClass ? matchedClass.id : (classGroup?.id || 'class-vocab-auto');
-    const targetClassName = matchedClass?.name || cleanClassName || classGroup?.name || 'Lớp Học IELTS';
+    const targetClassId = matchedClass ? matchedClass.id : (classDigits ? `class-ielts-${classDigits}` : (classGroup?.id || 'class-vocab-auto'));
+    const targetClassName = matchedClass?.name || (classDigits ? `Lớp ${classDigits}` : (cleanClassName || classGroup?.name || 'Lớp Học IELTS'));
 
     const newSub: VocabTestSubmission = {
       id: `sub-${Date.now()}`,
@@ -756,7 +784,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       studentId: matchedStudent?.id,
       studentName: cleanStudentName,
       studentPhone: cleanPhone,
-      className: cleanClassName,
+      className: cleanClassName || targetClassName,
       classId: targetClassId,
       score: scoreOut10,
       correctCount,
@@ -825,27 +853,63 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     // 3. Auto-save score directly to the Class Spreadsheet (Bảng điểm nhập điểm học viên)
     const syncToSpreadsheet = async () => {
       try {
-        const sheetDocId = targetClassId === 'class-ielts-88' ? 'sheet-ielts-88' : `sheet-${targetClassId}`;
-        const sheet = await fetchDocument<any>('class_spreadsheets', sheetDocId);
+        const candidateSheetIds: string[] = [];
+        if (targetClassId) candidateSheetIds.push(`sheet-${targetClassId}`);
+        if (classDigits) {
+          candidateSheetIds.push(`sheet-ielts-${classDigits}`);
+          candidateSheetIds.push(`sheet-${classDigits}`);
+        }
+        if (cleanClassName) {
+          const slug = cleanClassName.toLowerCase().replace(/\s+/g, '-');
+          candidateSheetIds.push(`sheet-${slug}`);
+        }
+
+        let sheet = null;
+        for (const candId of candidateSheetIds) {
+          sheet = await fetchDocument<any>('class_spreadsheets', candId);
+          if (sheet && sheet.rows && sheet.columns) {
+            break;
+          }
+        }
+
+        if (!sheet) {
+          const allSheets = await fetchCollection<any>('class_spreadsheets');
+          sheet = allSheets.find((s: any) => {
+            if (!s.rows || !s.columns) return false;
+            const sId = (s.id || '').toLowerCase();
+            const sTitle = (s.classTitle || s.className || s.title || '').toLowerCase();
+            if (classDigits && (sId.includes(classDigits) || sTitle.includes(classDigits))) {
+              return true;
+            }
+            if (cleanClassName && (sId.includes(cleanClassName.toLowerCase()) || sTitle.includes(cleanClassName.toLowerCase()))) {
+              return true;
+            }
+            return false;
+          });
+        }
         
         if (sheet && sheet.rows && sheet.columns) {
-          // Normalize student name for comparison (remove extra whitespaces and case-insensitive)
-          const normalizedStudentName = cleanStudentName.toLowerCase().replace(/\s+/g, ' ').trim();
+          const normalize = (str: string) =>
+            str
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+
+          const normalizedStudentName = normalize(cleanStudentName);
           
-          // Match row index by name
           let targetRowIdx = sheet.rows.findIndex((r: any) => 
-            r.fullName.toLowerCase().replace(/\s+/g, ' ').trim() === normalizedStudentName
+            normalize(r.fullName || '') === normalizedStudentName
           );
           
           if (targetRowIdx === -1) {
-            // Fuzzy contains match if exact match not found
             targetRowIdx = sheet.rows.findIndex((r: any) => {
-              const rowName = r.fullName.toLowerCase().replace(/\s+/g, ' ').trim();
+              const rowName = normalize(r.fullName || '');
               return rowName.includes(normalizedStudentName) || normalizedStudentName.includes(rowName);
             });
           }
           
-          // Parse lesson number (e.g., L1, L2, L3) from either Unit Name or Test Title
           const extractLessonNumber = (text: string): string | null => {
             const match = text.match(/(?:bài|lesson|session|unit|l|khóa|khoa)\s*(\d+)/i);
             if (match) {
@@ -857,7 +921,6 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
           const lessonLabel = extractLessonNumber(activeRunnerTest.unitName) || extractLessonNumber(activeRunnerTest.title);
           
           if (lessonLabel) {
-            // Find columns with this lessonLabel, prioritizing "từ vựng" or "vocab"
             let targetCol = sheet.columns.find((c: any) => 
               c.lessonLabel.toUpperCase() === lessonLabel.toUpperCase() && 
               (c.subSkill.toLowerCase().includes('từ vựng') || c.subSkill.toLowerCase().includes('vocab'))
@@ -1304,137 +1367,223 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       </div>
 
       {/* MODAL 1: BẢNG XẾP HẠNG (LEADERBOARD) AI LÀM NHANH NHẤT & CHÍNH XÁC NHẤT */}
-      {activeLeaderboardTest && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-400 text-purple-950 flex items-center justify-center font-black text-xl shadow-md border border-amber-300 shrink-0">
-                  🏆
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">
-                    Bảng Xếp Hạng Bài Test Từ Vựng
-                  </h3>
-                  <p className="text-xs text-slate-500">{activeLeaderboardTest.title}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveLeaderboardTest(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold hover:bg-slate-200"
-              >
-                ✕
-              </button>
-            </div>
+      {activeLeaderboardTest && (() => {
+        const allSubmissions = activeLeaderboardTest.submissions || [];
 
-            {/* Leaderboard Rules Notice */}
-            <div className="bg-purple-50 p-3.5 rounded-2xl border border-purple-200 text-xs text-purple-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 font-medium">
-              <span>🏆 <strong>Tiêu chí xếp hạng:</strong> 1. Số câu trả lời <strong>ĐÚNG</strong> nhiều nhất ➔ 2. Thời gian hoàn thành <strong>NHANH NHẤT</strong> (ít giây hơn).</span>
-              <span className="text-[10px] font-bold bg-amber-400 text-purple-950 px-2.5 py-1 rounded-lg border border-amber-300 shrink-0 shadow-2xs">
-                Tự động xếp hạng
-              </span>
-            </div>
+        // Extract list of unique classes present in submissions
+        const availableClassList: string[] = Array.from(
+          new Set(
+            allSubmissions
+              .map((s) => (s.className || '').trim())
+              .filter((c) => Boolean(c))
+          )
+        ) as string[];
 
-            {/* Submissions List Sorted by Score desc, Time asc */}
-            {activeLeaderboardTest.submissions.length === 0 ? (
-              <div className="py-8 text-center text-slate-500 text-xs space-y-2">
-                <p>Chưa có học sinh nào hoàn thành bài test này.</p>
-                <p className="text-[11px] text-slate-400">Hãy chép link và gửi cho lớp làm bài!</p>
+        // Filter submissions by selected class
+        const filteredLeaderboardSubmissions = allSubmissions.filter((sub) => {
+          if (leaderboardClassFilter === 'all') return true;
+          const subClass = (sub.className || '').trim().toLowerCase();
+          const filterVal = leaderboardClassFilter.trim().toLowerCase();
+          if (subClass === filterVal) return true;
+          
+          const subNum = subClass.match(/\d+/)?.[0];
+          const filterNum = filterVal.match(/\d+/)?.[0];
+          if (subNum && filterNum && subNum === filterNum) return true;
+          return subClass.includes(filterVal) || filterVal.includes(subClass);
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto space-y-5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-400 text-purple-950 flex items-center justify-center font-black text-xl shadow-md border border-amber-300 shrink-0">
+                    🏆
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-base">
+                      Bảng Xếp Hạng Bài Test Từ Vựng
+                    </h3>
+                    <p className="text-xs text-slate-500">{activeLeaderboardTest.title}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveLeaderboardTest(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold hover:bg-slate-200"
+                >
+                  ✕
+                </button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {activeLeaderboardTest.submissions
-                  .slice()
-                  .sort((a, b) => {
-                    if (b.correctCount !== a.correctCount) {
-                      return b.correctCount - a.correctCount;
-                    }
-                    return a.timeSpentSeconds - b.timeSpentSeconds;
-                  })
-                  .map((sub, rankIdx) => {
-                    let rankBadge = `${rankIdx + 1}`;
-                    let rowBg = 'bg-white border-slate-200';
-                    if (rankIdx === 0) {
-                      rankBadge = '🥇 TOP 1';
-                      rowBg = 'bg-amber-50 border-amber-300 ring-2 ring-amber-400/30';
-                    } else if (rankIdx === 1) {
-                      rankBadge = '🥈 TOP 2';
-                      rowBg = 'bg-slate-100 border-slate-300';
-                    } else if (rankIdx === 2) {
-                      rankBadge = '🥉 TOP 3';
-                      rowBg = 'bg-orange-50 border-orange-200';
-                    }
+
+              {/* Leaderboard Rules Notice */}
+              <div className="bg-purple-50 p-3.5 rounded-2xl border border-purple-200 text-xs text-purple-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 font-medium">
+                <span>🏆 <strong>Tiêu chí xếp hạng:</strong> 1. Số câu <strong>ĐÚNG</strong> nhiều nhất ➔ 2. Thời gian <strong>NHANH NHẤT</strong>.</span>
+                <span className="text-[10px] font-bold bg-amber-400 text-purple-950 px-2.5 py-1 rounded-lg border border-amber-300 shrink-0 shadow-2xs">
+                  Xếp hạng theo lớp
+                </span>
+              </div>
+
+              {/* Class Filter Control Tabs / Dropdown */}
+              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-purple-700" />
+                    <span>Xếp hạng theo Số Lớp học sinh đã nhập:</span>
+                  </span>
+                  <span className="text-[11px] font-extrabold text-purple-900 bg-purple-100 px-2.5 py-0.5 rounded-lg border border-purple-200">
+                    {leaderboardClassFilter === 'all'
+                      ? `Tất cả các lớp (${allSubmissions.length} lượt làm)`
+                      : `${leaderboardClassFilter} (${filteredLeaderboardSubmissions.length} lượt làm)`}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  <button
+                    type="button"
+                    onClick={() => setLeaderboardClassFilter('all')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all border ${
+                      leaderboardClassFilter === 'all'
+                        ? 'bg-purple-700 text-white border-purple-800 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🌐 Tất cả các lớp ({allSubmissions.length})
+                  </button>
+
+                  {availableClassList.map((clsName) => {
+                    const clsCount = allSubmissions.filter((s) => {
+                      const sc = (s.className || '').toLowerCase();
+                      const fc = clsName.toLowerCase();
+                      const sn = sc.match(/\d+/)?.[0];
+                      const fn = fc.match(/\d+/)?.[0];
+                      return sc === fc || (sn && fn && sn === fn) || sc.includes(fc) || fc.includes(sc);
+                    }).length;
+
+                    const isSelected =
+                      leaderboardClassFilter.toLowerCase() === clsName.toLowerCase() ||
+                      (leaderboardClassFilter.match(/\d+/)?.[0] &&
+                        clsName.match(/\d+/)?.[0] &&
+                        leaderboardClassFilter.match(/\d+/)?.[0] === clsName.match(/\d+/)?.[0]);
 
                     return (
-                      <div
-                        key={sub.id}
-                        className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all ${rowBg}`}
+                      <button
+                        key={clsName}
+                        type="button"
+                        onClick={() => setLeaderboardClassFilter(clsName)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all border ${
+                          isSelected
+                            ? 'bg-purple-700 text-white border-purple-800 shadow-xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`px-3 py-1.5 rounded-xl font-black text-xs shrink-0 ${
-                              rankIdx === 0
-                                ? 'bg-amber-500 text-purple-950 shadow-xs'
-                                : rankIdx === 1
-                                ? 'bg-slate-300 text-slate-900'
-                                : rankIdx === 2
-                                ? 'bg-orange-300 text-orange-950'
-                                : 'bg-slate-200 text-slate-700'
-                            }`}
-                          >
-                            {rankBadge}
-                          </span>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-extrabold text-slate-900 text-sm">{sub.studentName}</h4>
-                              {sub.className && (
-                                <span className="text-[10px] font-extrabold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200">
-                                  Lớp: {sub.className}
+                        🏫 Lớp {clsName} ({clsCount})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Submissions List Sorted by Score desc, Time asc */}
+              {filteredLeaderboardSubmissions.length === 0 ? (
+                <div className="py-8 text-center text-slate-500 text-xs space-y-2">
+                  <p>Chưa có học sinh nào thuộc {leaderboardClassFilter === 'all' ? 'bài test này' : `lớp ${leaderboardClassFilter}`} nộp bài.</p>
+                  <p className="text-[11px] text-slate-400">Hãy chép link bài test gửi cho học sinh làm bài!</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredLeaderboardSubmissions
+                    .slice()
+                    .sort((a, b) => {
+                      if (b.correctCount !== a.correctCount) {
+                        return b.correctCount - a.correctCount;
+                      }
+                      return a.timeSpentSeconds - b.timeSpentSeconds;
+                    })
+                    .map((sub, rankIdx) => {
+                      let rankBadge = `${rankIdx + 1}`;
+                      let rowBg = 'bg-white border-slate-200';
+                      if (rankIdx === 0) {
+                        rankBadge = '🥇 TOP 1';
+                        rowBg = 'bg-amber-50 border-amber-300 ring-2 ring-amber-400/30';
+                      } else if (rankIdx === 1) {
+                        rankBadge = '🥈 TOP 2';
+                        rowBg = 'bg-slate-100 border-slate-300';
+                      } else if (rankIdx === 2) {
+                        rankBadge = '🥉 TOP 3';
+                        rowBg = 'bg-orange-50 border-orange-200';
+                      }
+
+                      return (
+                        <div
+                          key={sub.id}
+                          className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all ${rowBg}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`px-3 py-1.5 rounded-xl font-black text-xs shrink-0 ${
+                                rankIdx === 0
+                                  ? 'bg-amber-500 text-purple-950 shadow-xs'
+                                  : rankIdx === 1
+                                  ? 'bg-slate-300 text-slate-900'
+                                  : rankIdx === 2
+                                  ? 'bg-orange-300 text-orange-950'
+                                  : 'bg-slate-200 text-slate-700'
+                              }`}
+                            >
+                              {rankBadge}
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-extrabold text-slate-900 text-sm">{sub.studentName}</h4>
+                                {sub.className && (
+                                  <span className="text-[10px] font-extrabold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200">
+                                    Lớp: {sub.className}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                {sub.studentPhone ? `SĐT: ${sub.studentPhone} • ` : ''}Nộp bài: {sub.submittedAt}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0 space-y-1">
+                            <div className="font-black text-purple-900 text-sm">
+                              {sub.correctCount} / {sub.totalQuestions} câu ({sub.score}/10đ)
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-600 flex items-center justify-end gap-2">
+                              <span>⏱️ {sub.timeSpentSeconds} giây</span>
+                              {sub.tabSwitchViolations > 0 ? (
+                                <span className="text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200 font-bold">
+                                  ⚠️ Thoát {sub.tabSwitchViolations} lần
+                                </span>
+                              ) : (
+                                <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 font-bold">
+                                  ✅ Trung thực
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              {sub.studentPhone ? `SĐT: ${sub.studentPhone} • ` : ''}Nộp bài: {sub.submittedAt}
-                            </p>
                           </div>
                         </div>
+                      );
+                    })}
+                </div>
+              )}
 
-                        <div className="text-right shrink-0 space-y-1">
-                          <div className="font-black text-purple-900 text-sm">
-                            {sub.correctCount} / {sub.totalQuestions} câu ({sub.score}/10đ)
-                          </div>
-                          <div className="text-[11px] font-bold text-slate-600 flex items-center justify-end gap-2">
-                            <span>⏱️ {sub.timeSpentSeconds} giây</span>
-                            {sub.tabSwitchViolations > 0 ? (
-                              <span className="text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200 font-bold">
-                                ⚠️ Thoát {sub.tabSwitchViolations} lần
-                              </span>
-                            ) : (
-                              <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 font-bold">
-                                ✅ Trung thực
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div className="pt-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => setActiveLeaderboardTest(null)}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl"
+                >
+                  Đóng Bảng Xếp Hạng
+                </button>
               </div>
-            )}
-
-            <div className="pt-2 text-right">
-              <button
-                type="button"
-                onClick={() => setActiveLeaderboardTest(null)}
-                className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl"
-              >
-                Đóng Bảng Xếp Hạng
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL 2: TẠO BÀI TEST TỪ VỰNG MỚI */}
       {showCreateModal && (
