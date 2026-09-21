@@ -5220,6 +5220,21 @@ export const INITIAL_TEACHERS: Teacher[] = [
     "hourlyRate": 420000,
     "rating": 4.90,
     "status": "Đang giảng dạy"
+  },
+  {
+    "id": "tch-trunghieu",
+    "code": "GV-IDV11",
+    "name": "Đàm Trung Hiếu",
+    "type": "Việt Nam",
+    "nationality": "Việt Nam 🇻🇳",
+    "email": "damtrunghieu1803@gmail.com",
+    "phone": "0911 345 678",
+    "specialty": "IELTS Listening & Speaking Chuyên Sâu, Phản Xạ Kép",
+    "degrees": "Cử nhân Ngôn ngữ Anh, Chứng chỉ Giảng dạy Quốc tế",
+    "activeClassesCount": 2,
+    "hourlyRate": 420000,
+    "rating": 4.91,
+    "status": "Đang giảng dạy"
   }
 ];
 

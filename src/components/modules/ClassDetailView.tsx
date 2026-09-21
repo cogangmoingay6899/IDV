@@ -2114,17 +2114,17 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[75vh] relative scrollbar-thin">
               <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
-                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 w-12 min-w-[48px] max-w-[48px] text-center bg-slate-100 font-bold sticky left-0 z-20">STT</th>
-                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-3 min-w-[170px] max-w-[200px] bg-slate-100 font-bold sticky left-12 z-20 border-r-2 border-slate-300 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.08)]">Học viên</th>
-                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-48">Điểm danh</th>
+                <thead className="sticky top-0 z-30 shadow-xs bg-slate-100">
+                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px]">
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 w-12 min-w-[48px] max-w-[48px] text-center bg-slate-100 font-bold sticky top-0 left-0 z-40 border-b border-slate-300">STT</th>
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-3 min-w-[170px] max-w-[200px] bg-slate-100 font-bold sticky top-0 left-12 z-40 border-r-2 border-b border-slate-300 shadow-[3px_0_5px_-2px_rgba(0,0,0,0.08)]">Học viên</th>
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-48 bg-slate-100">Điểm danh</th>
 
                     {/* DYNAMIC SCORE COLUMNS FOR EACH SELECTED SKILL */}
                     {selectedSkills.map((sk) => (
-                      <th key={sk} rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-2 text-center min-w-[105px]">
+                      <th key={sk} rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-2.5 px-2 text-center min-w-[105px] bg-slate-100">
                         <div className="flex flex-col items-center gap-1 py-0.5">
                           <span className="font-bold text-slate-800 flex items-center gap-1">
                             <span>{SKILL_ICONS[sk] || '📝'}</span>
@@ -2150,29 +2150,29 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
 
                     {/* Calculated Average score or IELTS Band if enabled */}
                     {enableOverallScore && (
-                      <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-20 bg-purple-50/50">
+                      <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-20 bg-purple-100 text-purple-950 font-bold">
                         <div className="flex flex-col items-center text-purple-900 font-bold">
                           <span>{overallScoreType === 'ielts_band' ? 'Overall Band' : 'Điểm TB'}</span>
-                          <span className="text-[9px] text-purple-600 font-normal">Tự tính</span>
+                          <span className="text-[9px] text-purple-700 font-normal">Tự tính</span>
                         </div>
                       </th>
                     )}
 
                     {/* Penalty Copies column if Viết is selected */}
                     {hasWritingSkill && (
-                      <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-28 bg-amber-50/50">
+                      <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-28 bg-amber-100 text-amber-950 font-bold">
                         <div className="flex flex-col items-center text-amber-900">
                           <span>Chép phạt</span>
-                          <span className="text-[10px] text-amber-700 font-normal">(Số lần)</span>
+                          <span className="text-[10px] text-amber-800 font-normal">(Số lần)</span>
                         </div>
                       </th>
                     )}
 
                     {/* Quizlet Column */}
-                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-36">
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-36 bg-slate-100">
                       <div className="flex flex-col items-center gap-1">
                         <span>Quizlet</span>
-                        <div className="inline-flex items-center gap-1 font-normal text-[10px] bg-purple-50/80 px-1.5 py-0.5 rounded border border-purple-200/60">
+                        <div className="inline-flex items-center gap-1 font-normal text-[10px] bg-white px-1.5 py-0.5 rounded border border-purple-200/80">
                           <button
                             type="button"
                             onClick={() => handleSetAllQuizlet('Đã học')}
@@ -2196,7 +2196,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                     {homeworkItems.length > 0 ? (
                       <th
                         colSpan={homeworkItems.length}
-                        className="py-2 px-2 text-center bg-amber-100/90 text-amber-950 font-black text-xs border-l border-b border-amber-300/80 tracking-wide"
+                        className="py-2 px-2 text-center bg-amber-200 text-amber-950 font-black text-xs border-l border-b border-amber-300 tracking-wide"
                       >
                         <div className="flex items-center justify-center gap-1.5 py-1">
                           <span>BTVN (Đề mục {homeworkItems.length})</span>
@@ -2211,11 +2211,11 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                         </div>
                       </th>
                     ) : (
-                      <th className="py-3 px-2 text-center w-24">BTVN</th>
+                      <th className="py-3 px-2 text-center w-24 bg-amber-100 text-amber-950 font-bold">BTVN</th>
                     )}
 
                     {/* CỘT TỔNG TIỀN PHẠT BUỔI NÀY (Sau cột BTVN) */}
-                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center min-w-[120px] bg-amber-50/80 text-amber-950 font-bold border-l border-amber-200/60">
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center min-w-[120px] bg-amber-100 text-amber-950 font-bold border-l border-amber-200">
                       <div className="flex flex-col items-center gap-1">
                         <div className="flex items-center gap-1">
                           <Coins className="w-3.5 h-3.5 text-amber-600" />
@@ -2253,7 +2253,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                     </th>
 
                     {/* CỘT NỢ CHƯA NỘP CÁC BUỔI TRƯỚC */}
-                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center min-w-[130px] bg-rose-50/80 text-rose-950 font-bold border-l border-rose-200/70">
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center min-w-[130px] bg-rose-100 text-rose-950 font-bold border-l border-rose-200">
                       <div className="flex flex-col items-center gap-1">
                         <span>Nợ các buổi trước</span>
                         <span className="text-[10px] text-rose-900 font-mono font-black bg-white px-2 py-0.5 rounded-full border border-rose-300 shadow-2xs">
@@ -2288,17 +2288,17 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                     </th>
 
                     {/* Feedback Column */}
-                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-3 min-w-[150px]">Nhận xét giáo viên</th>
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-3 min-w-[150px] bg-slate-100 text-slate-700">Nhận xét giáo viên</th>
 
                     {/* Zalo Single Send Column */}
-                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-24">Báo Zalo</th>
+                    <th rowSpan={homeworkItems.length > 0 ? 2 : 1} className="py-3 px-2 text-center w-24 bg-slate-100 text-slate-700">Báo Zalo</th>
                   </tr>
 
                   {/* SECOND HEADER ROW FOR BTVN SUB-ITEMS */}
                   {homeworkItems.length > 0 && (
-                    <tr className="bg-amber-50/80 border-b border-amber-200 text-[10px] font-extrabold text-amber-950">
+                    <tr className="bg-amber-100 border-b border-amber-200 text-[10px] font-extrabold text-amber-950">
                       {homeworkItems.map((item) => (
-                        <th key={item} className="py-1 px-1 text-center min-w-[55px] border-l border-amber-200/60 font-black">
+                        <th key={item} className="py-1.5 px-1 text-center min-w-[55px] border-l border-amber-200 font-black bg-amber-100">
                           {item}
                         </th>
                       ))}
