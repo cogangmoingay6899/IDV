@@ -20,8 +20,19 @@ import {
   AlertCircle,
   CalendarCheck2,
   ArrowUpDown,
+  UserPlus,
+  DollarSign,
+  Phone,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  CreditCard,
+  UserCheck,
+  Award,
+  CalendarDays,
 } from 'lucide-react';
-import { ClassGroup, Teacher, CurriculumCourse } from '../../types';
+import { ClassGroup, Teacher, CurriculumCourse, Student } from '../../types';
 import {
   COURSE_LEVEL_CONFIGS,
   SCHEDULE_PRESETS,
@@ -38,8 +49,17 @@ interface EditClassModalProps {
   classGroup: ClassGroup | null;
   teachers: Teacher[];
   courses: CurriculumCourse[];
-  onUpdateClass: (updatedClass: ClassGroup) => void;
+  students?: Student[];
+  onUpdateClass: (
+    updatedClass: ClassGroup,
+    modifiedStudents?: Student[],
+    newPastedStudents?: { name: string; phone?: string; note?: string; customTuitionFee?: number }[]
+  ) => void;
 }
+
+const formatVND = (amount: number) => {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+};
 
 export const EditClassModal: React.FC<EditClassModalProps> = ({
   isOpen,
@@ -47,8 +67,10 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
   classGroup,
   teachers,
   courses,
+  students = [],
   onUpdateClass,
 }) => {
+  const [activeTab, setActiveTab] = useState<'info' | 'students'>('info');
   const [selectedCourseLevel, setSelectedCourseLevel] = useState<CourseLevelKey>('Khóa 1');
   const [selectedSchedulePreset, setSelectedSchedulePreset] = useState<string>('t2_t5_ca1');
   const [offDates, setOffDates] = useState<string[]>([]);
@@ -77,6 +99,16 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
   const [customTeacherInput, setCustomTeacherInput] = useState('');
 
+  // Local state for existing class students being edited
+  const [editableStudents, setEditableStudents] = useState<Student[]>([]);
+  const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+
+  // Batch paste state
+  const [pastedStudentsRawText, setPastedStudentsRawText] = useState<string>('');
+  const [excludedPastedIndices, setExcludedPastedIndices] = useState<number[]>([]);
+  const [pastedDefaultCustomTuition, setPastedDefaultCustomTuition] = useState<string>('');
+
   // Calculate schedule and estimated end date automatically in real-time
   const calculatedSchedule = useMemo(() => {
     return calculateCourseSchedule(
@@ -88,15 +120,14 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
     );
   }, [formData.startDate, formData.schedule, formData.totalSessions, offDates, selectedCourseLevel]);
 
-  // Populate form when classGroup changes
+  // Populate form and students when classGroup changes or modal opens
   useEffect(() => {
-    if (classGroup) {
+    if (classGroup && isOpen) {
       // Parse existing teachers list
       let initialTeachers: string[] = [];
       if (classGroup.teacherNames && classGroup.teacherNames.length > 0) {
         initialTeachers = [...classGroup.teacherNames];
       } else if (classGroup.teacherName) {
-        // Split by comma or semicolon if multiple
         initialTeachers = classGroup.teacherName
           .split(/[,;&+]/)
           .map((t) => t.trim())
@@ -115,6 +146,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
         setSelectedSchedulePreset(matchPreset.id);
       }
 
+      const defaultTuition = classGroup.tuitionFee || 14500000;
+
       setFormData({
         code: classGroup.code || '',
         name: classGroup.name || '',
@@ -131,11 +164,73 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
         totalSessions: classGroup.totalSessions || COURSE_LEVEL_CONFIGS[detected].totalSessions,
         completedSessions: classGroup.completedSessions || 0,
         maxStudents: classGroup.maxStudents || 25,
-        tuitionFee: classGroup.tuitionFee || 14500000,
+        tuitionFee: defaultTuition,
         status: classGroup.status || 'Đang diễn ra',
       });
+
+      // Filter and clone students belonging to this class for editable local state
+      const classStudents = students.filter(
+        (s) => s.classId === classGroup.id || s.className === classGroup.name
+      );
+      setEditableStudents(JSON.parse(JSON.stringify(classStudents)));
+      setPastedStudentsRawText('');
+      setExcludedPastedIndices([]);
+      setExpandedStudentId(classStudents.length > 0 ? classStudents[0].id : null);
+      setActiveTab('info');
     }
   }, [classGroup, isOpen]);
+
+  // Parse batch pasted students text
+  const parsedPastedStudents = useMemo(() => {
+    if (!pastedStudentsRawText.trim()) return [];
+    const lines = pastedStudentsRawText.split(/[\n;]/).map((l) => l.trim()).filter(Boolean);
+    const result: { name: string; phone?: string; note?: string; customTuitionFee?: number; originalIndex: number }[] = [];
+
+    const defaultFee = pastedDefaultCustomTuition ? Number(pastedDefaultCustomTuition) : formData.tuitionFee;
+
+    lines.forEach((line, idx) => {
+      // Clean leading bullet points, numbers e.g. "1.", "1/", "1 -", "-", "+"
+      let clean = line.replace(/^[\d]+[\.\)\/\-\:\s]+/, '').replace(/^[\-\+\*•]\s*/, '').trim();
+      if (!clean) return;
+
+      // Skip common table headers if user copied them
+      const lower = clean.toLowerCase();
+      if (
+        lower.startsWith('họ và tên') ||
+        lower.startsWith('họ tên') ||
+        lower.startsWith('tên học sinh') ||
+        lower.startsWith('stt') ||
+        lower.startsWith('danh sách')
+      ) {
+        return;
+      }
+
+      // Detect phone number if included in line (e.g. "0912345678", "(0988776655)", "+84912345678")
+      let phone = '';
+      const phoneMatch = clean.match(/(?:(?:\+84|0)[1-9][0-9]{8,9})/);
+      if (phoneMatch) {
+        phone = phoneMatch[0];
+        clean = clean.replace(phone, '').replace(/[\(\)\-\:\,]/g, ' ').trim();
+      }
+
+      // Remove extra multiple spaces
+      clean = clean.replace(/\s+/g, ' ').trim();
+
+      if (clean.length >= 2) {
+        result.push({
+          name: clean,
+          phone: phone || undefined,
+          note: 'Dán nhanh khi cập nhật lớp học',
+          customTuitionFee: defaultFee,
+          originalIndex: idx,
+        });
+      }
+    });
+
+    return result.filter((_, i) => !excludedPastedIndices.includes(i));
+  }, [pastedStudentsRawText, excludedPastedIndices, pastedDefaultCustomTuition, formData.tuitionFee]);
+
+  if (!isOpen || !classGroup) return null;
 
   const handleSelectCourseLevel = (levelKey: CourseLevelKey) => {
     setSelectedCourseLevel(levelKey);
@@ -146,17 +241,6 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
       courseName: config.name,
       totalSessions: config.totalSessions,
     }));
-  };
-
-  const handleSelectSchedulePreset = (presetId: string) => {
-    setSelectedSchedulePreset(presetId);
-    const preset = SCHEDULE_PRESETS.find((p) => p.id === presetId);
-    if (preset) {
-      setFormData((prev) => ({
-        ...prev,
-        schedule: preset.name,
-      }));
-    }
   };
 
   const handleAddOffDate = () => {
@@ -170,8 +254,6 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
   const handleRemoveOffDate = (dateToRemove: string) => {
     setOffDates(offDates.filter((d) => d !== dateToRemove));
   };
-
-  if (!isOpen || !classGroup) return null;
 
   const handleCourseSelect = (selectedName: string) => {
     const found = courses.find((c) => c.name === selectedName);
@@ -220,6 +302,158 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
     setFormData((prev) => ({ ...prev, teacherName: updated.join(', ') }));
   };
 
+  // Update a single student's field
+  const handleUpdateStudentField = (studentId: string, field: keyof Student, value: any) => {
+    setEditableStudents((prev) =>
+      prev.map((st) => {
+        if (st.id !== studentId) return st;
+
+        const updated = { ...st, [field]: value };
+
+        // If customTuitionFee is updated, recompute balanceOwed and tuitionPayable if needed
+        if (field === 'customTuitionFee') {
+          const newFee = Number(value) || 0;
+          updated.customTuitionFee = newFee;
+          updated.courseTuitionFee = newFee;
+          updated.tuitionPayable = newFee;
+          // If status is 'Chưa đóng', balanceOwed = full fee
+          if (updated.tuitionStatus === 'Chưa đóng') {
+            updated.balanceOwed = newFee;
+          } else if (updated.tuitionStatus === 'Đã đóng đủ') {
+            updated.balanceOwed = 0;
+          }
+        }
+
+        if (field === 'tuitionStatus') {
+          const fee = updated.customTuitionFee ?? (classGroup.tuitionFee || 14500000);
+          if (value === 'Đã đóng đủ') {
+            updated.balanceOwed = 0;
+          } else if (value === 'Chưa đóng') {
+            updated.balanceOwed = fee;
+          }
+        }
+
+        return updated;
+      })
+    );
+  };
+
+  // Add one manual new student to class list immediately
+  const handleAddManualStudent = () => {
+    const randId = `st-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const codeNum = (students.length + editableStudents.length + 1).toString().padStart(3, '0');
+    const newSt: Student = {
+      id: randId,
+      code: `IDV-HV${codeNum}`,
+      name: 'Học viên mới',
+      dob: '2008-01-01',
+      gender: 'Nam',
+      phone: '',
+      email: `hocvien${codeNum}@gmail.com`,
+      parentName: '',
+      parentPhone: '',
+      address: formData.branch || 'Hải Phòng',
+      classId: classGroup.id,
+      className: formData.name,
+      courseName: formData.courseName,
+      status: 'Đang học',
+      joinDate: formData.startDate || new Date().toISOString().split('T')[0],
+      tuitionStatus: 'Chưa đóng',
+      customTuitionFee: formData.tuitionFee,
+      courseTuitionFee: formData.tuitionFee,
+      tuitionPayable: formData.tuitionFee,
+      balanceOwed: formData.tuitionFee,
+      note: 'Thêm thủ công khi chỉnh sửa lớp',
+    };
+
+    setEditableStudents((prev) => [newSt, ...prev]);
+    setExpandedStudentId(newSt.id);
+  };
+
+  // Remove a student from this class (changes status to 'Chờ xếp lớp' and unlinks classId)
+  const handleRemoveStudentFromClass = (studentId: string) => {
+    setEditableStudents((prev) =>
+      prev.map((st) =>
+        st.id === studentId
+          ? {
+              ...st,
+              classId: '',
+              className: 'Chưa xếp lớp',
+              status: 'Chờ xếp lớp',
+              waitingForClassId: classGroup.id,
+            }
+          : st
+      )
+    );
+  };
+
+  // Convert pasted students directly into editable students list
+  const handleTransferPastedToEditableList = () => {
+    if (parsedPastedStudents.length === 0) return;
+
+    const newStudents: Student[] = parsedPastedStudents.map((item, idx) => {
+      const codeNum = (students.length + editableStudents.length + idx + 1).toString().padStart(3, '0');
+      const fee = item.customTuitionFee || formData.tuitionFee || 14500000;
+      return {
+        id: `st-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+        code: `IDV-HV${codeNum}`,
+        name: item.name,
+        dob: '2008-01-01',
+        gender: 'Nam',
+        phone: item.phone || '',
+        email: `${item.name.toLowerCase().replace(/[^a-z0-9]/g, '') || 'hocvien'}${codeNum}@gmail.com`,
+        parentName: '',
+        parentPhone: item.phone || '',
+        address: formData.branch || 'Hải Phòng',
+        classId: classGroup.id,
+        className: formData.name,
+        courseName: formData.courseName,
+        status: 'Đang học',
+        joinDate: formData.startDate || new Date().toISOString().split('T')[0],
+        tuitionStatus: 'Chưa đóng',
+        customTuitionFee: fee,
+        courseTuitionFee: fee,
+        tuitionPayable: fee,
+        balanceOwed: fee,
+        note: item.note || 'Dán nhanh từ danh sách',
+      };
+    });
+
+    setEditableStudents((prev) => [...newStudents, ...prev]);
+    setPastedStudentsRawText('');
+    setExcludedPastedIndices([]);
+    if (newStudents.length > 0) {
+      setExpandedStudentId(newStudents[0].id);
+    }
+  };
+
+  // Filtered active students in this class for display
+  const activeEnrolledStudents = editableStudents.filter(
+    (s) => s.classId === classGroup.id || s.className === formData.name
+  );
+
+  const displayedStudents = activeEnrolledStudents.filter((st) => {
+    if (!studentSearchQuery.trim()) return true;
+    const q = studentSearchQuery.toLowerCase();
+    return (
+      st.name.toLowerCase().includes(q) ||
+      st.code.toLowerCase().includes(q) ||
+      st.phone.toLowerCase().includes(q) ||
+      st.parentPhone.toLowerCase().includes(q) ||
+      (st.parentName && st.parentName.toLowerCase().includes(q))
+    );
+  });
+
+  // Calculate statistics for students in class
+  const studentStats = useMemo(() => {
+    const total = activeEnrolledStudents.length + parsedPastedStudents.length;
+    const paidCount = activeEnrolledStudents.filter((s) => s.tuitionStatus === 'Đã đóng đủ').length;
+    const unpaidCount = activeEnrolledStudents.filter((s) => s.tuitionStatus === 'Chưa đóng' || s.tuitionStatus === 'Còn nợ').length + parsedPastedStudents.length;
+    const customFeeCount = activeEnrolledStudents.filter((s) => s.customTuitionFee && s.customTuitionFee !== formData.tuitionFee).length;
+    const hasExamDateCount = activeEnrolledStudents.filter((s) => s.examDate || s.examRegisterDate).length;
+    return { total, paidCount, unpaidCount, customFeeCount, hasExamDateCount };
+  }, [activeEnrolledStudents, parsedPastedStudents, formData.tuitionFee]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -242,6 +476,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
     const finalTeacherName =
       finalTeachers.length > 0 ? finalTeachers.join(', ') : formData.teacherName.trim() || 'Chưa phân công';
 
+    const finalStudentCount = activeEnrolledStudents.length + parsedPastedStudents.length;
+
     const updated: ClassGroup = {
       ...classGroup,
       code: formData.code.trim().toUpperCase(),
@@ -261,54 +497,38 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
       endDate: calculatedSchedule.estimatedEndDate || formData.endDate,
       totalSessions: Number(formData.totalSessions) || 32,
       completedSessions: Number(formData.completedSessions) || 0,
-      maxStudents: Number(formData.maxStudents) || 25,
+      maxStudents: Math.max(Number(formData.maxStudents) || 25, finalStudentCount),
+      currentStudents: finalStudentCount,
       tuitionFee: Number(formData.tuitionFee) || 0,
       status: formData.status,
       offDates: offDates,
     };
 
-    onUpdateClass(updated);
+    onUpdateClass(updated, editableStudents, parsedPastedStudents);
     onClose();
   };
 
   // Quick course suggestions
-  const commonCourses = [
-    'PRE',
-    'INSPIRE',
-    'DESIRE',
-    'LUYỆN ĐỀ DRILL',
-  ];
-
-  // Quick teacher suggestions
-  const suggestedTeachers = [
-    'Tâm Vương (IELTS 8.0+ Speaking & Writing)',
-    'Minh Tâm (IELTS 8.0 Listening & Reading 9.0)',
-    'Trang Nguyễn (IELTS Foundation & Phản Xạ B2)',
-    'Thơm Nguyễn (IELTS 8.0 Ngữ Pháp & Đọc Hiểu)',
-    'Diệp Đặng (IELTS 8.0+ Intensive Writing)',
-    'Vũ Ngọc (IELTS Foundation & Từ Vựng)',
-    'Dương Vũ (Founder & Academic Director - IELTS 8.5)',
-    'Huyền Chi (IELTS Speaking & Phát Âm)',
-  ];
+  const commonCourses = ['PRE', 'INSPIRE', 'DESIRE', 'LUYỆN ĐỀ DRILL'];
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 md:p-6 flex justify-center items-start">
-      <div className="bg-white rounded-3xl border border-purple-100 shadow-2xl w-full max-w-3xl my-2 sm:my-4 md:my-6 flex flex-col min-h-0 max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-2.5rem)] overflow-hidden animate-in fade-in zoom-in-95">
+      <div className="bg-white rounded-3xl border border-purple-100 shadow-2xl w-full max-w-4xl my-2 sm:my-4 md:my-6 flex flex-col min-h-0 max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-2.5rem)] overflow-hidden animate-in fade-in zoom-in-95">
         {/* Modal Header */}
-        <div className="shrink-0 bg-gradient-to-r from-purple-800 to-indigo-700 px-5 py-4 sm:px-6 sm:py-5 text-white flex items-center justify-between shadow-xs z-10">
+        <div className="shrink-0 bg-gradient-to-r from-purple-800 via-indigo-800 to-purple-900 px-5 py-4 sm:px-6 sm:py-5 text-white flex items-center justify-between shadow-xs z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
               <Edit3 className="w-5 h-5 text-purple-200" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-base sm:text-lg">Chỉnh Sửa Thông Tin Lớp Học</h3>
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] bg-white/15 px-2 py-0.5 rounded-full text-purple-100 font-medium">
-                  <ArrowUpDown className="w-2.5 h-2.5" /> Có thể cuộn lên/xuống
+                <h3 className="font-extrabold text-base sm:text-lg">Chỉnh Sửa Lớp Học & Học Viên</h3>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] bg-white/15 px-2.5 py-0.5 rounded-full text-purple-100 font-bold border border-white/10">
+                  {classGroup.code}
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-purple-200">
-                Tự nhập tên giáo viên, phân công nhiều giáo viên cùng dạy & cập nhật khóa học cho {classGroup.code}
+                Sửa thông tin lớp, dán thêm học sinh hàng loạt, cập nhật học phí riêng & lịch thi từng bạn
               </p>
             </div>
           </div>
@@ -321,520 +541,1039 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
           </button>
         </div>
 
+        {/* Modal Navigation Tabs */}
+        <div className="shrink-0 bg-purple-50/80 border-b border-purple-100 px-4 sm:px-6 py-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('info')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'info'
+                  ? 'bg-purple-700 text-white shadow-xs'
+                  : 'bg-white text-slate-700 hover:bg-purple-100 border border-purple-200/60'
+              }`}
+            >
+              <Building className="w-3.5 h-3.5" />
+              <span>1. Thông tin lớp & Lịch học</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('students')}
+              className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'students'
+                  ? 'bg-purple-700 text-white shadow-xs'
+                  : 'bg-white text-slate-700 hover:bg-purple-100 border border-purple-200/60'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>2. Quản lý học viên & Học phí riêng</span>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                  activeTab === 'students' ? 'bg-white text-purple-800' : 'bg-purple-200 text-purple-900'
+                }`}
+              >
+                {studentStats.total} HV
+              </span>
+            </button>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-2 text-[11px] text-purple-900 font-semibold">
+            <span>Học phí chuẩn lớp: <strong className="text-emerald-700">{formatVND(formData.tuitionFee)}</strong></span>
+          </div>
+        </div>
+
         {/* Modal Form */}
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {/* Scrollable Form Body */}
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 sm:space-y-5 text-xs">
-          {/* Row 1: Code & Name */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">
-                Mã lớp học <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono font-bold text-purple-700 uppercase focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-                required
-              />
-            </div>
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-5 text-xs">
+            {/* ================= TAB 1: THÔNG TIN LỚP & LỊCH HỌC ================= */}
+            {activeTab === 'info' && (
+              <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-200">
+                {/* Row 1: Code & Name */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Mã lớp học <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.code}
+                      onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-mono font-bold text-purple-700 uppercase focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      required
+                    />
+                  </div>
 
-            <div className="sm:col-span-2">
-              <label className="font-bold text-slate-700 block mb-1">
-                Tên lớp học <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="VD: Lớp 76 - IELTS Intensive 6.5+"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-                required
-              />
-            </div>
-          </div>
+                  <div className="sm:col-span-2">
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Tên lớp học <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="VD: Lớp 76 - IELTS Intensive 6.5+"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      required
+                    />
+                  </div>
+                </div>
 
-          {/* Row 2: Course Level Selection (Khóa 1 - 4) */}
-          <div className="bg-purple-50/60 p-4 rounded-2xl border border-purple-200/80 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <label className="font-bold text-purple-950 flex items-center gap-1.5">
-                <BookOpen className="w-4 h-4 text-purple-700" />
-                <span>Cấp độ Khóa học chuẩn IELTS DƯƠNG VŨ:</span> <span className="text-rose-500">*</span>
-              </label>
-              <span className="text-[11px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-full">
-                {COURSE_LEVEL_CONFIGS[selectedCourseLevel].totalSessions} buổi
-              </span>
-            </div>
+                {/* Row 2: Course Level Selection (Khóa 1 - 4) */}
+                <div className="bg-purple-50/60 p-4 rounded-2xl border border-purple-200/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-purple-950 flex items-center gap-1.5">
+                      <BookOpen className="w-4 h-4 text-purple-700" />
+                      <span>Cấp độ Khóa học chuẩn IELTS DƯƠNG VŨ:</span> <span className="text-rose-500">*</span>
+                    </label>
+                    <span className="text-[11px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-full">
+                      {COURSE_LEVEL_CONFIGS[selectedCourseLevel].totalSessions} buổi
+                    </span>
+                  </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {(Object.keys(COURSE_LEVEL_CONFIGS) as CourseLevelKey[]).map((lvlKey) => {
-                const cfg = COURSE_LEVEL_CONFIGS[lvlKey];
-                const isSelected = selectedCourseLevel === lvlKey;
-                return (
-                  <button
-                    key={lvlKey}
-                    type="button"
-                    onClick={() => handleSelectCourseLevel(lvlKey)}
-                    className={`p-2 rounded-xl border text-left transition-all ${
-                      isSelected
-                        ? 'bg-purple-700 text-white border-purple-700 shadow-md ring-2 ring-purple-300'
-                        : 'bg-white text-slate-700 hover:bg-purple-50 border-slate-200'
-                    }`}
-                  >
-                    <div className="font-black text-xs flex items-center justify-between">
-                      <span>{lvlKey}</span>
-                      <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
-                        isSelected ? 'bg-white/20 text-purple-100' : 'bg-purple-100 text-purple-800'
-                      }`}>
-                        {cfg.totalSessions}b
-                      </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {(Object.keys(COURSE_LEVEL_CONFIGS) as CourseLevelKey[]).map((lvlKey) => {
+                      const cfg = COURSE_LEVEL_CONFIGS[lvlKey];
+                      const isSelected = selectedCourseLevel === lvlKey;
+                      return (
+                        <button
+                          key={lvlKey}
+                          type="button"
+                          onClick={() => handleSelectCourseLevel(lvlKey)}
+                          className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-purple-700 text-white border-purple-700 shadow-md ring-2 ring-purple-300'
+                              : 'bg-white text-slate-700 hover:bg-purple-50 border-slate-200'
+                          }`}
+                        >
+                          <div className="font-black text-xs flex items-center justify-between">
+                            <span>{lvlKey}</span>
+                            <span
+                              className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
+                                isSelected ? 'bg-white/20 text-purple-100' : 'bg-purple-100 text-purple-800'
+                              }`}
+                            >
+                              {cfg.totalSessions}b
+                            </span>
+                          </div>
+                          <div
+                            className={`text-[10px] mt-0.5 font-semibold truncate ${
+                              isSelected ? 'text-purple-100' : 'text-slate-500'
+                            }`}
+                          >
+                            {cfg.name}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                        Chọn khóa học mẫu:
+                      </label>
+                      <select
+                        value={formData.courseName}
+                        onChange={(e) => handleCourseSelect(e.target.value)}
+                        className="w-full bg-white border border-purple-200 rounded-xl p-2.5 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      >
+                        <option value="">-- Chọn khóa học tiêu chuẩn --</option>
+                        {courses.map((c) => (
+                          <option key={c.id} value={c.name}>
+                            {c.name} ({c.level})
+                          </option>
+                        ))}
+                        {commonCourses.map((cName) => (
+                          <option key={cName} value={cName}>
+                            {cName}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    <div className={`text-[10px] mt-0.5 font-semibold truncate ${isSelected ? 'text-purple-100' : 'text-slate-500'}`}>
-                      {cfg.name}
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">
+                        Tên khóa hiển thị (Tùy chỉnh):
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Nhập tên khóa học..."
+                        value={formData.courseName}
+                        onChange={(e) => setFormData({ ...formData, courseName: e.target.value })}
+                        className="w-full bg-white border border-purple-200 rounded-xl p-2.5 font-bold text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                        required
+                      />
                     </div>
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                  Chọn khóa học mẫu:
-                </label>
-                <select
-                  value={formData.courseName}
-                  onChange={(e) => handleCourseSelect(e.target.value)}
-                  className="w-full bg-white border border-purple-200 rounded-xl p-2.5 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-                >
-                  <option value="">-- Chọn khóa học tiêu chuẩn --</option>
-                  {courses.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name} ({c.level})
-                    </option>
-                  ))}
-                  {commonCourses.map((cName) => (
-                    <option key={cName} value={cName}>
-                      {cName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                {/* Row 3: Teacher Multi-Selection & Custom Teacher Input */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <label className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <GraduationCap className="w-4 h-4 text-purple-700" />
+                      <span>Giáo viên phụ trách lớp (Có thể chọn nhiều GV cùng dạy):</span>
+                    </label>
+                    <span className="text-[11px] text-purple-700 font-semibold">
+                      Đã chọn: <strong>{selectedTeachers.length}</strong> giáo viên
+                    </span>
+                  </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-slate-600 block mb-1">
-                  Tên khóa hiển thị (Tùy chỉnh):
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nhập tên khóa học..."
-                  value={formData.courseName}
-                  onChange={(e) => setFormData({ ...formData, courseName: e.target.value })}
-                  className="w-full bg-white border border-purple-200 rounded-xl p-2.5 font-bold text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-                  required
-                />
-              </div>
-            </div>
+                  {/* Selected Teachers Badge List */}
+                  {selectedTeachers.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-purple-50/80 rounded-xl border border-purple-200">
+                      {selectedTeachers.map((tName) => (
+                        <span
+                          key={tName}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-700 text-white rounded-lg text-xs font-bold shadow-2xs"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>{tName}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTeacher(tName)}
+                            className="hover:text-rose-300 ml-1 p-0.5 rounded cursor-pointer"
+                            title="Xóa giáo viên này khỏi lớp"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
-            {/* Quick tag suggestions for Course */}
-            <div className="pt-1">
-              <span className="text-[10px] font-bold text-slate-500 mr-1.5">Gợi ý nhanh:</span>
-              <div className="inline-flex flex-wrap gap-1 mt-1">
-                {['IELTS 4.5 - 5.5', 'IELTS Intensive 6.5+', 'IELTS Master 7.5+', 'Giao Tiếp B2', 'Luyện Đề Bứt Phá'].map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, courseName: item })}
-                    className="px-2 py-0.5 text-[10px] font-bold bg-white text-purple-700 hover:bg-purple-100 border border-purple-200 rounded-md transition-colors"
-                  >
-                    + {item}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+                  {/* Available Teachers Chips from System */}
+                  <div>
+                    <span className="text-[11px] text-slate-500 font-semibold block mb-1">
+                      Bấm vào giáo viên để thêm / bỏ phân công:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {teachers.map((t) => {
+                        const isSelected = selectedTeachers.includes(t.name);
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => handleToggleTeacher(t.name)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1 ${
+                              isSelected
+                                ? 'bg-purple-700 text-white border-purple-700 shadow-2xs'
+                                : 'bg-white text-slate-700 hover:bg-purple-50 border-slate-200'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 text-white" />}
+                            <span>{t.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-          {/* Row 3: Multi-teacher management & Custom teacher entry */}
-          <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-200/80 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="font-bold text-indigo-950 flex items-center gap-1.5 text-xs">
-                <Users className="w-4 h-4 text-indigo-700" />
-                <span>Giáo viên giảng dạy (Hỗ trợ tự nhập & 1 lớp có nhiều GV cùng dạy):</span>
-              </label>
-              <span className="text-[11px] font-bold text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full">
-                {selectedTeachers.length} Giáo viên
-              </span>
-            </div>
-
-            {/* Selected Teachers Badges */}
-            {selectedTeachers.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 bg-white p-2.5 rounded-xl border border-indigo-200">
-                {selectedTeachers.map((tName, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-900 border border-indigo-300 font-bold rounded-lg text-xs shadow-2xs"
-                  >
-                    <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>{tName}</span>
+                  {/* Custom Teacher Text Input */}
+                  <div className="pt-2 border-t border-slate-200 flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Tự nhập tên giáo viên mới (VD: Thầy John, Cô Mai...)..."
+                      value={customTeacherInput}
+                      onChange={(e) => setCustomTeacherInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddCustomTeacher();
+                        }
+                      }}
+                      className="flex-1 bg-white border border-slate-200 rounded-xl p-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                    />
                     <button
                       type="button"
-                      onClick={() => handleRemoveTeacher(tName)}
-                      className="text-slate-400 hover:text-rose-600 ml-0.5"
+                      onClick={handleAddCustomTeacher}
+                      className="px-3.5 py-2 bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold text-xs rounded-xl transition-colors cursor-pointer shrink-0"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      + Thêm GV
                     </button>
-                  </span>
-                ))}
-              </div>
-            )}
+                  </div>
+                </div>
 
-            {/* Custom Teacher Name Entry & Quick Add */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-              <div className="sm:col-span-8">
-                <input
-                  type="text"
-                  placeholder="Tự nhập tên giáo viên (VD: Thầy Alex Morgan, Cô Mai Phương)..."
-                  value={customTeacherInput}
-                  onChange={(e) => setCustomTeacherInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddCustomTeacher();
-                    }
+                {/* Row 4: Branch, Room, Assistant & Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Cơ sở học</label>
+                    <select
+                      value={formData.branch}
+                      onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold text-slate-800 focus:outline-none"
+                    >
+                      <option value="Cơ sở 1 - Tô Hiệu (Hải Phòng)">Cơ sở 1 - Tô Hiệu (HP)</option>
+                      <option value="Cơ sở 2 - Lạch Tray (Hải Phòng)">Cơ sở 2 - Lạch Tray (HP)</option>
+                      <option value="Online Zoom VIP">Online Zoom VIP</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Phòng học</label>
+                    <input
+                      type="text"
+                      placeholder="VD: Phòng 201 - IELTS Lab"
+                      value={formData.room}
+                      onChange={(e) => setFormData({ ...formData, room: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Trợ giảng (TA)</label>
+                    <input
+                      type="text"
+                      placeholder="VD: Trần Thùy Linh (TA)"
+                      value={formData.assistantTeacherName}
+                      onChange={(e) => setFormData({ ...formData, assistantTeacherName: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Trạng thái lớp</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value as ClassGroup['status'] })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-800 focus:outline-none text-xs"
+                    >
+                      <option value="Đang diễn ra">Đang diễn ra</option>
+                      <option value="Sắp khai giảng">Sắp khai giảng</option>
+                      <option value="Đã kết thúc">Đã kết thúc</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Row 5: Standard Schedule Selection */}
+                <StandardScheduleSelector
+                  value={formData.schedule}
+                  onChange={(newSchedule) => {
+                    setFormData((prev) => ({ ...prev, schedule: newSchedule }));
                   }}
-                  className="w-full bg-white border border-indigo-200 rounded-xl p-2.5 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
-              </div>
-              <div className="sm:col-span-4 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleAddCustomTeacher}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 shadow-xs transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Thêm GV này</span>
-                </button>
-              </div>
-            </div>
 
-            {/* Quick click to add from existing teacher database */}
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 block mb-1">
-                Chọn nhanh từ danh sách giáo viên trung tâm:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {teachers.map((t) => {
-                  const isSelected = selectedTeachers.includes(t.name);
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => handleToggleTeacher(t.name)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all ${
-                        isSelected
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                          : 'bg-white text-slate-700 hover:bg-indigo-50 border-slate-200 hover:border-indigo-300'
-                      }`}
-                    >
-                      {isSelected ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                      <span>{t.name}</span>
-                      <span className="text-[9px] opacity-75">({t.type === 'Bản ngữ (Native)' ? 'Native' : 'VN'})</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                {/* Row 6: Dates, Sessions & Tuition */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1 text-xs">Ngày khai giảng</label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-800 focus:outline-none"
+                    />
+                  </div>
 
-            {/* Direct Free-Form Text Field */}
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                Chuỗi tên giáo viên đầy đủ (Hiển thị trên toàn hệ thống):
-              </label>
-              <input
-                type="text"
-                value={formData.teacherName}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setFormData({ ...formData, teacherName: val });
-                  const splitted = val
-                    .split(/[,;&+]/)
-                    .map((t) => t.trim())
-                    .filter((t) => t.length > 0);
-                  setSelectedTeachers(splitted);
-                }}
-                placeholder="VD: Tâm Vương, Minh Tâm, Thơm Nguyễn"
-                className="w-full bg-white border border-indigo-200 rounded-xl p-2 font-bold text-indigo-900 focus:outline-none"
-              />
-            </div>
-          </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1 text-xs">Tổng số buổi</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      value={formData.totalSessions}
+                      onChange={(e) => setFormData({ ...formData, totalSessions: Number(e.target.value) || 32 })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-bold focus:outline-none"
+                    />
+                  </div>
 
-          {/* Row 4: Branch, Room, Assistant & Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Cơ sở đào tạo</label>
-              <select
-                value={formData.branch}
-                onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-medium text-slate-800 focus:outline-none text-xs"
-              >
-                <option value="Cơ sở 1 - Tô Hiệu (Hải Phòng)">Cơ sở 1 - Tô Hiệu (Hải Phòng)</option>
-                <option value="Cơ sở 2 - Kiến An (Hải Phòng)">Cơ sở 2 - Kiến An (Hải Phòng)</option>
-              </select>
-            </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1 text-xs">Đã hoàn thành</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={formData.totalSessions}
+                      value={formData.completedSessions}
+                      onChange={(e) => setFormData({ ...formData, completedSessions: Number(e.target.value) || 0 })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-purple-700 font-bold focus:outline-none"
+                    />
+                  </div>
 
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Phòng học</label>
-              <input
-                type="text"
-                placeholder="VD: Phòng 201"
-                value={formData.room}
-                onChange={(e) => setFormData({ ...formData, room: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Trợ giảng (TA) / Quản nhiệm</label>
-              <input
-                type="text"
-                placeholder="VD: Trần Thùy Linh (TA)"
-                value={formData.assistantTeacherName}
-                onChange={(e) => setFormData({ ...formData, assistantTeacherName: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Trạng thái lớp</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as ClassGroup['status'] })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-800 focus:outline-none text-xs"
-              >
-                <option value="Đang diễn ra">Đang diễn ra</option>
-                <option value="Sắp khai giảng">Sắp khai giảng</option>
-                <option value="Đã kết thúc">Đã kết thúc</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Row 5: Standard Schedule Selection (Tuần 2 buổi: Thứ 2+Thứ 5, Thứ 3+Thứ 6, hoặc Thứ 4+Thứ 7) */}
-          <StandardScheduleSelector
-            value={formData.schedule}
-            onChange={(newSchedule) => {
-              setFormData((prev) => ({ ...prev, schedule: newSchedule }));
-            }}
-          />
-
-          {/* Row 6: Dates & Sessions */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <label className="font-bold text-slate-700 block mb-1 text-xs">Ngày khai giảng</label>
-              <input
-                type="date"
-                required
-                value={formData.startDate}
-                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 font-bold text-slate-800 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1 text-xs">Tổng số buổi</label>
-              <input
-                type="number"
-                min={1}
-                max={120}
-                value={formData.totalSessions}
-                onChange={(e) => setFormData({ ...formData, totalSessions: Number(e.target.value) || 32 })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-bold focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1 text-xs">Đã hoàn thành</label>
-              <input
-                type="number"
-                min={0}
-                max={formData.totalSessions}
-                value={formData.completedSessions}
-                onChange={(e) => setFormData({ ...formData, completedSessions: Number(e.target.value) || 0 })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-purple-700 font-bold focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1 text-xs">Sĩ số tối đa</label>
-              <input
-                type="number"
-                min={5}
-                max={50}
-                value={formData.maxStudents}
-                onChange={(e) => setFormData({ ...formData, maxStudents: Number(e.target.value) || 25 })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 font-bold focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Calculated Projected Schedule & Estimated End Date Card */}
-          <div className="bg-gradient-to-br from-indigo-900 to-purple-900 text-white p-4 sm:p-5 rounded-2xl shadow-sm space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/15 pb-2.5">
-              <div className="flex items-center gap-2">
-                <CalendarCheck2 className="w-5 h-5 text-amber-300 shrink-0" />
-                <div>
-                  <h4 className="font-black text-sm tracking-wide text-white">
-                    LỘ TRÌNH DỰ KIẾN & NGÀY KẾT THÚC KHÓA
-                  </h4>
-                  <p className="text-[11px] text-purple-200">
-                    Tự động tính toán theo lịch 2 buổi/tuần và cập nhật ngay khi có buổi nghỉ
-                  </p>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1 text-xs">Học phí lớp chuẩn (VNĐ)</label>
+                    <input
+                      type="number"
+                      step={500000}
+                      value={formData.tuitionFee}
+                      onChange={(e) => setFormData({ ...formData, tuitionFee: Number(e.target.value) || 0 })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-emerald-700 font-bold focus:outline-none"
+                    />
+                  </div>
                 </div>
-              </div>
-              <span className="px-2.5 py-1 bg-amber-400 text-amber-950 font-black rounded-lg text-xs self-start sm:self-auto">
-                {selectedCourseLevel} ({calculatedSchedule.totalSessions} buổi)
-              </span>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl border border-white/10">
-                <span className="text-[11px] text-purple-200 font-semibold block">Ngày kết thúc khóa (Lịch tuần 2 buổi):</span>
-                <div className="text-base sm:text-lg font-black text-amber-300 mt-0.5">
-                  {calculatedSchedule.formattedEstimatedEndDate || 'Đang tính...'}
-                </div>
-                <div className="text-[10px] text-purple-200 font-medium mt-0.5">
-                  Tổng thời gian: <strong className="text-white font-bold">{calculatedSchedule.totalDays} ngày</strong> (~{calculatedSchedule.totalWeeks} tuần • {calculatedSchedule.totalSessions} buổi)
-                </div>
-                <span className="text-[9px] text-emerald-300 block mt-0.5 font-semibold">
-                  {calculatedSchedule.remainingDaysText}
-                </span>
-                <span className="text-[9px] text-purple-300/80 block">
-                  Buổi {calculatedSchedule.totalSessions} ({calculatedSchedule.sessions[calculatedSchedule.sessions.length - 1]?.dayOfWeekName || ''})
-                </span>
-              </div>
-
-              <div className="bg-white/10 backdrop-blur-xs p-3 rounded-xl border border-white/10">
-                <span className="text-[11px] text-purple-200 font-semibold block">Lịch kiểm tra cuối khóa:</span>
-                <div className="text-sm sm:text-base font-bold text-white mt-0.5">
-                  Buổi {calculatedSchedule.examSessions.join(' & ')}
-                </div>
-                <span className="text-[10px] text-emerald-300 block mt-0.5">
-                  {selectedCourseLevel === 'Khóa 4' ? 'Buổi 31-32 (Không nghỉ)' : 'Thi xong nghỉ 1 buổi trước khóa sau'}
-                </span>
-                <span className="text-[9px] text-purple-200 block mt-0.5">
-                  Lịch học: {calculatedSchedule.scheduleDaysLabel}
-                </span>
-              </div>
-
-              <div className="bg-amber-500/20 backdrop-blur-xs p-3 rounded-xl border border-amber-400/30">
-                <span className="text-[11px] text-amber-200 font-bold block flex items-center gap-1">
-                  <Bell className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Buổi 29 - Nhắc xếp Trợ giảng (TA):</span>
-                </span>
-                <div className="text-sm sm:text-base font-black text-amber-300 mt-0.5">
-                  {calculatedSchedule.formattedSession29Date || 'Buổi 29'}
-                </div>
-                <span className="text-[10px] text-amber-100 block mt-0.5">
-                  Giáo viên nhắn Quản lý chuẩn bị TA
-                </span>
-              </div>
-            </div>
-
-            {calculatedSchedule.breakSessionsCount > 0 && (
-              <div className="text-[11px] bg-white/10 rounded-xl p-2.5 flex items-center justify-between text-purple-100">
-                <span>
-                  🎓 Nghỉ 1 buổi sau khi kết thúc khóa • Dự kiến khai giảng <strong>{calculatedSchedule.config.nextCourseName}</strong>:
-                </span>
-                <strong className="text-amber-300 ml-2">{calculatedSchedule.formattedNextCourseStartDate}</strong>
-              </div>
-            )}
-
-            {/* Off Dates / Nghỉ buổi nào đó -> Tự động dời ngày kết thúc */}
-            <div className="pt-2 border-t border-white/15 space-y-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <span className="text-xs font-bold text-purple-200 flex items-center gap-1.5">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-300" />
-                  <span>Danh sách ngày nghỉ / nghỉ lễ của lớp ({offDates.length} ngày đã dời):</span>
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
-                    value={newOffDateInput}
-                    onChange={(e) => setNewOffDateInput(e.target.value)}
-                    className="bg-white text-slate-800 text-xs px-2.5 py-1 rounded-lg border-none focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddOffDate}
-                    className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-amber-950 font-bold rounded-lg text-xs transition-colors"
-                  >
-                    + Thêm ngày nghỉ
-                  </button>
-                </div>
-              </div>
-
-              {offDates.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  {offDates.map((d) => (
-                    <span
-                      key={d}
-                      className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-500/30 border border-rose-400/40 text-rose-100 rounded-lg text-[11px] font-semibold"
-                    >
-                      <span>Nghỉ: {formatDateVN(d)}</span>
+                {/* Off Dates List */}
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 text-purple-700" />
+                      <span>Danh sách ngày nghỉ của lớp ({offDates.length} ngày đã dời):</span>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={newOffDateInput}
+                        onChange={(e) => setNewOffDateInput(e.target.value)}
+                        className="bg-white text-slate-800 text-xs px-2.5 py-1 rounded-lg border border-slate-200 focus:outline-none"
+                      />
                       <button
                         type="button"
-                        onClick={() => handleRemoveOffDate(d)}
-                        className="hover:text-white ml-0.5 text-rose-300"
-                        title="Xóa ngày nghỉ này"
+                        onClick={handleAddOffDate}
+                        className="px-2.5 py-1 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        + Thêm ngày nghỉ
                       </button>
-                    </span>
-                  ))}
+                    </div>
+                  </div>
+
+                  {offDates.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {offDates.map((d) => (
+                        <span
+                          key={d}
+                          className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[11px] font-semibold"
+                        >
+                          <span>Nghỉ: {formatDateVN(d)}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveOffDate(d)}
+                            className="hover:text-rose-900 ml-0.5 text-rose-400 cursor-pointer"
+                            title="Xóa ngày nghỉ này"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* ================= TAB 2: QUẢN LÝ HỌC VIÊN & HỌC PHÍ RIÊNG ================= */}
+            {activeTab === 'students' && (
+              <div className="space-y-5 animate-in fade-in duration-200">
+                {/* Summary Statistics Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  <div className="bg-purple-50/80 border border-purple-200/80 rounded-2xl p-3">
+                    <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">
+                      Tổng học viên
+                    </span>
+                    <div className="text-lg font-black text-purple-950 mt-0.5">
+                      {studentStats.total} <span className="text-xs font-medium text-slate-500">bạn</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-3">
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">
+                      Đã đóng đủ
+                    </span>
+                    <div className="text-lg font-black text-emerald-900 mt-0.5">
+                      {studentStats.paidCount} <span className="text-xs font-medium text-slate-500">bạn</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-rose-50/80 border border-rose-200/80 rounded-2xl p-3">
+                    <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">
+                      Còn nợ học phí
+                    </span>
+                    <div className="text-lg font-black text-rose-900 mt-0.5">
+                      {studentStats.unpaidCount} <span className="text-xs font-medium text-slate-500">bạn</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-3">
+                    <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">
+                      Học phí riêng / Ưu đãi
+                    </span>
+                    <div className="text-lg font-black text-amber-900 mt-0.5">
+                      {studentStats.customFeeCount} <span className="text-xs font-medium text-slate-500">bạn</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-indigo-50/80 border border-indigo-200/80 rounded-2xl p-3 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block">
+                      Đã có lịch thi
+                    </span>
+                    <div className="text-lg font-black text-indigo-900 mt-0.5">
+                      {studentStats.hasExamDateCount} <span className="text-xs font-medium text-slate-500">bạn</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section A: Dán nhanh học viên mới (Paste hàng loạt) */}
+                <div className="bg-gradient-to-br from-indigo-50/90 via-purple-50/70 to-slate-50 p-4 rounded-2xl border border-indigo-200 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                        <UserPlus className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <label className="font-extrabold text-indigo-950 text-xs flex items-center gap-1.5">
+                          <span>📋 Dán thêm học sinh vào lớp (Paste hàng loạt từ Excel / Zalo)</span>
+                          <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
+                            Tự động trích xuất
+                          </span>
+                        </label>
+                        <span className="text-[11px] text-slate-500">
+                          Paste danh sách tên học viên kèm SĐT để nạp nhanh vào lớp này
+                        </span>
+                      </div>
+                    </div>
+
+                    {parsedPastedStudents.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-emerald-600" />
+                          <span>Nhận diện: <strong>{parsedPastedStudents.length}</strong> học viên</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleTransferPastedToEditableList}
+                          className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded-xl transition-all shadow-2xs cursor-pointer"
+                        >
+                          + Nạp vào danh sách ngay
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <textarea
+                      rows={3}
+                      value={pastedStudentsRawText}
+                      onChange={(e) => {
+                        setPastedStudentsRawText(e.target.value);
+                        setExcludedPastedIndices([]);
+                      }}
+                      placeholder="Dán danh sách tên học sinh vào đây (mỗi bạn 1 dòng hoặc cách nhau bởi dấu phẩy, có thể kèm SĐT)...&#10;Ví dụ:&#10;1. Nguyễn Minh Anh - 0987654321&#10;2. Trần Quốc Bảo&#10;3. Lê Thu Hà - 0912345678"
+                      className="w-full text-xs font-medium bg-white border border-indigo-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 leading-relaxed placeholder:text-slate-400"
+                    />
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-indigo-700 mt-1 gap-1">
+                      <span>💡 Tự động lọc bỏ STT (1, 2, 3..), dấu gạch đầu dòng và trích xuất SĐT.</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-slate-600">Học phí gán cho nhóm dán:</span>
+                        <input
+                          type="number"
+                          placeholder={`Mặc định: ${formatVND(formData.tuitionFee)}`}
+                          value={pastedDefaultCustomTuition}
+                          onChange={(e) => setPastedDefaultCustomTuition(e.target.value)}
+                          className="w-36 bg-white border border-indigo-200 rounded-lg px-2 py-0.5 text-xs text-indigo-900 font-bold focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live Preview of Parsed Students */}
+                  {parsedPastedStudents.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-indigo-200/60 animate-in fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-700">
+                          Học viên mới sẽ được thêm ({parsedPastedStudents.length}):
+                        </span>
+                        <span className="text-[10px] text-slate-400 italic">Bấm dấu × để bỏ bớt nếu dán nhầm</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1 bg-white/80 rounded-xl border border-indigo-100">
+                        {parsedPastedStudents.map((st, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-200/80 text-indigo-900 rounded-lg text-xs font-semibold"
+                          >
+                            <span className="w-4 h-4 rounded-full bg-indigo-200 text-indigo-800 text-[10px] font-black flex items-center justify-center">
+                              {i + 1}
+                            </span>
+                            <span>{st.name}</span>
+                            {st.phone && (
+                              <span className="text-[10px] font-mono text-indigo-600 bg-white px-1 rounded">
+                                {st.phone}
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setExcludedPastedIndices([...excludedPastedIndices, i])}
+                              className="text-indigo-400 hover:text-rose-600 ml-0.5 p-0.5 rounded cursor-pointer transition-colors"
+                              title="Bỏ học sinh này"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section B: Sửa chi tiết từng học sinh trong lớp */}
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-purple-700" />
+                        <span>Danh sách & Sửa thông tin từng bạn trong lớp ({activeEnrolledStudents.length} học viên)</span>
+                      </h4>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Search Student Input */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Tìm theo tên, SĐT, mã..."
+                          value={studentSearchQuery}
+                          onChange={(e) => setStudentSearchQuery(e.target.value)}
+                          className="pl-8 pr-3 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs w-48 sm:w-56 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                        />
+                      </div>
+
+                      {/* Add Single Manual Student Button */}
+                      <button
+                        type="button"
+                        onClick={handleAddManualStudent}
+                        className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold text-xs rounded-xl flex items-center gap-1 transition-all cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>+ Thêm 1 bạn</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Student Cards List */}
+                  <div className="space-y-3">
+                    {displayedStudents.map((st, idx) => {
+                      const isExpanded = expandedStudentId === st.id;
+                      const hasCustomFee = st.customTuitionFee && st.customTuitionFee !== formData.tuitionFee;
+                      const effectiveTuition = st.customTuitionFee ?? (formData.tuitionFee || 14500000);
+
+                      return (
+                        <div
+                          key={st.id}
+                          className={`rounded-2xl border transition-all ${
+                            isExpanded
+                              ? 'bg-white border-purple-400 shadow-md ring-1 ring-purple-200'
+                              : 'bg-slate-50/80 hover:bg-white border-slate-200'
+                          }`}
+                        >
+                          {/* Student Header Bar */}
+                          <div
+                            className="p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 cursor-pointer select-none"
+                            onClick={() => setExpandedStudentId(isExpanded ? null : st.id)}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 text-xs font-black flex items-center justify-center shrink-0">
+                                {idx + 1}
+                              </span>
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-extrabold text-slate-900 text-xs sm:text-sm">
+                                    {st.name}
+                                  </span>
+                                  <span className="font-mono text-[11px] text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200">
+                                    {st.code}
+                                  </span>
+                                  {st.gender && (
+                                    <span className="text-[10px] text-slate-500 bg-slate-200/80 px-1.5 py-0.2 rounded">
+                                      {st.gender}
+                                    </span>
+                                  )}
+                                  {st.phone && (
+                                    <span className="text-[11px] text-slate-600 flex items-center gap-1 font-mono">
+                                      <Phone className="w-3 h-3 text-slate-400" />
+                                      {st.phone}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 flex-wrap">
+                              {/* Custom Fee Badge */}
+                              {hasCustomFee && (
+                                <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-200 flex items-center gap-0.5">
+                                  <Award className="w-3 h-3 text-amber-600" />
+                                  <span>Học phí riêng: {formatVND(effectiveTuition)}</span>
+                                </span>
+                              )}
+
+                              {/* Exam Date Badge */}
+                              {(st.examDate || st.examRegisterDate) && (
+                                <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full border border-indigo-200 flex items-center gap-0.5">
+                                  <CalendarDays className="w-3 h-3 text-indigo-600" />
+                                  <span>Thi: {st.examDate ? formatDateVN(st.examDate) : 'Đã ĐK'}</span>
+                                </span>
+                              )}
+
+                              {/* Tuition Status Badge */}
+                              <span
+                                className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                                  st.tuitionStatus === 'Đã đóng đủ'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    : st.tuitionStatus === 'Còn nợ'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    : 'bg-rose-100 text-rose-800 border border-rose-200'
+                                }`}
+                              >
+                                {st.tuitionStatus} {st.balanceOwed > 0 ? `(Nợ ${formatVND(st.balanceOwed)})` : ''}
+                              </span>
+
+                              {/* Expand / Collapse Button */}
+                              <button
+                                type="button"
+                                className="p-1 rounded-lg text-slate-400 hover:text-purple-700 hover:bg-purple-50 transition-colors"
+                              >
+                                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Expanded Full Student Editor Details */}
+                          {isExpanded && (
+                            <div className="p-4 pt-2 border-t border-purple-100 bg-white rounded-b-2xl space-y-4 animate-in fade-in">
+                              {/* Row 1: Personal Info & Contact */}
+                              <div className="bg-slate-50/90 p-3.5 rounded-xl border border-slate-200 space-y-3">
+                                <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                  <User className="w-3.5 h-3.5 text-purple-700" />
+                                  <span>1. Thông tin cá nhân & Liên hệ</span>
+                                </span>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Họ và tên học viên <span className="text-rose-500">*</span>
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={st.name}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'name', e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                      required
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Giới tính
+                                    </label>
+                                    <select
+                                      value={st.gender}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'gender', e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:outline-none"
+                                    >
+                                      <option value="Nam">Nam</option>
+                                      <option value="Nữ">Nữ</option>
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Ngày sinh
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={st.dob || ''}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'dob', e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Số điện thoại học sinh
+                                    </label>
+                                    <input
+                                      type="tel"
+                                      placeholder="0912..."
+                                      value={st.phone || ''}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'phone', e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Họ tên phụ huynh
+                                    </label>
+                                    <input
+                                      type="text"
+                                      placeholder="VD: Nguyễn Văn Nam (Bố)"
+                                      value={st.parentName || ''}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'parentName', e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Số điện thoại phụ huynh
+                                    </label>
+                                    <input
+                                      type="tel"
+                                      placeholder="VD: 0987..."
+                                      value={st.parentPhone || ''}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'parentPhone', e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Địa chỉ / Khu vực
+                                    </label>
+                                    <input
+                                      type="text"
+                                      placeholder="VD: Lê Chân, Hải Phòng"
+                                      value={st.address || ''}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'address', e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Row 2: Custom Tuition & Payment Status */}
+                              <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200/80 space-y-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                  <span className="text-[11px] font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                                    <DollarSign className="w-3.5 h-3.5 text-amber-700" />
+                                    <span>2. Học phí riêng & Tình trạng nộp học phí</span>
+                                  </span>
+                                  <span className="text-[10px] text-amber-800 font-semibold">
+                                    Học phí lớp chuẩn: <strong>{formatVND(formData.tuitionFee)}</strong>
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Học phí riêng của học viên (VNĐ):
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step={100000}
+                                      placeholder={String(formData.tuitionFee)}
+                                      value={st.customTuitionFee ?? formData.tuitionFee}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'customTuitionFee', Number(e.target.value))}
+                                      className="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs font-bold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                    />
+                                    {/* Quick Preset Buttons for Custom Fee */}
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateStudentField(st.id, 'customTuitionFee', formData.tuitionFee)}
+                                        className="text-[9px] bg-white text-slate-600 hover:text-purple-700 px-1.5 py-0.5 rounded border border-slate-200 cursor-pointer"
+                                      >
+                                        Chuẩn ({formatVND(formData.tuitionFee)})
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateStudentField(st.id, 'customTuitionFee', Math.round(formData.tuitionFee * 0.9))}
+                                        className="text-[9px] bg-white text-amber-700 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 cursor-pointer"
+                                      >
+                                        -10%
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateStudentField(st.id, 'customTuitionFee', Math.round(formData.tuitionFee * 0.8))}
+                                        className="text-[9px] bg-white text-amber-700 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 cursor-pointer"
+                                      >
+                                        -20%
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Trạng thái học phí
+                                    </label>
+                                    <select
+                                      value={st.tuitionStatus}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'tuitionStatus', e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-800 focus:outline-none"
+                                    >
+                                      <option value="Đã đóng đủ">Đã đóng đủ (0đ nợ)</option>
+                                      <option value="Còn nợ">Còn nợ (Đóng 1 phần)</option>
+                                      <option value="Chưa đóng">Chưa đóng</option>
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Số tiền còn nợ (VNĐ)
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step={100000}
+                                      value={st.balanceOwed || 0}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'balanceOwed', Number(e.target.value))}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-rose-700 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Hạn nộp / Ngày hẹn nộp
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={st.tuitionPromiseDate || st.tuitionDeadlineDate || ''}
+                                      onChange={(e) => {
+                                        handleUpdateStudentField(st.id, 'tuitionPromiseDate', e.target.value);
+                                        handleUpdateStudentField(st.id, 'tuitionDeadlineDate', e.target.value);
+                                      }}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Tuition Reminder Note & Promise Note */}
+                                <div>
+                                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                    Ghi chú nhắc nhở học phí / Lịch hẹn phụ huynh nộp phí:
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder="VD: Phụ huynh hẹn chuyển khoản trước buổi 3; Đã gửi tin nhắn Zalo nhắc lần 1..."
+                                    value={st.tuitionReminderNote || st.tuitionPromiseNote || ''}
+                                    onChange={(e) => {
+                                      handleUpdateStudentField(st.id, 'tuitionReminderNote', e.target.value);
+                                      handleUpdateStudentField(st.id, 'tuitionPromiseNote', e.target.value);
+                                    }}
+                                    className="w-full bg-white border border-amber-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none placeholder:text-slate-400"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Row 3: Exam Registration Date, Official Exam Date & Learning Note */}
+                              <div className="bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-200/80 space-y-3">
+                                <span className="text-[11px] font-black text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                                  <GraduationCap className="w-3.5 h-3.5 text-indigo-700" />
+                                  <span>3. Lịch thi chứng chỉ & Ghi chú học tập</span>
+                                </span>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Ngày đăng ký thi
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={st.examRegisterDate || ''}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'examRegisterDate', e.target.value)}
+                                      className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Ngày thi (IELTS / Cambridge / Cuối khóa)
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={st.examDate || ''}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'examDate', e.target.value)}
+                                      className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs font-bold text-indigo-900 focus:outline-none"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      Trạng thái trong lớp
+                                    </label>
+                                    <select
+                                      value={st.status}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'status', e.target.value)}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:outline-none"
+                                    >
+                                      <option value="Đang học">Đang học</option>
+                                      <option value="Bảo lưu">Bảo lưu</option>
+                                      <option value="Chờ xếp lớp">Chờ lớp sau</option>
+                                      <option value="Đã nghỉ học">Đã nghỉ học</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                    Ghi chú cá nhân / mục tiêu điểm số:
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder="VD: Mục tiêu IELTS 6.5 Speaking; Cần chú ý phần phát âm và từ vựng B2..."
+                                    value={st.note || ''}
+                                    onChange={(e) => handleUpdateStudentField(st.id, 'note', e.target.value)}
+                                    className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none placeholder:text-slate-400"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Student Row Actions */}
+                              <div className="flex items-center justify-between pt-1">
+                                <span className="text-[10px] text-slate-400">
+                                  Mã hệ thống: <span className="font-mono">{st.id}</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveStudentFromClass(st.id)}
+                                  className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-3 py-1 rounded-lg border border-rose-200 flex items-center gap-1 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Rút học viên này khỏi lớp</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {displayedStudents.length === 0 && (
+                      <div className="py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        <Users className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-600">Không tìm thấy học viên nào phù hợp</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Dán danh sách ở trên hoặc bấm "+ Thêm 1 bạn" để thêm học sinh vào lớp
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="font-bold text-slate-700 block mb-1 text-xs">Học phí toàn khóa (VNĐ)</label>
-              <input
-                type="number"
-                step={500000}
-                value={formData.tuitionFee}
-                onChange={(e) => setFormData({ ...formData, tuitionFee: Number(e.target.value) || 0 })}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-emerald-700 font-bold focus:outline-none"
-              />
+          {/* Action buttons Fixed Footer */}
+          <div className="shrink-0 bg-slate-50 border-t border-slate-200 px-5 py-3.5 sm:px-6 flex items-center justify-between gap-3 shadow-xs">
+            <div className="text-[11px] text-slate-600 font-medium hidden sm:flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>
+                Sĩ số lớp sau khi lưu: <strong>{studentStats.total} học viên</strong>{' '}
+                {parsedPastedStudents.length > 0 && `(${parsedPastedStudents.length} bạn dán mới)`}
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5 ml-auto">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 text-slate-600 hover:bg-slate-200 rounded-xl font-bold transition-colors cursor-pointer text-xs"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white rounded-xl font-bold shadow-md shadow-purple-600/20 flex items-center gap-2 transition-all cursor-pointer text-xs"
+              >
+                <Save className="w-4 h-4" />
+                <span>Lưu thay đổi lớp & học viên</span>
+              </button>
             </div>
           </div>
-        </div>
-
-        {/* Action buttons Fixed Footer */}
-        <div className="shrink-0 bg-slate-50 border-t border-slate-200 px-5 py-3.5 sm:px-6 flex items-center justify-between gap-3 shadow-xs">
-          <div className="text-[11px] text-slate-500 font-medium hidden sm:flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>Cuộn chuột hoặc lướt chạm để xem & sửa đầy đủ thông tin</span>
-          </div>
-          <div className="flex items-center gap-2.5 ml-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 text-slate-600 hover:bg-slate-200 rounded-xl font-bold transition-colors cursor-pointer text-xs"
-            >
-              Hủy bỏ
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl font-bold shadow-md shadow-purple-600/20 flex items-center gap-2 transition-colors cursor-pointer text-xs"
-            >
-              <Save className="w-4 h-4" />
-              <span>Lưu thay đổi</span>
-            </button>
-          </div>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
-  </div>
   );
 };

@@ -54,7 +54,11 @@ interface StudentsModuleProps {
   onAddExamScore?: (exam: ExamScore) => void;
   onAddStudent: () => void;
   onOpenCreateClass?: () => void;
-  onUpdateClass?: (updatedClass: ClassGroup) => void;
+  onUpdateClass?: (
+    updatedClass: ClassGroup,
+    modifiedStudents?: Student[],
+    newPastedStudents?: { name: string; phone?: string; note?: string; customTuitionFee?: number }[]
+  ) => void;
   onOpenImportSheet?: () => void;
   onSelectStudentDetail?: (student: Student) => void;
   onEnrollStudentToClass?: (classId: string, studentIdOrData: string | Student) => void;
@@ -1247,8 +1251,9 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
           classGroup={editingClass}
           teachers={teachers}
           courses={courses}
-          onUpdateClass={(updated) => {
-            onUpdateClass(updated);
+          students={students}
+          onUpdateClass={(updated, modifiedSts, newPasted) => {
+            onUpdateClass(updated, modifiedSts, newPasted);
             setEditingClass(null);
           }}
         />

@@ -68,6 +68,10 @@ export interface Student {
   tuitionReminderNote?: string;
   tuitionPromiseDate?: string;
   tuitionPromiseNote?: string;
+  // Thông tin thi chứng chỉ / thi cuối khóa & Ghi chú cá nhân
+  examDate?: string; // Ngày thi (IELTS / Cambridge / Cuối khóa)
+  examRegisterDate?: string; // Ngày đăng ký thi
+  note?: string; // Ghi chú cá nhân / học tập
 }
 
 export interface ClassGroup {

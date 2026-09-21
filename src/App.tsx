@@ -776,30 +776,109 @@ export default function App() {
     showToast(`Đã tạo thành công lớp ${newClass.name} với ${studentCount} học viên!`);
   };
 
-  // Handler: Update Class (Edit name, course, teacher, schedule, etc.)
-  const handleUpdateClass = (updatedClass: ClassGroup) => {
+  // Handler: Update Class (Edit name, course, teacher, schedule, and sync student modifications / new pasted students)
+  const handleUpdateClass = (
+    updatedClass: ClassGroup,
+    modifiedStudents?: Student[],
+    newPastedStudents?: { name: string; phone?: string; note?: string; customTuitionFee?: number }[]
+  ) => {
+    let newCreatedCount = 0;
+    let modifiedCount = 0;
+
+    // 1. Process new pasted students if any
+    let createdStudents: Student[] = [];
+    if (newPastedStudents && newPastedStudents.length > 0) {
+      newCreatedCount = newPastedStudents.length;
+      createdStudents = newPastedStudents.map((item, idx) => {
+        const cleanName = item.name.trim();
+        const randId = `st-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`;
+        const codeNum = (students.length + (modifiedStudents?.length || 0) + idx + 1).toString().padStart(3, '0');
+        const studentCode = `IDV-HV${codeNum}`;
+        const fee = item.customTuitionFee || updatedClass.tuitionFee || 14500000;
+
+        return {
+          id: randId,
+          code: studentCode,
+          name: cleanName,
+          dob: '2008-01-01',
+          gender: 'Nam' as const,
+          phone: item.phone || '',
+          email: `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'hocvien'}${codeNum}@gmail.com`,
+          parentName: '',
+          parentPhone: item.phone || '',
+          address: updatedClass.branch || 'Hải Phòng',
+          classId: updatedClass.id,
+          className: updatedClass.name,
+          courseName: updatedClass.courseName,
+          status: 'Đang học' as const,
+          joinDate: updatedClass.startDate || new Date().toISOString().split('T')[0],
+          tuitionStatus: 'Chưa đóng' as const,
+          balanceOwed: fee,
+          customTuitionFee: fee,
+          courseTuitionFee: fee,
+          tuitionPayable: fee,
+          note: item.note || 'Dán nhanh từ chỉnh sửa lớp',
+        };
+      });
+    }
+
+    // 2. Update students state & batch save
+    setStudents((prev) => {
+      let nextStudents = [...prev];
+
+      // Add newly created pasted students
+      if (createdStudents.length > 0) {
+        nextStudents = [...createdStudents, ...nextStudents];
+        saveBatchDocuments('students', createdStudents);
+      }
+
+      // If modifiedStudents array is provided, merge them
+      if (modifiedStudents && modifiedStudents.length > 0) {
+        const modMap = new Map<string, Student>();
+        modifiedStudents.forEach((st) => {
+          modMap.set(st.id, {
+            ...st,
+            className: st.classId === updatedClass.id ? updatedClass.name : st.className,
+            courseName: st.classId === updatedClass.id ? updatedClass.courseName : st.courseName,
+          });
+        });
+
+        // Track newly added manual students that weren't in prev
+        const existingIds = new Set(nextStudents.map((s) => s.id));
+        const brandNewManual = modifiedStudents.filter((st) => !existingIds.has(st.id));
+
+        nextStudents = nextStudents.map((s) => (modMap.has(s.id) ? modMap.get(s.id)! : s));
+        if (brandNewManual.length > 0) {
+          nextStudents = [...brandNewManual, ...nextStudents];
+        }
+
+        modifiedCount = modifiedStudents.length;
+        saveBatchDocuments('students', modifiedStudents);
+      } else {
+        // Just sync className and courseName for all enrolled students
+        nextStudents = nextStudents.map((s) =>
+          s.classId === updatedClass.id
+            ? {
+                ...s,
+                className: updatedClass.name,
+                courseName: updatedClass.courseName,
+              }
+            : s
+        );
+        const classSts = nextStudents.filter((s) => s.classId === updatedClass.id);
+        if (classSts.length > 0) saveBatchDocuments('students', classSts);
+      }
+
+      return nextStudents;
+    });
+
+    // 3. Update class record & save
     setClasses((prev) =>
       prev.map((c) => (c.id === updatedClass.id ? updatedClass : c))
     );
     saveDocument('classes', updatedClass);
 
-    // Sync student records: Update className and courseName for all enrolled students
-    setStudents((prev) => {
-      const updated = prev.map((s) =>
-        s.classId === updatedClass.id
-          ? {
-              ...s,
-              className: updatedClass.name,
-              courseName: updatedClass.courseName,
-            }
-          : s
-      );
-      const classSts = updated.filter((s) => s.classId === updatedClass.id);
-      if (classSts.length > 0) saveBatchDocuments('students', classSts);
-      return updated;
-    });
-
-    // Sync exams records if any
+    // 4. Sync exams records if any
     setExams((prev) => {
       const updated = prev.map((ex) =>
         ex.classId === updatedClass.id
@@ -814,7 +893,7 @@ export default function App() {
       return updated;
     });
 
-    // Sync contactNotes if any
+    // 5. Sync contactNotes if any
     setContactNotes((prev) => {
       const updated = prev.map((cn) =>
         cn.classId === updatedClass.id
@@ -828,6 +907,17 @@ export default function App() {
       if (classCns.length > 0) saveBatchDocuments('contactNotes', classCns);
       return updated;
     });
+
+    // 6. Toast summary
+    const msg = [
+      `Đã lưu cập nhật lớp ${updatedClass.name}!`,
+      newCreatedCount > 0 ? `+${newCreatedCount} HV mới` : null,
+      modifiedCount > 0 ? `Đã đồng bộ ${modifiedCount} học viên` : null,
+    ]
+      .filter(Boolean)
+      .join(' • ');
+
+    showToast(msg);
   };
 
   // Handler: Add Student

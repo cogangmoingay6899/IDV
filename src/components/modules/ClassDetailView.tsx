@@ -75,7 +75,11 @@ interface ClassDetailViewProps {
   onSaveAttendance?: (records: AttendanceRecord[]) => void;
   onAddTeacher?: (teacher: Teacher) => void;
   onAddExamScore?: (exam: ExamScore) => void;
-  onUpdateClass?: (updatedClass: ClassGroup) => void;
+  onUpdateClass?: (
+    updatedClass: ClassGroup,
+    modifiedStudents?: Student[],
+    newPastedStudents?: { name: string; phone?: string; note?: string; customTuitionFee?: number }[]
+  ) => void;
   onBack: () => void;
   onEnrollStudent: (classId: string, studentIdOrData: string | Student) => void;
   onRemoveStudent: (classId: string, studentId: string) => void;
@@ -3637,9 +3641,10 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
           classGroup={classGroup}
           teachers={teachers}
           courses={courses}
-          onUpdateClass={(updated) => {
-            onUpdateClass(updated);
-            setToastMessage(`Đã cập nhật tên lớp "${updated.name}" & khóa học thành công!`);
+          students={allStudents}
+          onUpdateClass={(updated, modifiedSts, newPasted) => {
+            onUpdateClass(updated, modifiedSts, newPasted);
+            setToastMessage(`Đã cập nhật tên lớp "${updated.name}" & danh sách học viên thành công!`);
             setTimeout(() => setToastMessage(null), 3500);
           }}
         />
