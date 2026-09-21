@@ -21,6 +21,7 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowUpDown,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { ClassGroup, Teacher, CurriculumCourse, Student } from '../../types';
 import {
@@ -41,6 +42,7 @@ interface CreateClassModalProps {
   students?: Student[];
   defaultBranch?: string;
   onAddClass: (newClass: ClassGroup, selectedStudentIds?: string[]) => void;
+  onAddBatchClasses?: (classes: ClassGroup[]) => void;
   onSave?: (newClass: ClassGroup, selectedStudentIds?: string[]) => void;
 }
 
@@ -52,16 +54,19 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
   students = [],
   defaultBranch = 'Cơ sở 1 - Tô Hiệu (Hải Phòng)',
   onAddClass,
+  onAddBatchClasses,
   onSave,
 }) => {
+  const [activeMode, setActiveMode] = useState<'manual' | 'excel'>('manual');
+  const [excelRawText, setExcelRawText] = useState('');
   const [selectedCourseLevel, setSelectedCourseLevel] = useState<CourseLevelKey>('Khóa 1');
   const [selectedSchedulePreset, setSelectedSchedulePreset] = useState<string>('t2_t5_ca1');
   const [offDates, setOffDates] = useState<string[]>([]);
   const [newOffDateInput, setNewOffDateInput] = useState<string>('');
 
   const [formData, setFormData] = useState({
-    code: `IDV-L${Math.floor(10 + Math.random() * 90)}`,
-    name: 'Lớp PRE',
+    code: `IDV-L74`,
+    name: 'Lớp 74',
     courseName: 'PRE',
     courseId: 'crs-pre',
     courseLevel: 'Khóa 1' as CourseLevelKey,
@@ -105,7 +110,6 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
       courseLevel: levelKey,
       courseName: config.name,
       totalSessions: config.totalSessions,
-      name: `Lớp ${config.name}`,
     }));
   };
 
@@ -259,6 +263,78 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
     onClose();
   };
 
+  const handleBatchExcelImport = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!excelRawText.trim()) {
+      alert('Vui lòng dán dữ liệu từ Excel hoặc Google Sheets!');
+      return;
+    }
+    const lines = excelRawText.split('\n').filter((l) => l.trim().length > 0);
+    const newClasses: ClassGroup[] = [];
+    let startIdx = 0;
+    if (lines[0].toLowerCase().includes('mã') || lines[0].toLowerCase().includes('tên')) {
+      startIdx = 1;
+    }
+
+    for (let i = startIdx; i < lines.length; i++) {
+      const line = lines[i];
+      const cols = line.split('\t').length > 1 ? line.split('\t') : line.split(',');
+      if (cols.length >= 2) {
+        const code = cols[0]?.trim() || `IDV-L${Math.floor(100 + Math.random() * 900)}`;
+        const name = cols[1]?.trim() || `Lớp ${code}`;
+        const courseName = cols[2]?.trim() || 'PRE';
+        const branch = cols[3]?.trim() || defaultBranch;
+        const teacherName = cols[4]?.trim() || teachers[0]?.name || 'Tâm Vương';
+        const assistantTeacherName = cols[5]?.trim() || '';
+        const room = cols[6]?.trim() || 'Phòng 201';
+        const schedule = cols[7]?.trim() || SCHEDULE_PRESETS[0].name;
+        const startDate = cols[8]?.trim() || new Date().toISOString().split('T')[0];
+        const maxStudents = Number(cols[9]?.trim()) || 15;
+        const tuitionFee = Number(cols[10]?.trim()) || 14500000;
+
+        const teacherList = teacherName.split(/[,;&+]/).map((t) => t.trim()).filter((t) => t.length > 0);
+
+        newClasses.push({
+          id: `cls-${Date.now()}-${i}`,
+          code: code.toUpperCase(),
+          name,
+          courseId: 'crs-custom',
+          courseName,
+          courseLevel: 'Khóa 1',
+          currentTermName: 'Khóa 1',
+          branch,
+          teacherId: teachers.find((t) => t.name === teacherList[0])?.id || 't-multi',
+          teacherName: teacherList.join(', '),
+          teacherNames: teacherList,
+          assistantTeacherName: assistantTeacherName || undefined,
+          room,
+          schedule,
+          startDate,
+          endDate: '',
+          totalSessions: 32,
+          completedSessions: 0,
+          maxStudents,
+          currentStudents: 0,
+          tuitionFee,
+          status: 'Đang diễn ra',
+          offDates: [],
+        });
+      }
+    }
+
+    if (newClasses.length === 0) {
+      alert('Không phân tích được dữ liệu. Kiểm tra lại định dạng cột.');
+      return;
+    }
+
+    if (onAddBatchClasses) {
+      onAddBatchClasses(newClasses);
+    } else {
+      newClasses.forEach((c) => onAddClass(c));
+    }
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 md:p-6 flex justify-center items-start">
       <div className="bg-white rounded-3xl border border-purple-100 shadow-2xl w-full max-w-3xl my-2 sm:my-4 md:my-6 flex flex-col min-h-0 max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-2.5rem)] overflow-hidden animate-in fade-in zoom-in-95">
@@ -290,9 +366,71 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
         </div>
 
         {/* Modal Form */}
-        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <form onSubmit={activeMode === 'manual' ? handleSubmit : handleBatchExcelImport} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {/* Mode Switcher Tabs */}
+          <div className="bg-slate-100 p-2 border-b border-slate-200 shrink-0">
+            <div className="flex items-center gap-2 max-w-md mx-auto bg-white p-1 rounded-2xl shadow-xs border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setActiveMode('manual')}
+                className={`flex-1 py-2 text-xs font-extrabold rounded-xl transition-all ${
+                  activeMode === 'manual'
+                    ? 'bg-purple-700 text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                📝 Tạo thủ công 1 lớp
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMode('excel')}
+                className={`flex-1 py-2 text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                  activeMode === 'excel'
+                    ? 'bg-emerald-700 text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>📊 Nhập từ Excel / Google Sheets</span>
+              </button>
+            </div>
+          </div>
+
           {/* Scrollable Form Body */}
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 sm:space-y-5 text-xs">
+          {activeMode === 'excel' ? (
+            <div className="space-y-4 py-2">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-emerald-900 space-y-2">
+                <h4 className="font-extrabold text-sm flex items-center gap-2 text-emerald-800">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                  <span>Hướng dẫn nhập danh sách lớp từ Google Sheets / Excel</span>
+                </h4>
+                <p className="text-xs text-emerald-700 leading-relaxed">
+                  Sao chép các cột từ bảng Google Sheets hoặc Excel của bạn (bao gồm tiêu đề hoặc dữ liệu trực tiếp) theo thứ tự:
+                </p>
+                <div className="bg-white/80 p-2 rounded-xl font-mono text-[11px] text-slate-700 border border-emerald-200 overflow-x-auto">
+                  Mã lớp | Tên lớp | Khóa học | Cơ sở | Giảng viên | Trợ giảng | Phòng | Lịch học | Ngày bắt đầu | Sĩ số | Học phí
+                </div>
+                <p className="text-[11px] text-emerald-700 font-medium">
+                  💡 Bạn có thể dán trực tiếp hàng chục lớp học cùng lúc vào ô bên dưới. Giáo viên có tên trong danh sách sẽ tự động được phân quyền xem lớp đó.
+                </p>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1.5">
+                  Dán dữ liệu Excel / Google Sheets vào đây <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={10}
+                  value={excelRawText}
+                  onChange={(e) => setExcelRawText(e.target.value)}
+                  placeholder="Dán dữ liệu bảng từ Excel / Google Sheets (Tab-separated)..."
+                  className="w-full font-mono text-xs bg-slate-50 border border-slate-200 rounded-2xl p-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                ></textarea>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 sm:space-y-5">
           {/* Row 1: Code & Name */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -848,7 +986,9 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
               </div>
             )}
           </div>
-        </div>
+          </div>
+          )}
+          </div>
 
         {/* Action Buttons Fixed Footer (Luôn hiển thị ở dưới cùng, không bị trôi) */}
         <div className="shrink-0 bg-slate-50 border-t border-slate-200 px-5 py-3.5 sm:px-6 flex items-center justify-between gap-3 shadow-xs">

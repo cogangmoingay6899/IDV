@@ -22,7 +22,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-29",
     "code": "IDV-L29",
-    "name": "Lớp 29 - IELTS Junior Khởi Động",
+    "name": "Lớp 29",
     "courseId": "crs-1",
     "courseName": "Khóa 1 (IELTS Foundation 3.0 - 4.5)",
     "courseLevel": "Khóa 1",
@@ -45,7 +45,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-41",
     "code": "IDV-L41",
-    "name": "Lớp 41 - IELTS Foundation Cơ Bản",
+    "name": "Lớp 41",
     "courseId": "crs-2",
     "courseName": "Khóa 2 (IELTS Pre-Intermediate 4.5 - 5.5)",
     "courseLevel": "Khóa 2",
@@ -68,7 +68,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-50",
     "code": "IDV-L50",
-    "name": "Lớp 50 - IELTS Nền Tảng 4.0 (Đang ở Buổi 29)",
+    "name": "Lớp 50",
     "courseId": "crs-3",
     "courseName": "Khóa 1 (IELTS Foundation 3.0 - 4.5)",
     "courseLevel": "Khóa 1",
@@ -91,7 +91,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-58",
     "code": "IDV-L58",
-    "name": "Lớp 58 - IELTS Giao Tiếp Học Thuật",
+    "name": "Lớp 58",
     "courseId": "crs-4",
     "courseName": "IELTS Speaking & Academic Communication",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -112,7 +112,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-59",
     "code": "IDV-L59",
-    "name": "Lớp 59 - IELTS Pre-Intermediate 5.0",
+    "name": "Lớp 59",
     "courseId": "crs-1",
     "courseName": "IELTS Pre-Intermediate (4.5 - 5.5)",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -133,7 +133,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-61",
     "code": "IDV-L61",
-    "name": "Lớp 61 - IELTS Thiếu Niên 5.0+",
+    "name": "Lớp 61",
     "courseId": "crs-2",
     "courseName": "IELTS Junior Pre-Inter (4.5 - 5.5)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -154,7 +154,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-63",
     "code": "IDV-L63",
-    "name": "Lớp 63 - IELTS Intermediate 5.5+",
+    "name": "Lớp 63",
     "courseId": "crs-3",
     "courseName": "IELTS Intermediate (5.0 - 6.0)",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -175,7 +175,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-64",
     "code": "IDV-L64",
-    "name": "Lớp 64 - IELTS Pre-Intermediate (4.5+)",
+    "name": "Lớp 64",
     "courseId": "crs-4",
     "courseName": "IELTS Pre-Intermediate (4.5 - 5.5)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -196,7 +196,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-65",
     "code": "IDV-L65",
-    "name": "Lớp 65 - IELTS Giao Tiếp & Speaking (5.0+)",
+    "name": "Lớp 65",
     "courseId": "crs-1",
     "courseName": "IELTS Speaking & Pronunciation",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -217,7 +217,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-66",
     "code": "IDV-L66",
-    "name": "Lớp 66 - IELTS Intermediate 5.5+",
+    "name": "Lớp 66",
     "courseId": "crs-2",
     "courseName": "IELTS Intermediate (5.0 - 6.0)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -238,7 +238,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-67",
     "code": "IDV-L67",
-    "name": "Lớp 67 - IELTS Intensive 6.5+ Bứt Phá",
+    "name": "Lớp 67",
     "courseId": "crs-3",
     "courseName": "IELTS Intensive 6.5+ Bứt Phá",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -259,7 +259,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-68",
     "code": "IDV-L68",
-    "name": "Lớp 68 - IELTS Junior Foundation (4.0+)",
+    "name": "Lớp 68",
     "courseId": "crs-4",
     "courseName": "IELTS Junior Foundation (3.5 - 4.5)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -280,7 +280,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-69",
     "code": "IDV-L69",
-    "name": "Lớp 69 - IELTS Cấp Tốc 7.0+",
+    "name": "Lớp 69",
     "courseId": "crs-1",
     "courseName": "IELTS Fast-Track 7.0+",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -301,7 +301,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-70",
     "code": "IDV-L70",
-    "name": "Lớp 70 - IELTS Foundation Nền Tảng",
+    "name": "Lớp 70",
     "courseId": "crs-2",
     "courseName": "IELTS Foundation (3.5 - 4.5)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -322,7 +322,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-71",
     "code": "IDV-L71",
-    "name": "Lớp 71 - IELTS Junior Master (5.0+)",
+    "name": "Lớp 71",
     "courseId": "crs-3",
     "courseName": "IELTS Junior (4.5 - 5.5)",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -343,7 +343,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-72",
     "code": "IDV-L72",
-    "name": "Lớp 72 - IELTS 4 Kỹ Năng Chuyên Sâu",
+    "name": "Lớp 72",
     "courseId": "crs-4",
     "courseName": "IELTS Intensive 4 Skills",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -364,7 +364,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-73",
     "code": "IDV-L73",
-    "name": "Lớp 73 - IELTS Master 7.5+ Đỉnh Cao",
+    "name": "Lớp 73",
     "courseId": "crs-1",
     "courseName": "IELTS Master 7.0 - 8.0+",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -385,7 +385,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-74",
     "code": "IDV-L74",
-    "name": "Lớp 74 - IELTS Writing & Speaking Pro 7.0+",
+    "name": "Lớp 74",
     "courseId": "crs-2",
     "courseName": "IELTS Writing & Speaking Chuyên Sâu",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -406,7 +406,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-75",
     "code": "IDV-L75",
-    "name": "Lớp 75 - IELTS Advanced Skills 7.0+",
+    "name": "Lớp 75",
     "courseId": "crs-3",
     "courseName": "IELTS Advanced (6.5 - 7.5)",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -427,7 +427,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-76",
     "code": "IDV-L76",
-    "name": "Lớp 76 - IELTS Comprehensive 6.5+",
+    "name": "Lớp 76",
     "courseId": "crs-4",
     "courseName": "IELTS Comprehensive 6.5+",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -448,7 +448,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-77",
     "code": "IDV-L77",
-    "name": "Lớp 77 - IELTS Intensive Skills 7.0+",
+    "name": "Lớp 77",
     "courseId": "crs-1",
     "courseName": "IELTS Intensive 6.5 - 7.5",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -469,7 +469,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-78",
     "code": "IDV-L78",
-    "name": "Lớp 78 - Luyện Đề IELTS 6.5+ Thực Chiến",
+    "name": "Lớp 78",
     "courseId": "crs-2",
     "courseName": "Luyện Đề IELTS Chuyên Sâu",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -490,7 +490,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-79",
     "code": "IDV-L79",
-    "name": "Lớp 79 - IELTS Fast-Track 6.5+",
+    "name": "Lớp 79",
     "courseId": "crs-3",
     "courseName": "IELTS Fast-Track 6.5+",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -511,7 +511,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-80",
     "code": "IDV-L80",
-    "name": "Lớp 80 - IELTS Khởi Động Nền Tảng",
+    "name": "Lớp 80",
     "courseId": "crs-4",
     "courseName": "IELTS Foundation (3.5 - 4.5)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -532,7 +532,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-81",
     "code": "IDV-L81",
-    "name": "Lớp 81 - IELTS Reading & Listening 7.5+",
+    "name": "Lớp 81",
     "courseId": "crs-1",
     "courseName": "IELTS Reading & Listening Bứt Phá",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -553,7 +553,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-82",
     "code": "IDV-L82",
-    "name": "Lớp 82 - IELTS Target 7.0+ Cam Kết",
+    "name": "Lớp 82",
     "courseId": "crs-2",
     "courseName": "IELTS Target 7.0+",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -574,7 +574,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-83",
     "code": "IDV-L83",
-    "name": "Lớp 83 - IELTS Academic Master",
+    "name": "Lớp 83",
     "courseId": "crs-3",
     "courseName": "IELTS Master 7.0 - 8.0+",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -595,7 +595,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-84",
     "code": "IDV-L84",
-    "name": "Lớp 84 - IELTS Pre-Master 6.5+",
+    "name": "Lớp 84",
     "courseId": "crs-4",
     "courseName": "IELTS Pre-Master (6.0 - 7.0)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -616,7 +616,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-85",
     "code": "IDV-L85",
-    "name": "Lớp 85 - Luyện Thi IELTS Cấp Tốc 7.0+",
+    "name": "Lớp 85",
     "courseId": "crs-1",
     "courseName": "IELTS Cấp Tốc Bứt Phá Band Điểm",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -637,7 +637,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-86",
     "code": "IDV-L86",
-    "name": "Lớp 86 - IELTS Junior Foundation 4.0+",
+    "name": "Lớp 86",
     "courseId": "crs-2",
     "courseName": "IELTS Junior Foundation (3.5 - 4.5)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -658,7 +658,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-87",
     "code": "IDV-L87",
-    "name": "Lớp 87 - IELTS 5.5 đến 6.5 Bứt Phá",
+    "name": "Lớp 87",
     "courseId": "crs-3",
     "courseName": "IELTS Intermediate (5.5 - 6.5)",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -679,7 +679,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-88",
     "code": "IDV-L88",
-    "name": "Lớp 88 - IELTS Academic Writing Pro",
+    "name": "Lớp 88",
     "courseId": "crs-4",
     "courseName": "IELTS Writing Chuyên Sâu",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -700,7 +700,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-89",
     "code": "IDV-L89",
-    "name": "Lớp 89 - IELTS Speaking & Pronunciation Master",
+    "name": "Lớp 89",
     "courseId": "crs-1",
     "courseName": "IELTS Speaking & Phát Âm Chuẩn",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -721,7 +721,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-90",
     "code": "IDV-L90",
-    "name": "Lớp 90 - IELTS Listening & Reading 8.0+",
+    "name": "Lớp 90",
     "courseId": "crs-2",
     "courseName": "IELTS Listening & Reading Mastery",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -742,7 +742,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-91",
     "code": "IDV-L91",
-    "name": "Lớp 91 - IELTS Foundation K02",
+    "name": "Lớp 91",
     "courseId": "crs-3",
     "courseName": "IELTS Foundation (3.5 - 4.5)",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -763,7 +763,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-92",
     "code": "IDV-L92",
-    "name": "Lớp 92 - IELTS Pre-Intermediate K02",
+    "name": "Lớp 92",
     "courseId": "crs-4",
     "courseName": "IELTS Pre-Intermediate (4.5 - 5.5)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -784,7 +784,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-93",
     "code": "IDV-L93",
-    "name": "Lớp 93 - Luyện Thi IELTS 7.5+ Chuyên Sâu",
+    "name": "Lớp 93",
     "courseId": "crs-1",
     "courseName": "Luyện Đề IELTS 7.5+ Master",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -805,7 +805,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-94",
     "code": "IDV-L94",
-    "name": "Lớp 94 - IELTS Masterclass 8.0+",
+    "name": "Lớp 94",
     "courseId": "crs-2",
     "courseName": "IELTS Masterclass 8.0+",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -826,7 +826,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-drill",
     "code": "IDV-DRILL",
-    "name": "Lớp Drill Kỹ Năng IELTS (Drill36 & Drill47)",
+    "name": "Lớp Drill",
     "courseId": "crs-3",
     "courseName": "IELTS Skill Drills (Nghe - Nói - Đọc - Viết)",
     "branch": "Cơ sở 2 - Kiến An (Hải Phòng)",
@@ -847,7 +847,7 @@ export const INITIAL_CLASSES: ClassGroup[] = [
   {
     "id": "cls-luyende",
     "code": "IDV-LUYENDE",
-    "name": "Lớp Luyện Đề IELTS Chuyên Sâu",
+    "name": "Lớp Luyện Đề",
     "courseId": "crs-4",
     "courseName": "Luyện Đề IELTS Thực Chiến (6.5 - 7.5+)",
     "branch": "Cơ sở 1 - Tô Hiệu (Hải Phòng)",
@@ -6228,7 +6228,7 @@ export const INITIAL_COURSES: CurriculumCourse[] = [
   {
     "id": "crs-drill",
     "code": "IDV-DRILL",
-    "name": "LUYỆN ĐỀ DRILL",
+    "name": "Lớp Drill",
     "level": "Khóa 4 (Intensive Drill 6.5 - 7.5+)",
     "durationMonths": 4,
     "totalSessions": 32,

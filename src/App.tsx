@@ -644,6 +644,30 @@ export default function App() {
     };
   }, [students, classes, transactions, leads, placementTests]);
 
+  const effectiveClasses = useMemo(() => {
+    if (isTeacher && currentUser?.name) {
+      const tName = currentUser.name.toLowerCase();
+      return classes.filter((c) => {
+        const match =
+          (c.teacherName && c.teacherName.toLowerCase().includes(tName)) ||
+          (c.assistantTeacherName && c.assistantTeacherName.toLowerCase().includes(tName)) ||
+          (c.teacherNames && c.teacherNames.some((tn) => tn.toLowerCase().includes(tName)));
+        return match;
+      });
+    }
+    return classes;
+  }, [classes, currentUser, isTeacher]);
+
+  const handleBatchClasses = (importedClasses: ClassGroup[]) => {
+    const existingIds = new Set(classes.map((c) => c.id));
+    const newOnes = importedClasses.filter((c) => !existingIds.has(c.id));
+    if (newOnes.length > 0) {
+      saveBatchDocuments('classes', newOnes);
+      setClasses((prev) => [...prev, ...newOnes]);
+      showToast(`Đã nhập thành công ${newOnes.length} lớp học mới từ Google Sheets/Excel!`);
+    }
+  };
+
   // Handler: Create Class
   const handleCreateClass = (newClass: ClassGroup, selectedStudentIds?: string[]) => {
     let studentCount = 0;
@@ -1712,7 +1736,7 @@ export default function App() {
         {currentModule === 'exams' && (
           <ExamsModule
             exams={exams}
-            classes={classes}
+            classes={effectiveClasses}
             students={students}
             onAddExamScore={handleAddExamScore}
             onOpenCreateClass={() => setIsCreateClassModalOpen(true)}
@@ -1724,7 +1748,7 @@ export default function App() {
         {currentModule === 'students' && (
           <StudentsModule
             students={students}
-            classes={classes}
+            classes={effectiveClasses}
             teachers={teachers}
             courses={courses}
             attendanceRecords={attendance}
@@ -1892,6 +1916,7 @@ export default function App() {
         isOpen={isCreateClassModalOpen}
         onClose={() => setIsCreateClassModalOpen(false)}
         onAddClass={handleCreateClass}
+        onAddBatchClasses={handleBatchClasses}
         onSave={handleCreateClass}
         teachers={teachers}
         courses={courses}
