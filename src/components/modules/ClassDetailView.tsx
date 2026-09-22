@@ -438,7 +438,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   // Flexible multiple skills in a single session e.g. ['Từ vựng', 'Nghe', 'Đọc']
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['Từ vựng', 'Nghe', 'Đọc']);
   const [lessonTopic, setLessonTopic] = useState<string>('');
-  const [enableOverallScore, setEnableOverallScore] = useState<boolean>(true);
+  const [enableOverallScore, setEnableOverallScore] = useState<boolean>(false);
   const [overallScoreType, setOverallScoreType] = useState<'average' | 'ielts_band'>('average');
 
   // Total questions per skill (e.g., Nghe: 40, Đọc: 40)
@@ -3651,6 +3651,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
           teachers={teachers}
           courses={courses}
           students={allStudents}
+          currentUser={currentUser}
           onUpdateClass={(updated, modifiedSts, newPasted) => {
             onUpdateClass(updated, modifiedSts, newPasted);
             setToastMessage(`Đã cập nhật tên lớp "${updated.name}" & danh sách học viên thành công!`);

@@ -45,16 +45,25 @@ import {
   Edit3,
   RefreshCw,
   UploadCloud,
+  Code,
+  FileSpreadsheet,
+  Table,
 } from 'lucide-react';
 import { PlacementTest, ClassGroup, Student, CurriculumCourse, AuthUser } from '../../types';
 import { OnlinePlacementTestForm } from './OnlinePlacementTestForm';
 import { formatDateVN } from '../../utils/courseSchedule';
-import { fetchCollection } from '../../lib/firestoreService';
+import { fetchCollection, saveDocument } from '../../lib/firestoreService';
 import {
   evaluatePlacementResult,
   generateParentReportText,
   PRESET_COMMENTS,
 } from '../../utils/placementEvaluation';
+import {
+  SAMPLE_GOOGLE_APPS_SCRIPT,
+  generatePlacementSheetTSV,
+  generatePlacementSheetCSV,
+} from '../../utils/placementGoogleSheets';
+import { parseCSVRows, convertRowsToPlacementTests } from '../../utils/placementCsvImporter';
 import {
   getPlacementTestUrl,
   getZaloShareMessage,
@@ -156,6 +165,21 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
     'https://docs.google.com/forms/d/e/1FAIpQLScNKToDFg0IoNjhOJl1SWQhc-sowh5olL2V3ejwSbMc6U6fCw/viewform?usp=header'
   );
   const [customFormTitle, setCustomFormTitle] = useState('BÀI KIỂM TRA ĐẦU VÀO IELTS CHUẨN QUỐC TẾ - IELTS DƯƠNG VŨ');
+
+  // Google Sheets & Webhook Integration States
+  const [googleSheetUrl, setGoogleSheetUrl] = useState<string>(() => {
+    return localStorage.getItem('ielts_placement_sheet_url') || 'https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit?usp=sharing';
+  });
+  const [tempGoogleSheetUrl, setTempGoogleSheetUrl] = useState<string>(googleSheetUrl);
+  const [showGoogleSheetModal, setShowGoogleSheetModal] = useState<boolean>(false);
+  const [showAppsScriptModal, setShowAppsScriptModal] = useState<boolean>(false);
+  const [showImportCsvModal, setShowImportCsvModal] = useState<boolean>(false);
+  const [copiedScript, setCopiedScript] = useState<boolean>(false);
+  const [rawCsvInput, setRawCsvInput] = useState<string>('');
+  const [isImportingCsv, setIsImportingCsv] = useState<boolean>(false);
+  const [webhookUrl, setWebhookUrl] = useState<string>(() => {
+    return localStorage.getItem('ielts_placement_webhook_url') || '';
+  });
 
   // Anti-Cheat Monitoring States for Online Test
   const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
@@ -676,6 +700,107 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
     setAssigningTest(null);
   };
 
+  // --- GOOGLE SHEETS & WEBHOOK HANDLERS ---
+  const handleSaveGoogleSheetUrl = () => {
+    const trimmed = tempGoogleSheetUrl.trim();
+    if (!trimmed) {
+      showToast('Vui lòng nhập link liên kết Google Sheet hợp lệ!');
+      return;
+    }
+    if (trimmed.startsWith('Timestamp') || trimmed.includes('\n') || (trimmed.includes(',') && !trimmed.startsWith('http'))) {
+      setRawCsvInput(trimmed);
+      setShowGoogleSheetModal(false);
+      setShowImportCsvModal(true);
+      showToast('💡 Phát hiện bạn vừa dán dữ liệu bảng tính Google Sheet! Đang chuyển sang màn hình nhập dữ liệu...');
+      return;
+    }
+    setGoogleSheetUrl(trimmed);
+    localStorage.setItem('ielts_placement_sheet_url', trimmed);
+    setShowGoogleSheetModal(false);
+    showToast('Đã lưu link liên kết Google Sheet thành công!');
+  };
+
+  const handleOpenGoogleSheet = () => {
+    if (!googleSheetUrl) {
+      setShowGoogleSheetModal(true);
+      return;
+    }
+    window.open(googleSheetUrl, '_blank');
+  };
+
+  const handleCopyGoogleSheetsTSV = () => {
+    const tsvContent = generatePlacementSheetTSV(placementTests);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tsvContent).then(() => {
+        showToast('📋 Đã sao chép toàn bộ 57 cột vào clipboard! Mở Google Sheet và nhấn Ctrl+V.');
+      }).catch(() => {
+        const textArea = document.createElement('textarea');
+        textArea.value = tsvContent;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          showToast('📋 Đã sao chép 57 cột! Mở Google Sheet và nhấn Ctrl+V.');
+        } catch (e) {}
+        document.body.removeChild(textArea);
+      });
+    }
+  };
+
+  const handleImportCsvData = async () => {
+    if (!rawCsvInput.trim()) {
+      showToast('⚠️ Vui lòng dán dữ liệu CSV hoặc bảng tính Google Sheet!');
+      return;
+    }
+    try {
+      setIsImportingCsv(true);
+      const rows = parseCSVRows(rawCsvInput.trim());
+      if (rows.length < 2) {
+        showToast('⚠️ Dữ liệu không hợp lệ hoặc không có dòng học viên nào.');
+        setIsImportingCsv(false);
+        return;
+      }
+      const imported = convertRowsToPlacementTests(rows);
+      if (imported.length === 0) {
+        showToast('⚠️ Không tìm thấy thông tin thí sinh nào trong dữ liệu.');
+        setIsImportingCsv(false);
+        return;
+      }
+
+      for (const t of imported) {
+        onAddTest(t);
+        saveDocument('placementTests', t).catch(() => {});
+      }
+
+      try {
+        const existing: PlacementTest[] = JSON.parse(
+          localStorage.getItem('idv_submitted_candidate_placement_tests') || '[]'
+        );
+        const merged = [
+          ...imported,
+          ...existing.filter((e) => !imported.some((i) => i.candidateName === e.candidateName && i.phone === e.phone)),
+        ];
+        localStorage.setItem('idv_submitted_candidate_placement_tests', JSON.stringify(merged.slice(0, 500)));
+      } catch (e) {}
+
+      showToast(`🎉 Đã nhập thành công ${imported.length} bài thi từ Google Sheet vào hệ thống!`);
+      setShowImportCsvModal(false);
+      setRawCsvInput('');
+    } catch (err: any) {
+      console.error(err);
+      showToast('Lỗi khi nhập dữ liệu: ' + err.message);
+    } finally {
+      setIsImportingCsv(false);
+    }
+  };
+
+  const handleSaveWebhookUrl = () => {
+    setWebhookUrl(webhookUrl.trim());
+    localStorage.setItem('ielts_placement_webhook_url', webhookUrl.trim());
+    setShowAppsScriptModal(false);
+    showToast('Đã lưu cấu hình Webhook Google Apps Script thành công!');
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast Notification */}
@@ -895,6 +1020,96 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
       {/* TAB 1: DANH SÁCH BÀI TEST & PHÂN LỚP CHỜ */}
       {activeTab === 'list' && (
         <div className="space-y-4">
+          {/* GOOGLE SHEETS & WEBHOOK AUTO-SYNC BANNER */}
+          <div className="bg-gradient-to-r from-emerald-900 via-slate-900 to-purple-950 p-4 sm:p-5 rounded-3xl text-white shadow-lg space-y-3 border border-emerald-500/30">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+                  <h3 className="text-sm font-extrabold text-white">
+                    Tự Động Cập Nhật Vào Google Sheet (57 Cột Chi Tiết)
+                  </h3>
+                  <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    {webhookUrl ? 'Đã kích hoạt Webhook tự động' : 'Chưa cài Webhook'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                  Cấu hình Webhook để mỗi khi học sinh làm test xong và nộp bài, hệ thống sẽ tự động thêm ngay 1 dòng với đủ 57 cột vào Google Sheet của bạn.
+                </p>
+              </div>
+
+              {/* Action Buttons for Google Sheets & Webhook */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setShowAppsScriptModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-black shadow-md border border-purple-400/40 transition-all cursor-pointer"
+                  title="Cấu hình Google Apps Script Webhook để tự động ghi vào Sheet khi thí sinh nộp bài"
+                >
+                  <Code className="w-4 h-4 text-purple-200" />
+                  <span>Webhook Tự Động</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenGoogleSheet}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer"
+                  title="Mở Google Sheet đã lưu để xem lại dữ liệu"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Mở Google Sheet</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleSheetModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold border border-white/15 transition-all cursor-pointer"
+                  title="Đổi hoặc cập nhật link liên kết Google Sheet"
+                >
+                  <Link2 className="w-3.5 h-3.5 text-emerald-300" />
+                  <span>Đổi Link Sheet</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowImportCsvModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-md transition-all cursor-pointer"
+                  title="Nhập dữ liệu bài thi từ bảng tính Google Sheet (Dán CSV hoặc TSV)"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>Nhập Từ Sheet (Dán CSV)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyGoogleSheetsTSV}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 rounded-xl text-xs font-bold border border-purple-400/30 transition-all cursor-pointer"
+                  title="Sao chép toàn bộ 57 cột để dán trực tiếp vào Google Sheet (Ctrl+V)"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Sao chép 57 Cột</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Link Info */}
+            <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 text-slate-300 truncate max-w-xl">
+                <span className="text-slate-400 shrink-0 font-medium">Link Sheet hiện tại:</span>
+                <span className="font-mono text-emerald-300 text-[11px] truncate underline cursor-pointer" onClick={handleOpenGoogleSheet}>
+                  {googleSheetUrl || 'Chưa lưu link Google Sheet'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-slate-300 text-[11px]">
+                <span className="text-slate-400">Webhook:</span>
+                <span className={`font-mono ${webhookUrl ? 'text-purple-300' : 'text-slate-500'}`}>
+                  {webhookUrl ? 'Đang hoạt động' : 'Chưa cài đặt'}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* LINK SHARING BANNER: Gửi học sinh làm bài & tự động lưu DB */}
           <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white p-5 rounded-3xl border border-purple-700/50 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-start sm:items-center gap-3.5">
@@ -2332,6 +2547,315 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
                 <Trash2 className="w-4 h-4" />
                 <span>Xác nhận xóa bài thi</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          MODAL: CẤU HÌNH LINK GOOGLE SHEET
+         ========================================================= */}
+      {showGoogleSheetModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">Cấu Hình Link Google Sheet</h3>
+                  <p className="text-[11px] text-slate-500">Lưu lại link bảng tính Google Sheet để xem và đối soát</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGoogleSheetModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-800">
+                Nhập đường dẫn (Link URL) Google Sheet của bạn:
+              </label>
+              <div className="relative">
+                <Link2 className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="url"
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  value={tempGoogleSheetUrl}
+                  onChange={(e) => setTempGoogleSheetUrl(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-sm text-slate-800 font-mono focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                💡 Hệ thống sẽ lưu link này vào bộ nhớ của bạn. Bạn có thể bấm &quot;Mở Google Sheet&quot; bất kỳ lúc nào để xem trực tiếp, hoặc nhấn &quot;Sao chép 57 cột&quot; rồi dán vào sheet.
+              </p>
+
+              {(tempGoogleSheetUrl.includes('\n') || tempGoogleSheetUrl.startsWith('Timestamp') || (tempGoogleSheetUrl.includes(',') && !tempGoogleSheetUrl.startsWith('http'))) && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-2">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span>Phát hiện bạn đang dán dữ liệu bảng tính thay vì link web URL!</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Bạn có thể chuyển dữ liệu này sang màn hình <strong>Nhập Học Viên</strong> để tự động đọc toàn bộ thí sinh, tự động chấm điểm và nạp vào hệ thống:
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRawCsvInput(tempGoogleSheetUrl);
+                      setShowGoogleSheetModal(false);
+                      setShowImportCsvModal(true);
+                    }}
+                    className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
+                  >
+                    Chuyển Sang Nhập Học Viên Từ Dữ Liệu Này Ngay
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  if (tempGoogleSheetUrl && tempGoogleSheetUrl.startsWith('http')) window.open(tempGoogleSheetUrl, '_blank');
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Mở thử link</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleSheetModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveGoogleSheetUrl}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-all cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Lưu Link Google Sheet</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          MODAL: CẤU HÌNH WEBHOOK GOOGLE APPS SCRIPT
+         ========================================================= */}
+      {showAppsScriptModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center">
+                  <Code className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">Cấu Hình Webhook Tự Động (Google Apps Script)</h3>
+                  <p className="text-[11px] text-slate-500">Giúp tự động thêm dòng vào Google Sheet ngay khi thí sinh nộp bài</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAppsScriptModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 overflow-y-auto pr-1 flex-1 text-xs text-slate-700">
+              <div className="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 space-y-2">
+                <div className="font-bold text-purple-950 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  <span>Hướng dẫn cài đặt webhook trong 1 phút:</span>
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-purple-900 leading-relaxed">
+                  <li>Mở Google Sheet của bạn &gt; Chọn menu <strong>Tiện ích mở rộng (Extensions)</strong> &gt; Chọn <strong>Apps Script</strong>.</li>
+                  <li>Xóa toàn bộ mã cũ, sau đó dán đoạn mã bên dưới vào.</li>
+                  <li>Bấm <strong>Triển khai (Deploy)</strong> &gt; <strong>Triển khai mới (New deployment)</strong> &gt; Chọn loại <strong>Ứng dụng web (Web app)</strong>.</li>
+                  <li>Mục <em>Who has access</em> chọn <strong>Anyone (Bất kỳ ai)</strong> &gt; Bấm <strong>Triển khai</strong> và cấp quyền.</li>
+                  <li>Copy đường link Web App nhận được và dán vào ô bên dưới!</li>
+                </ol>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 text-xs">Mã Google Apps Script (Copy để dán vào Sheet):</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(SAMPLE_GOOGLE_APPS_SCRIPT);
+                      setCopiedScript(true);
+                      showToast('Đã sao chép mã Apps Script!');
+                      setTimeout(() => setCopiedScript(false), 2500);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold text-[11px]"
+                  >
+                    {copiedScript ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedScript ? 'Đã sao chép!' : 'Sao chép mã'}</span>
+                  </button>
+                </div>
+                <textarea
+                  readOnly
+                  rows={6}
+                  value={SAMPLE_GOOGLE_APPS_SCRIPT}
+                  className="w-full bg-slate-900 text-purple-200 font-mono text-[11px] p-3 rounded-xl border border-slate-800 select-all"
+                />
+              </div>
+
+              <div className="space-y-1.5 pt-2 border-t border-slate-200">
+                <label className="font-bold text-slate-800 text-xs">Dán Link Web App đã Deploy (Webhook URL):</label>
+                <input
+                  type="url"
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:ring-2 focus:ring-purple-500/20"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setWebhookUrl('');
+                  localStorage.removeItem('ielts_placement_webhook_url');
+                  showToast('Đã xóa cấu hình webhook.');
+                }}
+                className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-rose-600"
+              >
+                Xóa webhook
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAppsScriptModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveWebhookUrl}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold shadow-md transition-all cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Lưu Webhook</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          MODAL: NHẬP DỮ LIỆU TỪ GOOGLE SHEET (CSV / TSV / PASTE)
+         ========================================================= */}
+      {showImportCsvModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <UploadCloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">Nhập Dữ Liệu Từ Google Sheet (Dán CSV / TSV)</h3>
+                  <p className="text-[11px] text-slate-500">Tự động đọc toàn bộ câu trả lời, tự động chấm điểm và lưu vào danh sách bài test</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportCsvModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 overflow-y-auto pr-1 flex-1">
+              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-950 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-amber-700" />
+                  <span>Cách lấy dữ liệu nhanh nhất (2 bước):</span>
+                </div>
+                <ol className="list-decimal list-inside text-[11px] text-amber-800 space-y-0.5 leading-relaxed">
+                  <li>Mở file Google Sheet chứa kết quả thi đầu vào &gt; Nhấn <strong>Ctrl + A</strong> (chọn toàn bộ bảng) &gt; Nhấn <strong>Ctrl + C</strong> (sao chép).</li>
+                  <li>Nhấp chuột vào ô bên dưới và nhấn <strong>Ctrl + V</strong> (dán vào) &gt; Bấm nút <strong>Tiến Hành Nhập Học Viên</strong>.</li>
+                </ol>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800">
+                    Dán nội dung bảng tính hoặc CSV vào đây:
+                  </label>
+                  {rawCsvInput && (
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      Đã phát hiện ~{Math.max(0, rawCsvInput.split('\n').filter(l => l.trim().length > 0).length - 1)} thí sinh
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  rows={9}
+                  placeholder="Dán dữ liệu từ Google Sheet (Timestamp, Score, Họ tên của em, Số điện thoại...)"
+                  value={rawCsvInput}
+                  onChange={(e) => setRawCsvInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3 text-xs text-slate-800 font-mono focus:ring-2 focus:ring-amber-500/20 focus:outline-none leading-relaxed"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => setRawCsvInput('')}
+                disabled={!rawCsvInput || isImportingCsv}
+                className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-rose-600 disabled:opacity-40 cursor-pointer"
+              >
+                Xóa ô nhập
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowImportCsvModal(false)}
+                  disabled={isImportingCsv}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImportCsvData}
+                  disabled={!rawCsvInput.trim() || isImportingCsv}
+                  className="flex items-center gap-2 px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-sm font-black shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isImportingCsv ? (
+                    <span className="w-4 h-4 rounded-full border-2 border-slate-950 border-t-transparent animate-spin" />
+                  ) : (
+                    <UploadCloud className="w-4 h-4" />
+                  )}
+                  <span>{isImportingCsv ? 'Đang phân tích...' : 'Tiến Hành Nhập Học Viên'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

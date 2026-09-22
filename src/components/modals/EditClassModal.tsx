@@ -31,8 +31,9 @@ import {
   UserCheck,
   Award,
   CalendarDays,
+  Lock,
 } from 'lucide-react';
-import { ClassGroup, Teacher, CurriculumCourse, Student } from '../../types';
+import { ClassGroup, Teacher, CurriculumCourse, Student, AuthUser } from '../../types';
 import {
   COURSE_LEVEL_CONFIGS,
   SCHEDULE_PRESETS,
@@ -55,6 +56,7 @@ interface EditClassModalProps {
     modifiedStudents?: Student[],
     newPastedStudents?: { name: string; phone?: string; note?: string; customTuitionFee?: number }[]
   ) => void;
+  currentUser?: AuthUser;
 }
 
 const formatVND = (amount: number) => {
@@ -69,6 +71,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
   courses,
   students = [],
   onUpdateClass,
+  currentUser,
 }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'students'>('info');
   const [selectedCourseLevel, setSelectedCourseLevel] = useState<CourseLevelKey>('Khóa 1');
@@ -98,6 +101,9 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
 
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
   const [customTeacherInput, setCustomTeacherInput] = useState('');
+
+  const isTeacher = currentUser?.role === 'teacher';
+  const [originalStudentIds, setOriginalStudentIds] = useState<Set<string>>(new Set());
 
   // Local state for existing class students being edited
   const [editableStudents, setEditableStudents] = useState<Student[]>([]);
@@ -173,6 +179,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
         (s) => s.classId === classGroup.id || s.className === classGroup.name
       );
       setEditableStudents(JSON.parse(JSON.stringify(classStudents)));
+      setOriginalStudentIds(new Set(classStudents.map((s) => s.id)));
       setPastedStudentsRawText('');
       setExcludedPastedIndices([]);
       setExpandedStudentId(classStudents.length > 0 ? classStudents[0].id : null);
@@ -1146,6 +1153,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                       const isExpanded = expandedStudentId === st.id;
                       const hasCustomFee = st.customTuitionFee && st.customTuitionFee !== formData.tuitionFee;
                       const effectiveTuition = st.customTuitionFee ?? (formData.tuitionFee || 14500000);
+                      const isStudentDisabled = isTeacher && originalStudentIds.has(st.id);
 
                       return (
                         <div
@@ -1232,6 +1240,12 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                           {/* Expanded Full Student Editor Details */}
                           {isExpanded && (
                             <div className="p-4 pt-2 border-t border-purple-100 bg-white rounded-b-2xl space-y-4 animate-in fade-in">
+                              {isStudentDisabled && (
+                                <div className="bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold p-2.5 rounded-xl flex items-center gap-1.5 shadow-sm">
+                                  <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>Tài khoản Giáo viên chỉ xem thông tin, không có quyền chỉnh sửa học viên đã có.</span>
+                                </div>
+                              )}
                               {/* Row 1: Personal Info & Contact */}
                               <div className="bg-slate-50/90 p-3.5 rounded-xl border border-slate-200 space-y-3">
                                 <span className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
@@ -1239,7 +1253,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                   <span>1. Thông tin cá nhân & Liên hệ</span>
                                 </span>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
                                   <div>
                                     <label className="text-[11px] font-bold text-slate-700 block mb-1">
                                       Họ và tên học viên <span className="text-rose-500">*</span>
@@ -1248,8 +1262,9 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       type="text"
                                       value={st.name}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'name', e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
                                       required
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
 
@@ -1260,7 +1275,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                     <select
                                       value={st.gender}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'gender', e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     >
                                       <option value="Nam">Nam</option>
                                       <option value="Nữ">Nữ</option>
@@ -1275,7 +1291,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       type="date"
                                       value={st.dob || ''}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'dob', e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
 
@@ -1288,7 +1305,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       placeholder="0912..."
                                       value={st.phone || ''}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'phone', e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
                                 </div>
@@ -1303,7 +1321,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       placeholder="VD: Nguyễn Văn Nam (Bố)"
                                       value={st.parentName || ''}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'parentName', e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
 
@@ -1316,7 +1335,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       placeholder="VD: 0987..."
                                       value={st.parentPhone || ''}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'parentPhone', e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-mono font-semibold text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
 
@@ -1329,7 +1349,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       placeholder="VD: Lê Chân, Hải Phòng"
                                       value={st.address || ''}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'address', e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
                                 </div>
@@ -1347,7 +1368,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                   </span>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
                                   <div>
                                     <label className="text-[11px] font-bold text-slate-700 block mb-1">
                                       Học phí riêng của học viên (VNĐ):
@@ -1358,32 +1379,35 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       placeholder={String(formData.tuitionFee)}
                                       value={st.customTuitionFee ?? formData.tuitionFee}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'customTuitionFee', Number(e.target.value))}
-                                      className="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs font-bold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                                      className="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs font-bold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                     {/* Quick Preset Buttons for Custom Fee */}
-                                    <div className="flex items-center gap-1 mt-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateStudentField(st.id, 'customTuitionFee', formData.tuitionFee)}
-                                        className="text-[9px] bg-white text-slate-600 hover:text-purple-700 px-1.5 py-0.5 rounded border border-slate-200 cursor-pointer"
-                                      >
-                                        Chuẩn ({formatVND(formData.tuitionFee)})
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateStudentField(st.id, 'customTuitionFee', Math.round(formData.tuitionFee * 0.9))}
-                                        className="text-[9px] bg-white text-amber-700 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 cursor-pointer"
-                                      >
-                                        -10%
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateStudentField(st.id, 'customTuitionFee', Math.round(formData.tuitionFee * 0.8))}
-                                        className="text-[9px] bg-white text-amber-700 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 cursor-pointer"
-                                      >
-                                        -20%
-                                      </button>
-                                    </div>
+                                    {!isStudentDisabled && (
+                                      <div className="flex items-center gap-1 mt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateStudentField(st.id, 'customTuitionFee', formData.tuitionFee)}
+                                          className="text-[9px] bg-white text-slate-600 hover:text-purple-700 px-1.5 py-0.5 rounded border border-slate-200 cursor-pointer"
+                                        >
+                                          Chuẩn ({formatVND(formData.tuitionFee)})
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateStudentField(st.id, 'customTuitionFee', Math.round(formData.tuitionFee * 0.9))}
+                                          className="text-[9px] bg-white text-amber-700 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 cursor-pointer"
+                                        >
+                                          -10%
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateStudentField(st.id, 'customTuitionFee', Math.round(formData.tuitionFee * 0.8))}
+                                          className="text-[9px] bg-white text-amber-700 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 cursor-pointer"
+                                        >
+                                          -20%
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
 
                                   <div>
@@ -1393,7 +1417,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                     <select
                                       value={st.tuitionStatus}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'tuitionStatus', e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     >
                                       <option value="Đã đóng đủ">Đã đóng đủ (0đ nợ)</option>
                                       <option value="Còn nợ">Còn nợ (Đóng 1 phần)</option>
@@ -1410,7 +1435,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       step={100000}
                                       value={st.balanceOwed || 0}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'balanceOwed', Number(e.target.value))}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-rose-700 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-bold text-rose-700 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
 
@@ -1425,7 +1451,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                         handleUpdateStudentField(st.id, 'tuitionPromiseDate', e.target.value);
                                         handleUpdateStudentField(st.id, 'tuitionDeadlineDate', e.target.value);
                                       }}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
                                 </div>
@@ -1443,7 +1470,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       handleUpdateStudentField(st.id, 'tuitionReminderNote', e.target.value);
                                       handleUpdateStudentField(st.id, 'tuitionPromiseNote', e.target.value);
                                     }}
-                                    className="w-full bg-white border border-amber-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none placeholder:text-slate-400"
+                                    className="w-full bg-white border border-amber-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none placeholder:text-slate-400 disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                    disabled={isStudentDisabled}
                                   />
                                 </div>
                               </div>
@@ -1464,7 +1492,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       type="date"
                                       value={st.examRegisterDate || ''}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'examRegisterDate', e.target.value)}
-                                      className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
 
@@ -1476,7 +1505,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       type="date"
                                       value={st.examDate || ''}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'examDate', e.target.value)}
-                                      className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs font-bold text-indigo-900 focus:outline-none"
+                                      className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs font-bold text-indigo-900 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     />
                                   </div>
 
@@ -1487,7 +1517,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                     <select
                                       value={st.status}
                                       onChange={(e) => handleUpdateStudentField(st.id, 'status', e.target.value)}
-                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:outline-none"
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
                                     >
                                       <option value="Đang học">Đang học</option>
                                       <option value="Bảo lưu">Bảo lưu</option>
@@ -1506,7 +1537,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                     placeholder="VD: Mục tiêu IELTS 6.5 Speaking; Cần chú ý phần phát âm và từ vựng B2..."
                                     value={st.note || ''}
                                     onChange={(e) => handleUpdateStudentField(st.id, 'note', e.target.value)}
-                                    className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none placeholder:text-slate-400"
+                                    className="w-full bg-white border border-indigo-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none placeholder:text-slate-400 disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                    disabled={isStudentDisabled}
                                   />
                                 </div>
                               </div>
@@ -1516,14 +1548,16 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                 <span className="text-[10px] text-slate-400">
                                   Mã hệ thống: <span className="font-mono">{st.id}</span>
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveStudentFromClass(st.id)}
-                                  className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-3 py-1 rounded-lg border border-rose-200 flex items-center gap-1 transition-colors cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Rút học viên này khỏi lớp</span>
-                                </button>
+                                {!isStudentDisabled && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveStudentFromClass(st.id)}
+                                    className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-3 py-1 rounded-lg border border-rose-200 flex items-center gap-1 transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Rút học viên này khỏi lớp</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )}

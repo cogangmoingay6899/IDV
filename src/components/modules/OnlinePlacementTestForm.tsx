@@ -91,6 +91,7 @@ import {
   getReceiptZaloText,
 } from '../../utils/placementReceipt';
 import { googleSignInForSheets, createNewSpreadsheet, appendToSpreadsheet } from '../../lib/googleSheetsApi';
+import { parseCSVRows, convertRowsToPlacementTests } from '../../utils/placementCsvImporter';
 
 // Default schedules for Placement Test Form (Editable by Manager)
 const DEFAULT_SCHEDULE_OPTIONS = [
@@ -410,6 +411,12 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   const [showColumnListModal, setShowColumnListModal] = useState<boolean>(false);
   const [showAppsScriptModal, setShowAppsScriptModal] = useState<boolean>(false);
   const [copiedScript, setCopiedScript] = useState<boolean>(false);
+  const [webhookUrl, setWebhookUrl] = useState<string>(() => {
+    return localStorage.getItem('ielts_placement_webhook_url') || '';
+  });
+  const [showImportCsvModal, setShowImportCsvModal] = useState<boolean>(false);
+  const [rawCsvInput, setRawCsvInput] = useState<string>('');
+  const [isImportingCsv, setIsImportingCsv] = useState<boolean>(false);
 
   // Scroll to top when section changes in student portal
   useEffect(() => {
@@ -1181,6 +1188,25 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
         console.warn('Direct Firestore save failed in OnlinePlacementTestForm:', err);
       });
 
+      // Send to Webhook (Google Apps Script) if configured
+      const savedWebhook = localStorage.getItem('ielts_placement_webhook_url');
+      if (savedWebhook && savedWebhook.trim()) {
+        const rowData = extractTestRowValues(newTest, placementTests.length);
+        fetch(savedWebhook, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            headers: PLACEMENT_SHEET_COLUMNS,
+            row: rowData,
+          }),
+        }).then(() => {
+          console.log('Successfully pushed data to Google Apps Script webhook');
+        }).catch((err) => {
+          console.warn('Failed to send to Google Apps Script webhook:', err);
+        });
+      }
+
       // 4. Clear live auto-draft since test is successfully submitted
       try {
         localStorage.removeItem('idv_placement_form_live_draft');
@@ -1318,14 +1344,72 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
 
   // --- 7. EXPORT & SYNC TO GOOGLE SHEETS (57 COLUMNS - EVERY ITEM AS A SEPARATE COLUMN) ---
   const handleSaveGoogleSheetUrl = () => {
-    if (!tempGoogleSheetUrl.trim()) {
+    const trimmed = tempGoogleSheetUrl.trim();
+    if (!trimmed) {
       showToast('Vui lòng nhập link liên kết Google Sheet hợp lệ!');
       return;
     }
-    setGoogleSheetUrl(tempGoogleSheetUrl.trim());
-    localStorage.setItem('ielts_placement_sheet_url', tempGoogleSheetUrl.trim());
+    // Check if the user accidentally pasted raw CSV/TSV table data instead of a URL
+    if (trimmed.startsWith('Timestamp') || trimmed.includes('\n') || (trimmed.includes(',') && !trimmed.startsWith('http'))) {
+      setRawCsvInput(trimmed);
+      setShowGoogleSheetModal(false);
+      setShowImportCsvModal(true);
+      showToast('💡 Phát hiện bạn vừa dán dữ liệu bảng tính Google Sheet! Đang chuyển sang màn hình nhập dữ liệu...');
+      return;
+    }
+    setGoogleSheetUrl(trimmed);
+    localStorage.setItem('ielts_placement_sheet_url', trimmed);
     setShowGoogleSheetModal(false);
     showToast('Đã lưu link liên kết Google Sheet thành công! Bạn có thể xem lại bất kỳ lúc nào.');
+  };
+
+  const handleImportCsvData = async () => {
+    if (!rawCsvInput.trim()) {
+      showToast('⚠️ Vui lòng dán dữ liệu CSV hoặc bảng tính Google Sheet!');
+      return;
+    }
+    try {
+      setIsImportingCsv(true);
+      const rows = parseCSVRows(rawCsvInput.trim());
+      if (rows.length < 2) {
+        showToast('⚠️ Dữ liệu không hợp lệ hoặc không có dòng học viên nào.');
+        setIsImportingCsv(false);
+        return;
+      }
+      const imported = convertRowsToPlacementTests(rows);
+      if (imported.length === 0) {
+        showToast('⚠️ Không tìm thấy thông tin thí sinh nào trong dữ liệu.');
+        setIsImportingCsv(false);
+        return;
+      }
+
+      // Save each to Firestore and local state
+      for (const t of imported) {
+        onAddTest(t);
+        saveDocument('placementTests', t).catch(() => {});
+      }
+
+      // Save to localStorage backup
+      try {
+        const existing: PlacementTest[] = JSON.parse(
+          localStorage.getItem('idv_submitted_candidate_placement_tests') || '[]'
+        );
+        const merged = [
+          ...imported,
+          ...existing.filter((e) => !imported.some((i) => i.candidateName === e.candidateName && i.phone === e.phone)),
+        ];
+        localStorage.setItem('idv_submitted_candidate_placement_tests', JSON.stringify(merged.slice(0, 500)));
+      } catch (e) {}
+
+      showToast(`🎉 Đã nhập thành công ${imported.length} bài thi từ Google Sheet vào hệ thống!`);
+      setShowImportCsvModal(false);
+      setRawCsvInput('');
+    } catch (err: any) {
+      console.error(err);
+      showToast('Lỗi khi nhập dữ liệu: ' + err.message);
+    } finally {
+      setIsImportingCsv(false);
+    }
   };
 
   const handleOpenGoogleSheet = () => {
@@ -3268,6 +3352,16 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
 
                 <button
                   type="button"
+                  onClick={() => setShowImportCsvModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-sm font-black shadow-md transition-all cursor-pointer"
+                  title="Nhập dữ liệu bài thi từ bảng tính Google Sheet (Dán CSV hoặc TSV)"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>Nhập Từ Sheet (Dán CSV)</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setShowColumnListModal(true)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-bold border border-white/15 transition-all"
                   title="Xem danh sách 57 cột dữ liệu"
@@ -4472,13 +4566,36 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 💡 Hệ thống sẽ lưu link này vào bộ nhớ của bạn. Bạn có thể bấm "Mở Google Sheet" bất kỳ lúc nào để xem trực tiếp, hoặc nhấn "Sao chép 57 cột" rồi dán vào sheet.
               </p>
+
+              {(tempGoogleSheetUrl.includes('\n') || tempGoogleSheetUrl.startsWith('Timestamp') || (tempGoogleSheetUrl.includes(',') && !tempGoogleSheetUrl.startsWith('http'))) && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-2">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span>Phát hiện bạn đang dán dữ liệu bảng tính thay vì link web URL!</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Bạn có thể chuyển dữ liệu này sang màn hình <strong>Nhập Học Viên</strong> để tự động đọc toàn bộ thí sinh, tự động chấm điểm và nạp vào hệ thống:
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRawCsvInput(tempGoogleSheetUrl);
+                      setShowGoogleSheetModal(false);
+                      setShowImportCsvModal(true);
+                    }}
+                    className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
+                  >
+                    Chuyển Sang Nhập Học Viên Từ Dữ Liệu Này Ngay
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between pt-3 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => {
-                  if (tempGoogleSheetUrl) window.open(tempGoogleSheetUrl, '_blank');
+                  if (tempGoogleSheetUrl && tempGoogleSheetUrl.startsWith('http')) window.open(tempGoogleSheetUrl, '_blank');
                 }}
                 className="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900"
               >
@@ -4497,10 +4614,106 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                 <button
                   type="button"
                   onClick={handleSaveGoogleSheetUrl}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-all"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md transition-all cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>Lưu Link Google Sheet</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================
+          MODAL 4.5: NHẬP DỮ LIỆU TỪ GOOGLE SHEET (CSV / TSV / PASTE)
+         ========================================================= */}
+      {showImportCsvModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <UploadCloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">Nhập Dữ Liệu Từ Google Sheet (Dán CSV / TSV)</h3>
+                  <p className="text-[11px] text-slate-500">Tự động đọc toàn bộ câu trả lời, tự động chấm điểm và lưu vào danh sách bài test</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportCsvModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 overflow-y-auto pr-1 flex-1">
+              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-950 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-amber-700" />
+                  <span>Cách lấy dữ liệu nhanh nhất (2 bước):</span>
+                </div>
+                <ol className="list-decimal list-inside text-[11px] text-amber-800 space-y-0.5 leading-relaxed">
+                  <li>Mở file Google Sheet chứa kết quả thi đầu vào &gt; Nhấn <strong>Ctrl + A</strong> (chọn toàn bộ bảng) &gt; Nhấn <strong>Ctrl + C</strong> (sao chép).</li>
+                  <li>Nhấp chuột vào ô bên dưới và nhấn <strong>Ctrl + V</strong> (dán vào) &gt; Bấm nút <strong>Tiến Hành Nhập Học Viên</strong>.</li>
+                </ol>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800">
+                    Dán nội dung bảng tính hoặc CSV vào đây:
+                  </label>
+                  {rawCsvInput && (
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      Đã phát hiện ~{Math.max(0, rawCsvInput.split('\n').filter(l => l.trim().length > 0).length - 1)} thí sinh
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  rows={9}
+                  placeholder="Dán dữ liệu từ Google Sheet (Timestamp, Score, Họ tên của em, Số điện thoại...)"
+                  value={rawCsvInput}
+                  onChange={(e) => setRawCsvInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3 text-xs text-slate-800 font-mono focus:ring-2 focus:ring-amber-500/20 focus:outline-none leading-relaxed"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => setRawCsvInput('')}
+                disabled={!rawCsvInput || isImportingCsv}
+                className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-rose-600 disabled:opacity-40 cursor-pointer"
+              >
+                Xóa ô nhập
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowImportCsvModal(false)}
+                  disabled={isImportingCsv}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImportCsvData}
+                  disabled={!rawCsvInput.trim() || isImportingCsv}
+                  className="flex items-center gap-2 px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-sm font-black shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isImportingCsv ? (
+                    <span className="w-4 h-4 rounded-full border-2 border-slate-950 border-t-transparent animate-spin" />
+                  ) : (
+                    <UploadCloud className="w-4 h-4" />
+                  )}
+                  <span>{isImportingCsv ? 'Đang phân tích...' : 'Tiến Hành Nhập Học Viên'}</span>
                 </button>
               </div>
             </div>
@@ -4613,6 +4826,37 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                   <li>Nhấn <strong>Triển khai (Deploy)</strong> &gt; <strong>Triển khai mới (New deployment)</strong> &gt; Chọn loại <strong>Web app</strong>.</li>
                   <li>Mục <em>Who has access</em> chọn <strong>Anyone (Bất kỳ ai)</strong> &gt; Bấm <strong>Deploy</strong>.</li>
                 </ol>
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-3">
+                <div className="font-bold text-emerald-950 flex items-center gap-1.5 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>Dán Link Web App đã Deploy (Webhook):</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                    value={webhookUrl}
+                    onChange={(e) => {
+                      setWebhookUrl(e.target.value);
+                      localStorage.setItem('ielts_placement_webhook_url', e.target.value);
+                    }}
+                    className="flex-1 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      showToast('✅ Đã lưu webhook URL thành công!');
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all"
+                  >
+                    Lưu
+                  </button>
+                </div>
+                <p className="text-[10px] text-emerald-800 leading-relaxed">
+                  💡 <strong>Tự Động 100%</strong>: Khi có học sinh mới nộp bài test online, hệ thống sẽ tự động gọi link này để đẩy trực tiếp toàn bộ <strong>57 cột dữ liệu</strong> đầy đủ vào Google Sheet của bạn ngay lập tức mà không cần copy tay!
+                </p>
               </div>
 
               <div className="space-y-1.5">

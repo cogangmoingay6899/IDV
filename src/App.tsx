@@ -630,7 +630,12 @@ export default function App() {
 
   useEffect(() => {
     if (isTeacher) {
-      if (currentModule !== 'students' && currentModule !== 'trial' && currentModule !== 'exams') {
+      if (
+        currentModule !== 'students' &&
+        currentModule !== 'trial' &&
+        currentModule !== 'exams' &&
+        currentModule !== 'teacher_sessions'
+      ) {
         setCurrentModule('students');
       }
     } else if (isAssistant) {
@@ -639,6 +644,7 @@ export default function App() {
         'curriculum',
         'admissions',
         'exams',
+        'teacher_sessions',
         'contact_book',
         'placement',
         'trial',
