@@ -412,7 +412,11 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   const [showAppsScriptModal, setShowAppsScriptModal] = useState<boolean>(false);
   const [copiedScript, setCopiedScript] = useState<boolean>(false);
   const [webhookUrl, setWebhookUrl] = useState<string>(() => {
-    return localStorage.getItem('ielts_placement_webhook_url') || '';
+    const saved = localStorage.getItem('ielts_placement_webhook_url');
+    if (saved) return saved;
+    const defaultUrl = 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+    localStorage.setItem('ielts_placement_webhook_url', defaultUrl);
+    return defaultUrl;
   });
   const [showImportCsvModal, setShowImportCsvModal] = useState<boolean>(false);
   const [rawCsvInput, setRawCsvInput] = useState<string>('');

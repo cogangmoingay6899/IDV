@@ -178,7 +178,11 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
   const [rawCsvInput, setRawCsvInput] = useState<string>('');
   const [isImportingCsv, setIsImportingCsv] = useState<boolean>(false);
   const [webhookUrl, setWebhookUrl] = useState<string>(() => {
-    return localStorage.getItem('ielts_placement_webhook_url') || '';
+    const saved = localStorage.getItem('ielts_placement_webhook_url');
+    if (saved) return saved;
+    const defaultUrl = 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+    localStorage.setItem('ielts_placement_webhook_url', defaultUrl);
+    return defaultUrl;
   });
 
   // Anti-Cheat Monitoring States for Online Test
