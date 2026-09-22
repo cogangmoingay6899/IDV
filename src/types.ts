@@ -25,6 +25,7 @@ export type ModuleId =
   | 'attendance'
   | 'reports'
   | 'exams'
+  | 'teacher_sessions'
   | 'kpi'
   | 'curriculum'
   | 'inventory';

@@ -10,6 +10,7 @@ import { TrialModule } from './components/modules/TrialModule';
 import { HRModule } from './components/modules/HRModule';
 import { ReportsModule } from './components/modules/ReportsModule';
 import { ExamsModule } from './components/modules/ExamsModule';
+import { TeacherSessionsModule } from './components/modules/TeacherSessionsModule';
 import { KPIModule } from './components/modules/KPIModule';
 import { CurriculumModule } from './components/modules/CurriculumModule';
 import { InventoryModule } from './components/modules/InventoryModule';
@@ -183,6 +184,7 @@ import {
   CalendarCheck2,
   BarChart3,
   Award,
+  CalendarDays,
   Target,
   BookMarked,
   PackageCheck,
@@ -1642,6 +1644,7 @@ export default function App() {
     { id: 'students', title: 'Học viên & Lớp', icon: <GraduationCap className="w-3.5 h-3.5" /> },
     { id: 'admissions', title: 'Tuyển sinh', icon: <UserPlus className="w-3.5 h-3.5" /> },
     { id: 'exams', title: 'Điểm thi', icon: <Award className="w-3.5 h-3.5" /> },
+    { id: 'teacher_sessions', title: 'Số buổi dạy', icon: <CalendarDays className="w-3.5 h-3.5" /> },
     { id: 'contact_book', title: 'Sổ liên lạc', icon: <MessageSquareText className="w-3.5 h-3.5" /> },
     { id: 'placement', title: 'Test đầu vào', icon: <ClipboardList className="w-3.5 h-3.5" /> },
     { id: 'trial', title: 'Học thử', icon: <BookOpenCheck className="w-3.5 h-3.5" /> },
@@ -1653,10 +1656,10 @@ export default function App() {
   ];
 
   const moduleNavList = isTeacher
-    ? allNavModules.filter((m) => m.id === 'students' || m.id === 'exams' || m.id === 'trial')
+    ? allNavModules.filter((m) => m.id === 'students' || m.id === 'exams' || m.id === 'teacher_sessions' || m.id === 'trial')
     : isAssistant
     ? allNavModules.filter((m) =>
-        ['students', 'curriculum', 'admissions', 'exams', 'contact_book', 'placement', 'trial'].includes(m.id)
+        ['students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'trial'].includes(m.id)
       )
     : allNavModules;
 
@@ -1994,6 +1997,17 @@ export default function App() {
             students={students}
             onAddExamScore={handleAddExamScore}
             onOpenCreateClass={() => setIsCreateClassModalOpen(true)}
+            currentUser={currentUser}
+          />
+        )}
+
+        {/* Teacher Sessions: accessible for teacher, assistant and admin */}
+        {currentModule === 'teacher_sessions' && (
+          <TeacherSessionsModule
+            classes={effectiveClasses}
+            students={students}
+            teachers={teachers}
+            attendanceRecords={attendance}
             currentUser={currentUser}
           />
         )}

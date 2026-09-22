@@ -1817,32 +1817,13 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-amber-200/50">
-                  <span className="text-[11px] font-bold text-rose-700">Nợ cũ:</span>
+                  <span className="text-[11px] font-bold text-rose-700">Nợ phạt cũ:</span>
                   <button
                     type="button"
                     onClick={() => handleSetAllPreviousDebts('')}
                     className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 transition-all"
                   >
                     Xoá trống cả lớp
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStudentRows((prev) => {
-                        const next = { ...prev };
-                        classStudents.forEach((st) => {
-                          if (next[st.id] && st.balanceOwed && st.balanceOwed > 0) {
-                            next[st.id] = { ...next[st.id], previousDebt: `${st.balanceOwed / 1000}k` };
-                          }
-                        });
-                        return next;
-                      });
-                      setToastMessage('Đã đồng bộ số nợ học phí từ hồ sơ học viên!');
-                      setTimeout(() => setToastMessage(null), 2500);
-                    }}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200 transition-all"
-                  >
-                    Đồng bộ nợ từ hồ sơ HV
                   </button>
                 </div>
                 <p className="text-[10px] text-amber-800 italic">
@@ -2858,7 +2839,8 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                     <th className="py-3 px-3 min-w-[190px]">Gmail</th>
                     <th className="py-3 px-3 min-w-[110px]">Ngày sinh (DOB)</th>
                     <th className="py-3 px-3 min-w-[150px]">Phụ huynh</th>
-                    <th className="py-3 px-3 w-28 text-center">Trạng thái</th>
+                    <th className="py-3 px-3 w-32 text-center">Trạng thái học viên</th>
+                    <th className="py-3 px-3 min-w-[150px] text-center">Học phí & Cảnh báo</th>
                     <th className="py-3 px-3 w-28 text-center">Thao tác</th>
                   </tr>
                 </thead>
@@ -2924,14 +2906,41 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                           </td>
                           <td className="py-3.5 px-3 text-center">
                             <span
-                              className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                                st.tuitionStatus === 'Đã đóng đủ'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                st.status === 'Đang học'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
                               }`}
                             >
                               {st.status}
                             </span>
+                          </td>
+                          <td className="py-3.5 px-3 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  st.tuitionStatus === 'Đã đóng đủ'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : st.tuitionStatus === 'Còn nợ'
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
+                                    : 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse'
+                                }`}
+                              >
+                                {st.tuitionStatus || 'Chưa đóng'}
+                              </span>
+
+                              {st.balanceOwed && st.balanceOwed > 0 ? (
+                                <div className="text-[10px] font-mono font-bold text-rose-600 bg-rose-50/60 px-1.5 py-0.5 rounded border border-rose-200">
+                                  Thiếu: {new Intl.NumberFormat('vi-VN').format(st.balanceOwed)}đ
+                                </div>
+                              ) : null}
+
+                              {st.tuitionReminderNote || st.tuitionPromiseNote ? (
+                                <div className="text-[9px] font-bold text-amber-800 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 max-w-[160px] text-center leading-tight">
+                                  📢 {st.tuitionReminderNote || st.tuitionPromiseNote}
+                                </div>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="py-3.5 px-3 text-center">
                             <div className="flex items-center justify-center gap-1">

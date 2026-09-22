@@ -10,6 +10,7 @@ import {
   CalendarCheck2,
   BarChart3,
   Award,
+  CalendarDays,
   Target,
   BookMarked,
   PackageCheck,
@@ -131,6 +132,14 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
       badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
     },
     {
+      id: 'teacher_sessions',
+      title: 'Thống kê số buổi dạy',
+      icon: <CalendarDays className="w-6 h-6 animate-pulse" />,
+      subtitle: 'Theo dõi, đối chiếu số ca đứng lớp giảng dạy thực tế của giáo viên theo từng tháng',
+      badge: 'Buổi dạy',
+      badgeColor: 'bg-purple-100 text-purple-800 font-bold',
+    },
+    {
       id: 'kpi',
       title: 'Quản lý chỉ tiêu',
       icon: <Target className="w-6 h-6" />,
@@ -148,14 +157,14 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
   ];
 
   // RBAC Filtering according to exact prompt specifications:
-  // - Teacher: 'students', 'trial', 'exams'
-  // - Assistant: 'students', 'curriculum', 'admissions', 'exams', 'contact_book', 'placement', 'trial'
+  // - Teacher: 'students', 'trial', 'exams', 'teacher_sessions'
+  // - Assistant: 'students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'trial'
   // - Admin: All modules
   const visibleModules = isTeacher
-    ? allModules.filter((m) => m.id === 'students' || m.id === 'trial' || m.id === 'exams')
+    ? allModules.filter((m) => m.id === 'students' || m.id === 'trial' || m.id === 'exams' || m.id === 'teacher_sessions')
     : isAssistant
     ? allModules.filter((m) =>
-        ['students', 'curriculum', 'admissions', 'exams', 'contact_book', 'placement', 'trial'].includes(m.id)
+        ['students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'trial'].includes(m.id)
       )
     : allModules;
 
