@@ -194,11 +194,30 @@ export const TeacherSessionsModule: React.FC<TeacherSessionsModuleProps> = ({
 
   // Helper to match a session with a selected teacher
   const isSessionForSelectedTeacher = (session: typeof processedSessions[0], teacherObj: Teacher | null | undefined, id: string) => {
+    // Normalization helper for accurate Vietnamese comparison
+    const normalize = (name: string) => name.toLowerCase().normalize('NFC').trim();
+    
+    // Split names by common separators (comma, and, semicolon, plus)
+    const splitNames = (fullName: string) => 
+      fullName.split(/[,;&+]/).map(n => normalize(n)).filter(n => n.length > 0);
+
+    const sessionTeacherParts = splitNames(session.teacherName);
+
     if (isTeacher) {
-      // The teacher can only see their own sessions
-      const nameMatch = loggedInTeacherName && session.teacherName.toLowerCase().includes(loggedInTeacherName.toLowerCase());
-      const emailMatch = loggedInTeacherProfile?.email && session.teacherName.toLowerCase().includes(loggedInTeacherProfile.email.toLowerCase());
-      return nameMatch || emailMatch;
+      if (!loggedInTeacherName) return false;
+      const normalizedLoggedIn = normalize(loggedInTeacherName);
+      
+      // Check if logged in name matches any of the split teacher parts, or vice-versa
+      const matchesName = sessionTeacherParts.some(part => 
+        part.includes(normalizedLoggedIn) || normalizedLoggedIn.includes(part)
+      );
+
+      // Check email matching
+      const matchesEmail = loggedInTeacherProfile?.email 
+        ? normalize(session.teacherName).includes(normalize(loggedInTeacherProfile.email))
+        : false;
+
+      return matchesName || matchesEmail;
     }
 
     if (id === 'all') return true;
@@ -207,10 +226,16 @@ export const TeacherSessionsModule: React.FC<TeacherSessionsModuleProps> = ({
     const targetTeacher = teachers.find((t) => t.id === id);
     if (!targetTeacher) return false;
 
-    return (
-      session.teacherName.toLowerCase().includes(targetTeacher.name.toLowerCase()) ||
-      (targetTeacher.email && session.teacherName.toLowerCase().includes(targetTeacher.email.toLowerCase()))
+    const normalizedTargetName = normalize(targetTeacher.name);
+    const matchesTargetName = sessionTeacherParts.some(part => 
+      part.includes(normalizedTargetName) || normalizedTargetName.includes(part)
     );
+
+    const matchesTargetEmail = targetTeacher.email 
+      ? normalize(session.teacherName).includes(normalize(targetTeacher.email))
+      : false;
+
+    return matchesTargetName || matchesTargetEmail;
   };
 
   // Get current filtered teacher object (if a specific teacher is selected or logged in)
