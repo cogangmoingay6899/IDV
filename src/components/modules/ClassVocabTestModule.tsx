@@ -29,9 +29,11 @@ import {
   Eye,
   FileText,
   HelpCircle,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { VocabTest, VocabTestSubmission, VocabQuestion, ClassGroup, Student, ExamScore, AttendanceRecord, AuthUser } from '../../types';
 import { saveDocument, subscribeCollection, fetchDocument, addSubmissionToTest, fetchCollection } from '../../lib/firestoreService';
+import { VocabLeaderboardExportModal } from '../modals/VocabLeaderboardExportModal';
 import {
   getPublicBaseUrl,
   setPublicBaseUrl,
@@ -398,6 +400,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   // Modals & Active Test States
   const [activeLeaderboardTest, setActiveLeaderboardTest] = useState<VocabTest | null>(null);
   const [leaderboardClassFilter, setLeaderboardClassFilter] = useState<string>('all');
+  const [exportZaloModalTest, setExportZaloModalTest] = useState<VocabTest | null>(null);
+  const [exportZaloInitialClass, setExportZaloInitialClass] = useState<string>('all');
   const [activeRunnerTest, setActiveRunnerTest] = useState<VocabTest | null>(null);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
@@ -1522,10 +1526,23 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       <button
                         type="button"
                         onClick={() => setActiveLeaderboardTest(test)}
-                        className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-purple-950 font-black text-xs rounded-xl flex items-center justify-center gap-1 transition-all shadow-xs"
+                        className="py-2 px-2.5 bg-amber-500 hover:bg-amber-600 text-purple-950 font-black text-xs rounded-xl flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer"
                       >
                         <Trophy className="w-3.5 h-3.5 text-purple-950" />
                         <span>BXH ({submissionCount})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExportZaloInitialClass(classGroup ? classGroup.name : 'all');
+                          setExportZaloModalTest(test);
+                        }}
+                        className="py-2 px-2.5 bg-purple-900 hover:bg-purple-950 text-amber-300 font-black text-xs rounded-xl flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer"
+                        title="Tạo ảnh Bảng Xếp Hạng chất lượng cao gửi Zalo cho phụ huynh"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Ảnh Zalo</span>
                       </button>
                     </div>
                   </div>
@@ -1586,13 +1603,28 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                     <p className="text-xs text-slate-500">{activeLeaderboardTest.title}</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveLeaderboardTest(null)}
-                  className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold hover:bg-slate-200"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportZaloInitialClass(leaderboardClassFilter);
+                      setExportZaloModalTest(activeLeaderboardTest);
+                    }}
+                    className="px-3 py-1.5 bg-purple-900 hover:bg-purple-950 text-amber-300 font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer border border-amber-400/40"
+                    title="Tạo ảnh Bảng Xếp Hạng gửi Zalo Phụ Huynh"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-amber-300" />
+                    <span className="hidden sm:inline">Tạo Ảnh Gửi Zalo</span>
+                    <span className="sm:hidden">Ảnh Zalo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveLeaderboardTest(null)}
+                    className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold hover:bg-slate-200 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
               {/* Leaderboard Rules Notice */}
@@ -1750,11 +1782,23 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                 </div>
               )}
 
-              <div className="pt-2 text-right">
+              <div className="pt-2 flex items-center justify-between border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportZaloInitialClass(leaderboardClassFilter);
+                    setExportZaloModalTest(activeLeaderboardTest);
+                  }}
+                  className="px-4 py-2.5 bg-purple-900 hover:bg-purple-950 text-amber-300 font-black text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer border border-amber-400/40 active:scale-95"
+                >
+                  <ImageIcon className="w-4 h-4 text-amber-300" />
+                  <span>📸 Tạo Ảnh Gửi Zalo Phụ Huynh</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setActiveLeaderboardTest(null)}
-                  className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl"
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl cursor-pointer"
                 >
                   Đóng Bảng Xếp Hạng
                 </button>
@@ -2836,6 +2880,17 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* MODAL 4: TẠO ẢNH BẢNG XẾP HẠNG GỬI ZALO PHỤ HUYNH CHO GIÁO VIÊN & QUẢN LÝ */}
+      {exportZaloModalTest && (
+        <VocabLeaderboardExportModal
+          isOpen={Boolean(exportZaloModalTest)}
+          onClose={() => setExportZaloModalTest(null)}
+          test={exportZaloModalTest}
+          initialClassFilter={exportZaloInitialClass || (classGroup ? classGroup.name : 'all')}
+          classes={classes}
+        />
       )}
     </div>
   );
