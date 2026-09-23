@@ -596,87 +596,30 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
                 className={`p-6 sm:p-8 rounded-3xl shadow-xl border overflow-hidden ${themeConfig.cardBg}`}
                 style={{ minWidth: '700px' }}
               >
-                {/* Brand Header */}
-                <div className="flex items-center justify-between pb-5 border-b border-white/15">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-black text-slate-950 text-xl shadow-lg border border-amber-300">
+                {/* Brand Header - Ultra Compact */}
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/15">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center font-black text-slate-950 text-base shadow-md border border-amber-300 shrink-0">
                       DV
                     </div>
                     <div>
-                      <div className="text-xs font-black uppercase tracking-widest text-amber-400">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-amber-400">
                         IELTS DƯƠNG VŨ
                       </div>
-                      <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+                      <h2 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-1.5">
                         BẢNG ĐIỂM BUỔI HỌC SỐ {sessionNumber}
-                        <Sparkles className="w-5 h-5 text-amber-300 inline" />
+                        <Sparkles className="w-4 h-4 text-amber-300 inline" />
                       </h2>
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <div className="inline-block px-3.5 py-1 rounded-full bg-white/10 backdrop-blur-xs border border-white/15 text-xs font-black text-amber-300">
-                      IELTS DƯƠNG VŨ
+                  <div className="text-right space-y-0.5">
+                    <div className="inline-block px-3 py-1 rounded-lg bg-white/10 backdrop-blur-xs border border-white/15 text-xs font-black text-amber-300">
+                      LỚP: {classGroup.name} {classGroup.courseName ? `• ${classGroup.courseName}` : ''}
                     </div>
-                    <div className="text-[11px] text-white/70 mt-1 font-medium">
+                    <div className="text-[10px] text-white/70 font-medium">
                       Ngày: <strong className="text-white">{currentDate}</strong>
                     </div>
-                  </div>
-                </div>
-
-                {/* Session Meta Info Grid (3 columns - No Teacher, No Lesson Topic) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-5">
-                  <div className={`p-3.5 rounded-2xl border ${themeConfig.statCardBg}`}>
-                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-75 flex items-center gap-1">
-                      <BookOpen className="w-3 h-3" /> Lớp học
-                    </div>
-                    <div className="text-sm sm:text-base font-black mt-0.5 truncate text-white">
-                      {classGroup.name}
-                    </div>
-                    <div className="text-[10px] text-amber-300 font-semibold truncate">
-                      {classGroup.courseName || 'IELTS Preparation'}
-                    </div>
-                  </div>
-
-                  <div className={`p-3.5 rounded-2xl border ${themeConfig.statCardBg}`}>
-                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-75 flex items-center gap-1">
-                      <Award className="w-3 h-3" /> Điểm TB Cả Lớp
-                    </div>
-                    <div className="text-sm sm:text-base font-black mt-0.5 text-amber-300">
-                      {classStats.averageScore} {overallScoreType === 'ielts_band' ? 'Band' : 'Điểm'}
-                    </div>
-                    <div className="text-[10px] opacity-75">
-                      Cao nhất: <strong className="text-white">{classStats.highestScore}</strong>
-                    </div>
-                  </div>
-
-                  <div className={`p-3.5 rounded-2xl border ${themeConfig.statCardBg}`}>
-                    <div className="text-[10px] font-bold uppercase tracking-wider opacity-75 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Sĩ số buổi học
-                    </div>
-                    <div className="text-sm sm:text-base font-black mt-0.5 text-emerald-400">
-                      {classStats.presentCount}/{classStats.total} Học viên
-                    </div>
-                    <div className="text-[10px] opacity-75">
-                      {classStats.absentCount > 0 ? `Vắng: ${classStats.absentCount}` : 'Đầy đủ 100%'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tested Skills Strip (No Lesson Topic) */}
-                <div className="p-3 rounded-2xl bg-white/[0.07] border border-white/10 mb-4 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-bold opacity-75">Kỹ năng kiểm tra:</span>
-                    {selectedSkills.map((sk) => (
-                      <span
-                        key={sk}
-                        className="px-2 py-0.5 rounded-md bg-purple-500/30 text-purple-200 font-bold text-[11px] border border-purple-400/30"
-                      >
-                        {sk} {skillTotalQuestions?.[sk] ? `(${skillTotalQuestions[sk]} câu)` : ''}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="text-[11px] font-bold text-amber-300">
-                    IELTS DƯƠNG VŨ
                   </div>
                 </div>
 
@@ -707,48 +650,6 @@ export const ClassScoreExportModal: React.FC<ClassScoreExportModalProps> = ({
                   </div>
                 )}
 
-                {/* TOP 3 PODIUM / HONORS (SHOW ONLY WHEN SORTING BY SCORE) */}
-                {sortMode === 'score_desc' && sortedStudents.length >= 2 && (
-                  <div className="mb-5 p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-indigo-500/10 border border-amber-400/20">
-                    <div className="text-xs font-black uppercase tracking-wider text-amber-300 mb-2.5 flex items-center gap-1.5">
-                      <Trophy className="w-4 h-4 text-amber-400" />
-                      <span>Vinh Danh Học Sinh Có Thành Tích Cao Nhất Buổi Học:</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      {sortedStudents.slice(0, 3).map((topSt, rankIdx) => {
-                        const row = studentRows[topSt.id];
-                        const avg = calculateStudentAverage(row);
-                        const medals = ['🥇 Top 1', '🥈 Top 2', '🥉 Top 3'];
-                        const medalColors = [
-                          'bg-amber-400/20 text-amber-300 border-amber-400/40',
-                          'bg-slate-300/20 text-slate-200 border-slate-300/40',
-                          'bg-amber-700/20 text-amber-200 border-amber-600/40',
-                        ];
-
-                        return (
-                          <div
-                            key={topSt.id}
-                            className={`p-2.5 rounded-xl border flex items-center justify-between ${medalColors[rankIdx]}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-black">{medals[rankIdx]}</span>
-                              <div className="truncate">
-                                <div className="font-bold text-xs text-white truncate">{topSt.name}</div>
-                                <div className="text-[10px] opacity-75">Mã HV: {topSt.studentCode || topSt.id}</div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs font-black text-amber-300">
-                                {avg !== '-' ? avg : 'Tốt'}
-                              </div>
-                              <div className="text-[9px] opacity-75">{overallScoreType === 'ielts_band' ? 'Band' : 'ĐTB'}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
 
                 {/* Score Details Table */}
                 <div className="rounded-2xl border border-white/10 overflow-hidden shadow-sm">
