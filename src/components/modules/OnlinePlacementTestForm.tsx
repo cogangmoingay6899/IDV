@@ -1192,23 +1192,40 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
         console.warn('Direct Firestore save failed in OnlinePlacementTestForm:', err);
       });
 
-      // Send to Webhook (Google Apps Script) if configured
+      // Send to Webhook (Google Apps Script) automatically
+      const DEFAULT_WEBHOOK = 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
       const savedWebhook = localStorage.getItem('ielts_placement_webhook_url');
-      if (savedWebhook && savedWebhook.trim()) {
+      const targetWebhookUrl = (savedWebhook && savedWebhook.trim()) ? savedWebhook.trim() : DEFAULT_WEBHOOK;
+
+      try {
         const rowData = extractTestRowValues(newTest, placementTests.length);
-        fetch(savedWebhook, {
+        const webhookPayload = JSON.stringify({
+          headers: PLACEMENT_SHEET_COLUMNS,
+          row: rowData,
+          test: newTest,
+        });
+
+        // 1. Direct browser fetch with text/plain (avoids CORS preflight)
+        fetch(targetWebhookUrl, {
           method: 'POST',
           mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: webhookPayload,
+        }).catch((err) => {
+          console.warn('Failed client fetch to Google Apps Script webhook:', err);
+        });
+
+        // 2. Server proxy fetch to ensure delivery regardless of browser/adblocker
+        fetch('/api/sync-placement-webhook', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            headers: PLACEMENT_SHEET_COLUMNS,
-            row: rowData,
+            webhookUrl: targetWebhookUrl,
+            tests: [newTest],
           }),
-        }).then(() => {
-          console.log('Successfully pushed data to Google Apps Script webhook');
-        }).catch((err) => {
-          console.warn('Failed to send to Google Apps Script webhook:', err);
-        });
+        }).catch(() => {});
+      } catch (webhookErr) {
+        console.warn('Webhook dispatch error:', webhookErr);
       }
 
       // 4. Clear live auto-draft since test is successfully submitted

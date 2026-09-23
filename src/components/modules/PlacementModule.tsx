@@ -62,6 +62,8 @@ import {
   SAMPLE_GOOGLE_APPS_SCRIPT,
   generatePlacementSheetTSV,
   generatePlacementSheetCSV,
+  extractTestRowValues,
+  PLACEMENT_SHEET_COLUMNS,
 } from '../../utils/placementGoogleSheets';
 import { parseCSVRows, convertRowsToPlacementTests } from '../../utils/placementCsvImporter';
 import {
@@ -798,6 +800,48 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
     }
   };
 
+  const [isSyncingWebhook, setIsSyncingWebhook] = useState<boolean>(false);
+
+  const handleSyncAllToWebhook = async () => {
+    const targetWebhook = webhookUrl.trim() || 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+    setIsSyncingWebhook(true);
+    showToast('⏳ Đang đồng bộ tất cả bài test sang Google Sheet qua Webhook...');
+
+    try {
+      // 1. Client-side push in batch to Google Apps Script
+      for (let i = 0; i < placementTests.length; i++) {
+        const test = placementTests[i];
+        const rowData = extractTestRowValues(test, i);
+        const payload = JSON.stringify({
+          headers: PLACEMENT_SHEET_COLUMNS,
+          row: rowData,
+          test,
+        });
+
+        await fetch(targetWebhook, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: payload,
+        }).catch(() => {});
+      }
+
+      // 2. Server-side proxy sync
+      await fetch('/api/sync-placement-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhookUrl: targetWebhook }),
+      }).catch(() => {});
+
+      showToast(`✅ Đã đẩy thành công ${placementTests.length} bài test sang Google Sheet!`);
+    } catch (err: any) {
+      console.error(err);
+      showToast('⚠️ Có lỗi khi đồng bộ Webhook: ' + (err?.message || 'Lỗi không xác định'));
+    } finally {
+      setIsSyncingWebhook(false);
+    }
+  };
+
   const handleSaveWebhookUrl = () => {
     setWebhookUrl(webhookUrl.trim());
     localStorage.setItem('ielts_placement_webhook_url', webhookUrl.trim());
@@ -1045,6 +1089,17 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
 
               {/* Action Buttons for Google Sheets & Webhook */}
               <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleSyncAllToWebhook}
+                  disabled={isSyncingWebhook}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-xl text-xs font-black shadow-md border border-emerald-300/50 transition-all cursor-pointer disabled:opacity-50"
+                  title="Đẩy tất cả bài test sang Google Sheet qua Webhook"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isSyncingWebhook ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingWebhook ? 'Đang đồng bộ...' : 'Đồng Bộ Sang Sheet'}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setShowAppsScriptModal(true)}

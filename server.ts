@@ -315,9 +315,54 @@ async function startServer() {
       console.log(
         `[VPS Storage] Successfully saved placement test: ${newTest.candidateName} (${newTest.code || newTest.id})`
       );
+
+      // Auto-push to Google Apps Script Webhook in the background
+      const webhookUrl = req.body?.webhookUrl || 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            test: newTest,
+            candidateName: newTest.candidateName,
+            phone: newTest.phone,
+            submittedAt: newTest.submittedAt || new Date().toISOString(),
+          }),
+        }).catch((wErr) => console.warn('[VPS Webhook Proxy] Direct push error:', wErr));
+      }
+
       res.json({ success: true, message: 'Saved successfully to VPS storage', data: newTest });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Server error' });
+    }
+  });
+
+  // --- MANUAL / BATCH SYNC TO GOOGLE APPS SCRIPT WEBHOOK ---
+  app.post('/api/sync-placement-webhook', async (req, res) => {
+    try {
+      const webhookUrl = req.body?.webhookUrl || 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+      const tests = getCollectionData('placementTests');
+
+      let successCount = 0;
+      for (const t of tests) {
+        try {
+          await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              test: t,
+              candidateName: t.candidateName,
+              phone: t.phone,
+              submittedAt: t.submittedAt || t.testDate || new Date().toISOString(),
+            }),
+          });
+          successCount++;
+        } catch (e) {}
+      }
+
+      res.json({ success: true, count: successCount, total: tests.length, webhookUrl });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Webhook sync error' });
     }
   });
 
