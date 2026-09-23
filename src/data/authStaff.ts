@@ -50,7 +50,8 @@ export const KNOWN_STAFF_PROFILES: Record<string, StaffProfile> = {
   },
   'nhungphan.mkt@gmail.com': {
     name: 'Cô Nhung Phan',
-    title: 'Trợ lý học vụ & Tuyển sinh',
+    title: 'Trợ lý (Nhật ký & Chấm điểm)',
+    specialty: 'Nhật ký & Chấm điểm buổi học',
   },
   // Tô Hiệu Teachers
   'tamvuong710@gmail.com': {

@@ -18,6 +18,7 @@ import {
   LogOut,
   Layers,
   Users2,
+  BookOpen,
 } from 'lucide-react';
 import { ModuleId, AuthUser } from '../types';
 
@@ -60,6 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isTeacher = currentUser?.role === 'teacher';
   const isAssistant = currentUser?.role === 'assistant';
   const isAdmin = currentUser?.role === 'admin';
+  const isNhungPhan = currentUser?.email?.trim().toLowerCase() === 'nhungphan.mkt@gmail.com';
 
   const branches = [
     'Cơ sở 1 - Tô Hiệu (Hải Phòng)',
@@ -210,8 +212,22 @@ export const Header: React.FC<HeaderProps> = ({
               </>
             )}
 
-            {/* If Assistant: Quick actions */}
-            {isAssistant && (
+            {/* If Nhung Phan: Specialized quick badge */}
+            {isNhungPhan && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => onSelectModule('students')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-xs transition-all whitespace-nowrap"
+                  title="Nhật ký & Chấm điểm buổi học"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Nhật ký & Chấm điểm</span>
+                </button>
+              </div>
+            )}
+
+            {/* If Assistant (standard): Quick actions */}
+            {isAssistant && !isNhungPhan && (
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={onOpenQuickStudent}

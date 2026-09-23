@@ -33,8 +33,8 @@ import {
   Lock,
   ShieldAlert,
 } from 'lucide-react';
-import { Student, ClassGroup, AuthUser } from '../../types';
-import { detectCourseLevel } from '../../utils/courseSchedule';
+import { Student, ClassGroup, AuthUser, AttendanceRecord } from '../../types';
+import { detectCourseLevel, calculateCourseSchedule } from '../../utils/courseSchedule';
 
 export interface CourseTuitionTableProps {
   courseName: string;
@@ -46,6 +46,7 @@ export interface CourseTuitionTableProps {
   classId?: string;
   classes?: ClassGroup[];
   currentUser?: AuthUser;
+  attendanceRecords?: AttendanceRecord[];
 }
 
 export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
@@ -58,6 +59,7 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
   classId,
   classes = [],
   currentUser,
+  attendanceRecords = [],
 }) => {
   const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
   const canAccessTuition = !currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant' || isVuNgoc;
@@ -235,6 +237,97 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
       isDeductible,
       discountAmount,
       finalFee,
+    };
+  };
+
+  // Helper: compute Khóa 4 progress and auto-calculate end date & tuition reminders
+  const getStudentK4ProgressInfo = (st: Student) => {
+    const isStudentK4 =
+      st.className?.toLowerCase().includes('khóa 4') ||
+      st.className?.toLowerCase().includes('drill') ||
+      st.courseName?.toLowerCase().includes('khóa 4') ||
+      st.courseName?.toLowerCase().includes('drill') ||
+      detectCourseLevel(st.className || st.courseName || '', 32) === 'Khóa 4' ||
+      st.isExternalStudent ||
+      st.studentCategory === 'Học sinh ngoài' ||
+      isCourse4;
+
+    if (!isStudentK4) {
+      return { isK4: false };
+    }
+
+    // Filter attendance records specifically for this student in their active class
+    const studentAttendance = attendanceRecords.filter(
+      (r) => r.studentId === st.id && r.classId === st.classId
+    );
+    const attendedCount = studentAttendance.length;
+
+    // Find class schedule details
+    const studentClass = classes.find((c) => c.id === st.classId);
+    const scheduleStr = studentClass?.schedule || 'Thứ 2 + Thứ 5 (Ca 1: 18:00 - 19:45)';
+    const offDates = studentClass?.offDates || [];
+    const startDate = st.startDate || st.joinDate || studentClass?.startDate || new Date().toISOString().split('T')[0];
+
+    // Determine current cycle (each cycle of K4 is 32 sessions)
+    const currentCycle = Math.floor(attendedCount / 32) + 1;
+    const sessionsThisCycle = attendedCount % 32;
+    const nextCycleSessions = currentCycle * 32;
+
+    // Calculate personal end date for the CURRENT cycle
+    const currentCycleSchedule = calculateCourseSchedule(
+      startDate,
+      scheduleStr,
+      nextCycleSessions,
+      offDates,
+      'Khóa 4'
+    );
+    const personalEndDate =
+      currentCycleSchedule.sessions[currentCycleSchedule.sessions.length - 1]?.date || '';
+
+    // Calculate previous cycle end date (if any)
+    let previousCycleEndDate = '';
+    if (currentCycle > 1) {
+      const prevCycleSchedule = calculateCourseSchedule(
+        startDate,
+        scheduleStr,
+        (currentCycle - 1) * 32,
+        offDates,
+        'Khóa 4'
+      );
+      previousCycleEndDate =
+        prevCycleSchedule.sessions[prevCycleSchedule.sessions.length - 1]?.date || '';
+    }
+
+    // Determine if student has paid for the current cycle
+    const isUnpaidForCurrentCycle =
+      currentCycle > 1 &&
+      (!st.tuitionPaidDate || (previousCycleEndDate && st.tuitionPaidDate < previousCycleEndDate));
+
+    const isApproachingCycleEnd = sessionsThisCycle >= 28;
+
+    let reminderMessage = '';
+    let needsReminder = false;
+
+    if (isUnpaidForCurrentCycle) {
+      needsReminder = true;
+      reminderMessage = `⚠️ NỢ PHÍ CHU KỲ ${currentCycle}: Đã học sang buổi ${sessionsThisCycle + 32 * (currentCycle - 1)} nhưng chưa nộp tiền đợt mới!`;
+    } else if (isApproachingCycleEnd) {
+      needsReminder = true;
+      reminderMessage = `🔔 SẮP HẾT KHÓA: Đã học ${sessionsThisCycle}/32 buổi của Chu kỳ ${currentCycle}. Nhắc đóng học phí cho chu kỳ tiếp theo!`;
+    }
+
+    return {
+      isK4: true,
+      attendedCount,
+      currentCycle,
+      sessionsThisCycle,
+      totalSessionsForCycle: nextCycleSessions,
+      personalEndDate,
+      previousCycleEndDate,
+      isUnpaidForCurrentCycle,
+      isApproachingCycleEnd,
+      needsReminder,
+      reminderMessage,
     };
   };
 
@@ -930,16 +1023,22 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                     <span className="text-[9px] text-slate-500 font-normal">Sau khi giảm</span>
                   </div>
                 </th>
+                <th className="py-3 px-3 min-w-[185px]">
+                  <div className="flex flex-col">
+                    <span className="text-blue-950 font-black">📅 Ngày Học Riêng Từng Bạn</span>
+                    <span className="text-[9px] text-blue-700 font-normal">Bắt đầu & Kết thúc khóa</span>
+                  </div>
+                </th>
                 <th className="py-3 px-3 min-w-[170px]">
                   <div className="flex flex-col">
                     <span className="text-purple-950 font-black">Hạn Nộp Học Phí</span>
                     <span className="text-[9px] text-purple-600 font-normal">Quy định hạn nộp</span>
                   </div>
                 </th>
-                <th className="py-3 px-3 min-w-[140px]">
+                <th className="py-3 px-3 min-w-[160px]">
                   <div className="flex flex-col">
-                    <span>Ngày Đóng Học Phí</span>
-                    <span className="text-[9px] text-slate-500 font-normal">Ghi nhận thanh toán</span>
+                    <span className="text-emerald-950 font-black">💳 Ngày Nộp Học Phí Riêng</span>
+                    <span className="text-[9px] text-emerald-700 font-semibold">Hiện ngày nộp từng bạn</span>
                   </div>
                 </th>
                 <th className="py-3 px-3 min-w-[170px]">
@@ -964,6 +1063,7 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                 const lateSessions = st.joinedLateSessions || 0;
                 const { discountAmount, finalFee, isDeductible } = calculateStudentTuition(baseFee, lateSessions, st, classes);
                 const overdue = checkOverdueStatus(st.tuitionPromiseDate, st.tuitionDeadlineDate, st.tuitionPaidDate, st.tuitionStatus);
+                const k4Info = getStudentK4ProgressInfo(st);
 
                 const isPaid = st.tuitionStatus === 'Đã đóng đủ' || (st.tuitionPaidDate && st.tuitionPaidDate.length > 0);
                 const parentPhone = st.parentPhone;
@@ -1086,6 +1186,30 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                               </button>
                             )}
                           </div>
+
+                          {/* Khóa 4 automated progress & tuition reminder info */}
+                          {k4Info.isK4 && (
+                            <div className="mt-2.5 p-2 bg-blue-50/70 border border-blue-200 rounded-xl space-y-1.5 shadow-2xs">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-md">
+                                  🎯 Khóa 4 - Chu kỳ {k4Info.currentCycle}
+                                </span>
+                                <span className="text-[10px] text-slate-700 font-bold">
+                                  Đã học: <strong className="text-slate-900 font-black">{k4Info.attendedCount} buổi</strong>
+                                </span>
+                                <span className="text-[10px] text-blue-700 font-semibold bg-white px-1.5 py-0.5 rounded border border-blue-100 font-mono">
+                                  Buổi {k4Info.sessionsThisCycle}/32
+                                </span>
+                              </div>
+                              
+                              {k4Info.needsReminder && (
+                                <div className="flex items-start gap-1 p-1.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] font-extrabold text-amber-905 leading-normal animate-pulse shadow-3xs">
+                                  <Bell className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                  <span>{k4Info.reminderMessage}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -1175,7 +1299,17 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                         {formatVND(finalFee)}
                       </div>
                       <div className="mt-0.5">
-                        {isPaid ? (
+                        {k4Info.isK4 ? (
+                          k4Info.isUnpaidForCurrentCycle ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200 animate-pulse shadow-3xs" title="Học viên đã học sang chu kỳ mới nhưng chưa đóng học phí chu kỳ này">
+                              ⚠️ Nợ CK {k4Info.currentCycle}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-3xs">
+                              <Check className="w-3 h-3 text-emerald-600" /> Đủ CK {k4Info.currentCycle}
+                            </span>
+                          )
+                        ) : isPaid ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
                             <Check className="w-3 h-3" /> Đã đóng đủ
                           </span>
@@ -1188,6 +1322,84 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                             Chưa đóng
                           </span>
                         )}
+                      </div>
+                    </td>
+
+                    {/* NGÀY BẮT ĐẦU VÀ NGÀY KẾT THÚC KHÓA RIÊNG TỪNG BẠN */}
+                    <td className="py-3 px-3">
+                      <div className="space-y-1.5 bg-blue-50/40 p-1.5 rounded-xl border border-blue-100">
+                        {/* Start Date input */}
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] text-blue-950 font-bold mb-0.5">
+                            <span>Bắt đầu học:</span>
+                            {st.startDate && (
+                              <span className="text-[9px] text-blue-600 font-mono font-normal">
+                                {formatDateDisplay(st.startDate)}
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="date"
+                            value={st.startDate || st.joinDate || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              handleStudentFieldChange(st, {
+                                startDate: val,
+                                joinDate: val,
+                              });
+                            }}
+                            className="w-full px-1.5 py-1 text-xs rounded-lg border border-blue-200 bg-white text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            title="Chọn ngày bắt đầu học riêng cho học viên này"
+                          />
+                        </div>
+
+                        {/* End Date input */}
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] text-blue-950 font-bold mb-0.5">
+                            <span>Kết thúc khóa:</span>
+                            {st.endDate && (
+                              <span className="text-[9px] text-blue-600 font-mono font-normal">
+                                {formatDateDisplay(st.endDate)}
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="date"
+                            value={st.endDate || ''}
+                            onChange={(e) => {
+                              handleStudentFieldChange(st, {
+                                endDate: e.target.value,
+                              });
+                            }}
+                            className="w-full px-1.5 py-1 text-xs rounded-lg border border-blue-200 bg-white text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            placeholder="Ngày kết thúc..."
+                            title="Chọn ngày kết thúc khóa riêng cho học viên này"
+                          />
+
+                          {/* Khóa 4 auto-calculate end date helper */}
+                          {k4Info.isK4 && (
+                            <div className="mt-1.5 p-1 bg-blue-100/50 border border-blue-200 rounded-lg text-[9.5px]">
+                              <div className="text-blue-950 font-black mb-0.5">
+                                🤖 Tự tính CK {k4Info.currentCycle} (32b):
+                              </div>
+                              <div className="font-mono text-blue-900 font-bold bg-white px-1 py-0.5 rounded border border-blue-200 text-center">
+                                {formatDateDisplay(k4Info.personalEndDate)}
+                              </div>
+                              {st.endDate !== k4Info.personalEndDate && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleStudentFieldChange(st, { endDate: k4Info.personalEndDate });
+                                  }}
+                                  className="w-full mt-1 text-center font-black text-white bg-blue-600 hover:bg-blue-700 py-0.5 rounded-md transition-all active:scale-95 cursor-pointer text-[9px]"
+                                  title="Lưu ngày kết thúc dự kiến tự động tính 32 buổi cho chu kỳ này"
+                                >
+                                  💾 Lưu ngày tự tính
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
 
@@ -1283,9 +1495,21 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                       </div>
                     </td>
 
-                    {/* Ô điền ngày tháng đóng học phí */}
+                    {/* Ô ĐIỀN VÀ HIỆN NGÀY NỘP HỌC PHÍ RIÊNG TỪNG BẠN */}
                     <td className="py-3 px-3">
-                      <div className="space-y-1">
+                      <div className="space-y-1.5 bg-emerald-50/40 p-2 rounded-xl border border-emerald-100">
+                        {/* Display badge if paid */}
+                        {st.tuitionPaidDate ? (
+                          <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-md border border-emerald-300">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-700 shrink-0" />
+                            <span>Đã nộp: <strong>{formatDateDisplay(st.tuitionPaidDate)}</strong></span>
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-slate-500 italic">
+                            Chưa ghi nhận ngày nộp
+                          </div>
+                        )}
+
                         <input
                           type="date"
                           value={st.tuitionPaidDate || ''}
@@ -1298,11 +1522,12 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                           }}
                           className={`w-full px-2 py-1 text-xs rounded-lg border focus:outline-none focus:ring-2 font-medium ${
                             st.tuitionPaidDate
-                              ? 'bg-emerald-50/70 border-emerald-300 text-emerald-900 focus:ring-emerald-500/20 font-bold'
+                              ? 'bg-white border-emerald-400 text-emerald-950 focus:ring-emerald-500/20 font-bold'
                               : 'bg-white border-slate-200 text-slate-700 focus:ring-purple-500/20'
                           }`}
+                          title="Ngày học viên thực tế nộp học phí"
                         />
-                        <div className="flex items-center justify-between text-[10px]">
+                        <div className="flex items-center justify-between text-[10px] pt-0.5">
                           <button
                             type="button"
                             onClick={() => {
@@ -1312,9 +1537,9 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                                 tuitionStatus: 'Đã đóng đủ',
                               });
                             }}
-                            className="text-purple-700 hover:underline font-bold cursor-pointer"
+                            className="text-emerald-800 bg-emerald-100/70 hover:bg-emerald-200 px-1.5 py-0.5 rounded font-bold cursor-pointer transition-colors"
                           >
-                            Hôm nay
+                            + Hôm nay
                           </button>
                           {st.tuitionPaidDate && (
                             <button
@@ -1325,7 +1550,7 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                                   tuitionStatus: 'Chưa đóng',
                                 });
                               }}
-                              className="text-slate-400 hover:text-rose-600 cursor-pointer"
+                              className="text-slate-400 hover:text-rose-600 px-1 py-0.5 rounded cursor-pointer"
                             >
                               Xóa ngày
                             </button>

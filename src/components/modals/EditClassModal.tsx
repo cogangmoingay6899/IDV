@@ -33,7 +33,7 @@ import {
   CalendarDays,
   Lock,
 } from 'lucide-react';
-import { ClassGroup, Teacher, CurriculumCourse, Student, AuthUser } from '../../types';
+import { ClassGroup, Teacher, CurriculumCourse, Student, AuthUser, AttendanceRecord } from '../../types';
 import {
   COURSE_LEVEL_CONFIGS,
   SCHEDULE_PRESETS,
@@ -51,6 +51,7 @@ interface EditClassModalProps {
   teachers: Teacher[];
   courses: CurriculumCourse[];
   students?: Student[];
+  attendanceRecords?: AttendanceRecord[];
   onUpdateClass: (
     updatedClass: ClassGroup,
     modifiedStudents?: Student[],
@@ -70,6 +71,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
   teachers,
   courses,
   students = [],
+  attendanceRecords = [],
   onUpdateClass,
   currentUser,
 }) => {
@@ -105,6 +107,116 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
   const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
   const isTeacher = (currentUser?.role === 'teacher') && !isVuNgoc;
   const [originalStudentIds, setOriginalStudentIds] = useState<Set<string>>(new Set());
+
+  // Helper: compute Khóa 4 progress and auto-calculate end date & tuition reminders
+  const getStudentK4ProgressInfo = (st: Student) => {
+    const isStudentK4 =
+      st.className?.toLowerCase().includes('khóa 4') ||
+      st.className?.toLowerCase().includes('drill') ||
+      st.courseName?.toLowerCase().includes('khóa 4') ||
+      st.courseName?.toLowerCase().includes('drill') ||
+      detectCourseLevel(st.className || st.courseName || '', 32) === 'Khóa 4' ||
+      st.isExternalStudent ||
+      st.studentCategory === 'Học sinh ngoài' ||
+      (formData.name?.toLowerCase().includes('khóa 4') ||
+       formData.name?.toLowerCase().includes('drill') ||
+       formData.courseName?.toLowerCase().includes('khóa 4') ||
+       formData.courseName?.toLowerCase().includes('drill') ||
+       detectCourseLevel(formData.name || formData.courseName || '', 32) === 'Khóa 4');
+
+    if (!isStudentK4) {
+      return { isK4: false };
+    }
+
+    // Filter attendance records specifically for this student in their active class
+    const studentAttendance = attendanceRecords.filter(
+      (r) => r.studentId === st.id && r.classId === st.classId
+    );
+    const attendedCount = studentAttendance.length;
+
+    // Find class schedule details
+    const scheduleStr = formData.schedule || 'Thứ 2 + Thứ 5 (Ca 1: 18:00 - 19:45)';
+    const startDate = st.startDate || st.joinDate || formData.startDate || new Date().toISOString().split('T')[0];
+
+    // Determine current cycle (each cycle of K4 is 32 sessions)
+    const currentCycle = Math.floor(attendedCount / 32) + 1;
+    const sessionsThisCycle = attendedCount % 32;
+    const nextCycleSessions = currentCycle * 32;
+
+    // Calculate personal end date for the CURRENT cycle
+    const currentCycleSchedule = calculateCourseSchedule(
+      startDate,
+      scheduleStr,
+      nextCycleSessions,
+      offDates,
+      'Khóa 4'
+    );
+    const personalEndDate =
+      currentCycleSchedule.sessions[currentCycleSchedule.sessions.length - 1]?.date || '';
+
+    // Calculate previous cycle end date (if any)
+    let previousCycleEndDate = '';
+    if (currentCycle > 1) {
+      const prevCycleSchedule = calculateCourseSchedule(
+        startDate,
+        scheduleStr,
+        (currentCycle - 1) * 32,
+        offDates,
+        'Khóa 4'
+      );
+      previousCycleEndDate =
+        prevCycleSchedule.sessions[prevCycleSchedule.sessions.length - 1]?.date || '';
+    }
+
+    // Determine if student has paid for the current cycle
+    const isUnpaidForCurrentCycle =
+      currentCycle > 1 &&
+      (!st.tuitionPaidDate || (previousCycleEndDate && st.tuitionPaidDate < previousCycleEndDate));
+
+    const isApproachingCycleEnd = sessionsThisCycle >= 28;
+
+    let reminderMessage = '';
+    let needsReminder = false;
+
+    if (isUnpaidForCurrentCycle) {
+      needsReminder = true;
+      reminderMessage = `⚠️ NỢ PHÍ CHU KỲ ${currentCycle}: Đã học sang buổi ${sessionsThisCycle + 32 * (currentCycle - 1)} nhưng chưa nộp tiền đợt mới!`;
+    } else if (isApproachingCycleEnd) {
+      needsReminder = true;
+      reminderMessage = `🔔 SẮP HẾT KHÓA: Đã học ${sessionsThisCycle}/32 buổi của Chu kỳ ${currentCycle}. Nhắc đóng học phí cho chu kỳ tiếp theo!`;
+    }
+
+    return {
+      isK4: true,
+      attendedCount,
+      currentCycle,
+      sessionsThisCycle,
+      totalSessionsForCycle: nextCycleSessions,
+      personalEndDate,
+      previousCycleEndDate,
+      isUnpaidForCurrentCycle,
+      isApproachingCycleEnd,
+      needsReminder,
+      reminderMessage,
+    };
+  };
+
+  // Generic helper for ALL courses to calculate end date based on class settings
+  const calculatePersonalEndDate = (st: Student) => {
+    const scheduleStr = formData.schedule || 'Thứ 2 + Thứ 5 (Ca 1: 18:00 - 19:45)';
+    const offDates = formData.offDates || []; // Use modal's offDates
+    const startDate = st.startDate || st.joinDate || formData.startDate || new Date().toISOString().split('T')[0];
+    const totalSessions = formData.totalSessions || 32;
+
+    const schedule = calculateCourseSchedule(
+      startDate,
+      scheduleStr,
+      totalSessions,
+      offDates,
+      selectedCourseLevel
+    );
+    return schedule.sessions[schedule.sessions.length - 1]?.date || '';
+  };
 
   // Local state for existing class students being edited
   const [editableStudents, setEditableStudents] = useState<Student[]>([]);
@@ -338,6 +450,14 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
             updated.balanceOwed = 0;
           } else if (value === 'Chưa đóng') {
             updated.balanceOwed = fee;
+          }
+        }
+
+        if (field === 'tuitionPaidDate') {
+          updated.tuitionPaidDate = value;
+          if (value && (updated.balanceOwed === 0 || updated.tuitionStatus === 'Chưa đóng')) {
+            updated.tuitionStatus = 'Đã đóng đủ';
+            updated.balanceOwed = 0;
           }
         }
 
@@ -1155,6 +1275,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                       const hasCustomFee = st.customTuitionFee && st.customTuitionFee !== formData.tuitionFee;
                       const effectiveTuition = st.customTuitionFee ?? (formData.tuitionFee || 14500000);
                       const isStudentDisabled = isTeacher && originalStudentIds.has(st.id);
+                      const k4Info = getStudentK4ProgressInfo(st);
 
                       return (
                         <div
@@ -1369,7 +1490,32 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                   </span>
                                 </div>
 
-                                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                                {/* Khóa 4 progress and auto-calculate info inside editor modal */}
+                                {k4Info.isK4 && (
+                                  <div className="p-3 bg-blue-50/80 rounded-xl border border-blue-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="bg-blue-600 text-white font-black px-1.5 py-0.5 rounded text-[10px]">
+                                          🎯 CHU KỲ {k4Info.currentCycle}
+                                        </span>
+                                        <span className="font-extrabold text-blue-900">
+                                          Tiến độ học viên: {k4Info.attendedCount}/32b (Buổi {k4Info.sessionsThisCycle} của CK này)
+                                        </span>
+                                      </div>
+                                      {k4Info.needsReminder && (
+                                        <p className="text-[11px] font-black text-rose-700 animate-pulse">
+                                          {k4Info.reminderMessage}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] bg-white px-2 py-1 rounded border border-blue-200">
+                                      <span className="font-bold text-slate-500">KT CK {k4Info.currentCycle}:</span>{' '}
+                                      <strong className="text-blue-700 font-mono">{formatDateVN(k4Info.personalEndDate)}</strong>
+                                    </div>
+                                  </div>
+                                )}
+
+                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                                   <div>
                                     <label className="text-[11px] font-bold text-slate-700 block mb-1">
                                       Học phí riêng của học viên (VNĐ):
@@ -1442,6 +1588,30 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                   </div>
 
                                   <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center justify-between">
+                                      <span>💳 Ngày nộp học phí:</span>
+                                      {st.tuitionPaidDate && (
+                                        <span className="text-[9px] text-emerald-600 font-bold">✓ Đã nộp</span>
+                                      )}
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={st.tuitionPaidDate || ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        handleUpdateStudentField(st.id, 'tuitionPaidDate', val);
+                                        if (val) {
+                                          handleUpdateStudentField(st.id, 'tuitionStatus', 'Đã đóng đủ');
+                                          handleUpdateStudentField(st.id, 'balanceOwed', 0);
+                                        }
+                                      }}
+                                      className="w-full bg-white border border-emerald-300 rounded-lg p-2 text-xs font-semibold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
+                                      title="Chọn ngày nộp học phí"
+                                    />
+                                  </div>
+
+                                  <div>
                                     <label className="text-[11px] font-bold text-slate-700 block mb-1">
                                       Hạn nộp / Ngày hẹn nộp
                                     </label>
@@ -1452,6 +1622,47 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                         handleUpdateStudentField(st.id, 'tuitionPromiseDate', e.target.value);
                                         handleUpdateStudentField(st.id, 'tuitionDeadlineDate', e.target.value);
                                       }}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Student-specific Dates Grid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-amber-200/50">
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                      📅 Ngày bắt đầu học riêng:
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={st.startDate || st.joinDate || ''}
+                                      onChange={(e) => {
+                                        handleUpdateStudentField(st.id, 'startDate', e.target.value);
+                                        handleUpdateStudentField(st.id, 'joinDate', e.target.value);
+                                      }}
+                                      className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
+                                      disabled={isStudentDisabled}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center justify-between">
+                                      <span>📅 Ngày kết thúc khóa riêng:</span>
+                                      {st.endDate !== calculatePersonalEndDate(st) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleUpdateStudentField(st.id, 'endDate', calculatePersonalEndDate(st))}
+                                          className="text-[9px] text-blue-700 font-extrabold hover:underline"
+                                        >
+                                          🤖 Lấy ngày tự tính
+                                        </button>
+                                      )}
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={st.endDate || ''}
+                                      onChange={(e) => handleUpdateStudentField(st.id, 'endDate', e.target.value)}
                                       className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-800 focus:outline-none disabled:bg-slate-100/80 disabled:text-slate-500 disabled:cursor-not-allowed"
                                       disabled={isStudentDisabled}
                                     />

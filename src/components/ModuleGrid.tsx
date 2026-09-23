@@ -162,8 +162,19 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
   // - Admin: All modules
   const isDuongVu = currentUser?.email === 'ieltsduongvu@gmail.com' || currentUser?.email === 'ieltsduongvu5@gmail.com' || currentUser?.name?.includes('Dương Vũ');
   const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
+  const isNhungPhan = currentUser?.email?.trim().toLowerCase() === 'nhungphan.mkt@gmail.com';
 
-  const visibleModules = isTeacher && !isDuongVu
+  const visibleModules = isNhungPhan
+    ? allModules
+        .filter((m) => m.id === 'students')
+        .map((m) => ({
+          ...m,
+          title: 'Nhật Ký & Chấm Điểm Buổi Học',
+          subtitle: 'Vào lớp học để ghi nhận nhật ký và chấm điểm chi tiết từng buổi học',
+          badge: 'Trợ lý chuyên trách',
+          badgeColor: 'bg-purple-100 text-purple-900 font-bold',
+        }))
+    : isTeacher && !isDuongVu
     ? allModules.filter((m) => m.id === 'trial' || m.id === 'exams' || m.id === 'teacher_sessions')
     : isTeacher
     ? allModules.filter((m) => m.id === 'students' || m.id === 'trial' || m.id === 'exams' || m.id === 'teacher_sessions')

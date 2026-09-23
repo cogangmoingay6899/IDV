@@ -35,6 +35,9 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     classId: initialClass?.id || '',
     tuitionFee: initialClass?.tuitionFee || 14500000,
     paidAmount: initialClass?.tuitionFee || 14500000,
+    startDate: initialClass?.startDate || new Date().toISOString().split('T')[0],
+    endDate: initialClass?.endDate || '',
+    tuitionPaidDate: new Date().toISOString().split('T')[0],
     isExternalStudent: initialIsK4,
   });
 
@@ -54,6 +57,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
       classId: newClassId,
       tuitionFee: targetClass?.tuitionFee || prev.tuitionFee,
       paidAmount: targetClass?.tuitionFee || prev.paidAmount,
+      startDate: targetClass?.startDate || prev.startDate,
+      endDate: targetClass?.endDate || prev.endDate,
       isExternalStudent: targetIsK4 ? true : prev.isExternalStudent,
     }));
   };
@@ -77,8 +82,12 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
       className: selectedClass?.name || 'Lớp học',
       courseName: selectedClass?.courseName || 'Khóa học tiếng Anh',
       status: 'Đang học',
-      joinDate: new Date().toISOString().split('T')[0],
-      tuitionStatus: balance === 0 ? 'Đã đóng đủ' : 'Còn nợ',
+      joinDate: formData.startDate || new Date().toISOString().split('T')[0],
+      startDate: formData.startDate || selectedClass?.startDate,
+      endDate: formData.endDate || selectedClass?.endDate,
+      tuitionStatus: balance === 0 ? 'Đã đóng đủ' : formData.paidAmount > 0 ? 'Còn nợ' : 'Chưa đóng',
+      tuitionPaidDate: formData.paidAmount > 0 ? formData.tuitionPaidDate : undefined,
+      tuitionAmountPaid: formData.paidAmount,
       balanceOwed: balance,
       isExternalStudent: formData.isExternalStudent,
       studentCategory: formData.isExternalStudent ? 'Học sinh ngoài' : 'Thường',
@@ -241,6 +250,38 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
             </p>
           </div>
 
+          {/* Ngày bắt đầu học riêng & Ngày kết thúc khóa riêng từng học viên */}
+          <div className="grid grid-cols-2 gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+            <div>
+              <label className="font-semibold text-blue-900 block mb-1">
+                📅 Ngày bắt đầu học riêng
+              </label>
+              <input
+                type="date"
+                value={formData.startDate}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                className="w-full bg-white border border-blue-200 rounded-lg p-2 font-medium text-slate-800"
+              />
+              <p className="text-[10px] text-blue-600 mt-1">
+                Mặc định theo lịch khai giảng của lớp
+              </p>
+            </div>
+            <div>
+              <label className="font-semibold text-blue-900 block mb-1">
+                🏁 Ngày kết thúc khóa riêng
+              </label>
+              <input
+                type="date"
+                value={formData.endDate}
+                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                className="w-full bg-white border border-blue-200 rounded-lg p-2 font-medium text-slate-800"
+              />
+              <p className="text-[10px] text-blue-600 mt-1">
+                Ngày bế giảng dự kiến của bạn
+              </p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 p-3 bg-purple-50/50 rounded-xl border border-purple-100">
             <div>
               <label className="font-semibold text-purple-900 block mb-1">
@@ -287,6 +328,24 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
               </p>
             </div>
           </div>
+
+          {/* Ngày nộp học phí riêng */}
+          {formData.paidAmount > 0 && (
+            <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-200">
+              <label className="font-semibold text-emerald-950 block mb-1">
+                💳 Ngày nộp học phí riêng
+              </label>
+              <input
+                type="date"
+                value={formData.tuitionPaidDate}
+                onChange={(e) => setFormData({ ...formData, tuitionPaidDate: e.target.value })}
+                className="w-full bg-white border border-emerald-300 rounded-lg p-2 font-bold text-emerald-900"
+              />
+              <p className="text-[10px] text-emerald-700 mt-1">
+                Ghi nhận ngày học viên thực tế hoàn tất hoặc đóng học phí đợt này
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
             <button

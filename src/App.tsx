@@ -195,7 +195,8 @@ import {
   KeyRound,
   Lock,
   Plus,
-  FileSpreadsheet
+  FileSpreadsheet,
+  BookOpen
 } from 'lucide-react';
 
 export default function App() {
@@ -623,13 +624,19 @@ export default function App() {
 
   // Role Enforcement according to exact specifications:
   // - Teacher: Only 'students' (Học viên & Lớp) and 'trial' (Học thử)
-  // - Assistant: 'students', 'admissions', 'exams', 'contact_book', 'placement', 'trial'
+  // - Assistant Nhung Phan: Only 'students' (Nhật ký & Chấm điểm buổi học)
+  // - Assistant (standard): 'students', 'admissions', 'exams', 'contact_book', 'placement', 'trial', 'teacher_sessions', 'curriculum'
   // - Admin: All modules
   const isTeacher = currentUser?.role === 'teacher';
   const isAssistant = currentUser?.role === 'assistant';
+  const isNhungPhan = currentUser?.email?.trim().toLowerCase() === 'nhungphan.mkt@gmail.com';
 
   useEffect(() => {
-    if (isTeacher) {
+    if (isNhungPhan) {
+      if (currentModule !== 'students') {
+        setCurrentModule('students');
+      }
+    } else if (isTeacher) {
       if (
         currentModule !== 'students' &&
         currentModule !== 'trial' &&
@@ -653,7 +660,7 @@ export default function App() {
         setCurrentModule('students');
       }
     }
-  }, [currentUser?.role, isTeacher, isAssistant, currentModule]);
+  }, [currentUser?.role, isTeacher, isAssistant, isNhungPhan, currentModule]);
 
   // Computed KPI stats for dashboard
   const stats = useMemo(() => {
@@ -1661,7 +1668,9 @@ export default function App() {
     { id: 'inventory', title: 'Kho hàng', icon: <PackageCheck className="w-3.5 h-3.5" /> },
   ];
 
-  const moduleNavList = isTeacher
+  const moduleNavList = isNhungPhan
+    ? [{ id: 'students' as ModuleId, title: 'Nhật Ký & Chấm Điểm', icon: <BookOpen className="w-3.5 h-3.5 text-purple-600" /> }]
+    : isTeacher
     ? allNavModules.filter((m) => m.id === 'students' || m.id === 'exams' || m.id === 'teacher_sessions' || m.id === 'trial')
     : isAssistant
     ? allNavModules.filter((m) =>
@@ -1878,6 +1887,14 @@ export default function App() {
             <div className="hidden md:flex items-center gap-2 text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200 shrink-0">
               <Shield className="w-3.5 h-3.5 text-emerald-600" />
               <span>Phân quyền Giáo viên: Truy cập Lớp học & Điểm thi</span>
+            </div>
+          )}
+
+          {/* If Assistant Nhung Phan, show role reminder */}
+          {isNhungPhan && (
+            <div className="hidden md:flex items-center gap-2 text-xs font-semibold text-purple-900 bg-purple-50 px-3 py-1 rounded-xl border border-purple-200 shrink-0">
+              <Shield className="w-3.5 h-3.5 text-purple-600" />
+              <span>Phân quyền Trợ lý Nhung Phan: Nhật ký & Chấm điểm buổi học</span>
             </div>
           )}
         </div>

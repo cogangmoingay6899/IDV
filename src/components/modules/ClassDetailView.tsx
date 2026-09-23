@@ -148,14 +148,22 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   currentUser,
 }) => {
   const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
+  const isNhungPhan = currentUser?.email?.trim().toLowerCase() === 'nhungphan.mkt@gmail.com';
   // Permission: Only Center Managers (admin), Assistants (assistant), and Vũ Ngọc are allowed to access Course Management & Student Tuition
-  const canAccessCourseTuition = !currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant' || isVuNgoc;
-  const isManager = currentUser?.role === 'admin' || isVuNgoc;
+  // Note: Assistant Nhung Phan is restricted to only viewing and entering the daily log & grading (Nhật ký & Chấm điểm buổi học)
+  const canAccessCourseTuition = !isNhungPhan && (!currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant' || isVuNgoc);
+  const isManager = !isNhungPhan && (currentUser?.role === 'admin' || isVuNgoc);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeletingClass, setIsDeletingClass] = useState(false);
 
   // Default directly to grading log as requested by user
   const [activeTab, setActiveTab] = useState<'daily_log' | 'students' | 'sheet_view' | 'vocab_tests'>('daily_log');
+
+  useEffect(() => {
+    if (isNhungPhan && activeTab !== 'daily_log') {
+      setActiveTab('daily_log');
+    }
+  }, [isNhungPhan, activeTab]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -210,6 +218,100 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
       }));
     }
   }, [classGroup, isTermHistoryModalOpen]);
+
+  // Helper: compute Khóa 4 progress and auto-calculate end date & tuition reminders
+  const getStudentK4ProgressInfo = (st: Student) => {
+    const isStudentK4 =
+      st.className?.toLowerCase().includes('khóa 4') ||
+      st.className?.toLowerCase().includes('drill') ||
+      st.courseName?.toLowerCase().includes('khóa 4') ||
+      st.courseName?.toLowerCase().includes('drill') ||
+      detectCourseLevel(st.className || st.courseName || '', 32) === 'Khóa 4' ||
+      st.isExternalStudent ||
+      st.studentCategory === 'Học sinh ngoài' ||
+      (classGroup.name?.toLowerCase().includes('khóa 4') ||
+       classGroup.name?.toLowerCase().includes('drill') ||
+       classGroup.courseName?.toLowerCase().includes('khóa 4') ||
+       classGroup.courseName?.toLowerCase().includes('drill') ||
+       detectCourseLevel(classGroup.name || classGroup.courseName || '', 32) === 'Khóa 4');
+
+    if (!isStudentK4) {
+      return { isK4: false };
+    }
+
+    // Filter attendance records specifically for this student in their active class
+    const studentAttendance = attendanceRecords.filter(
+      (r) => r.studentId === st.id && r.classId === st.classId
+    );
+    const attendedCount = studentAttendance.length;
+
+    // Find class schedule details
+    const scheduleStr = classGroup.schedule || 'Thứ 2 + Thứ 5 (Ca 1: 18:00 - 19:45)';
+    const offDates = classGroup.offDates || [];
+    const startDate = st.startDate || st.joinDate || classGroup.startDate || new Date().toISOString().split('T')[0];
+
+    // Determine current cycle (each cycle of K4 is 32 sessions)
+    const currentCycle = Math.floor(attendedCount / 32) + 1;
+    const sessionsThisCycle = attendedCount % 32;
+    const nextCycleSessions = currentCycle * 32;
+
+    // Calculate personal end date for the CURRENT cycle
+    const currentCycleSchedule = calculateCourseSchedule(
+      startDate,
+      scheduleStr,
+      nextCycleSessions,
+      offDates,
+      'Khóa 4'
+    );
+    const personalEndDate =
+      currentCycleSchedule.sessions[currentCycleSchedule.sessions.length - 1]?.date || '';
+
+    // Calculate previous cycle end date (if any)
+    let previousCycleEndDate = '';
+    if (currentCycle > 1) {
+      const prevCycleSchedule = calculateCourseSchedule(
+        startDate,
+        scheduleStr,
+        (currentCycle - 1) * 32,
+        offDates,
+        'Khóa 4'
+      );
+      previousCycleEndDate =
+        prevCycleSchedule.sessions[prevCycleSchedule.sessions.length - 1]?.date || '';
+    }
+
+    // Determine if student has paid for the current cycle
+    const isUnpaidForCurrentCycle =
+      currentCycle > 1 &&
+      (!st.tuitionPaidDate || (previousCycleEndDate && st.tuitionPaidDate < previousCycleEndDate));
+
+    const isApproachingCycleEnd = sessionsThisCycle >= 28;
+
+    let reminderMessage = '';
+    let needsReminder = false;
+
+    if (isUnpaidForCurrentCycle) {
+      needsReminder = true;
+      reminderMessage = `⚠️ NỢ PHÍ CHU KỲ ${currentCycle}: Đã học sang buổi ${sessionsThisCycle + 32 * (currentCycle - 1)} nhưng chưa nộp tiền đợt mới!`;
+    } else if (isApproachingCycleEnd) {
+      needsReminder = true;
+      reminderMessage = `🔔 SẮP HẾT KHÓA: Đã học ${sessionsThisCycle}/32 buổi của Chu kỳ ${currentCycle}. Nhắc đóng học phí cho chu kỳ tiếp theo!`;
+    }
+
+    return {
+      isK4: true,
+      attendedCount,
+      currentCycle,
+      sessionsThisCycle,
+      totalSessionsForCycle: nextCycleSessions,
+      personalEndDate,
+      previousCycleEndDate,
+      isUnpaidForCurrentCycle,
+      isApproachingCycleEnd,
+      needsReminder,
+      reminderMessage,
+    };
+  };
 
   // Full Roster Modal State (Xem toàn bộ danh sách học viên lớp ngắn gọn STT, Tên, DOB, Gmail, SĐT)
   const [isFullRosterModalOpen, setIsFullRosterModalOpen] = useState(false);
@@ -1344,7 +1446,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 )}
               </button>
             )}
-            {onUpdateClass && !canAccessCourseTuition && (
+            {onUpdateClass && !canAccessCourseTuition && !isNhungPhan && (
               <div
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-400 bg-slate-100/80 border border-slate-200/80 rounded-xl cursor-not-allowed select-none"
                 title="Quản lý Khóa học & Học phí chỉ dành riêng cho Quản lý trung tâm và Trợ lý"
@@ -1353,7 +1455,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 <span>Khóa & Học phí (Quản lý & Trợ lý)</span>
               </div>
             )}
-            {onUpdateClass && (
+            {onUpdateClass && !isNhungPhan && (
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(true)}
@@ -1573,44 +1675,48 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
             <span>📝 Nhật Ký & Chấm Điểm Buổi Học</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('students')}
-            className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-              activeTab === 'students'
-                ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
-                : 'text-slate-600 hover:text-purple-700 hover:bg-slate-50'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>📋 Xem Tổng Danh Sách Lớp ({classStudents.length} HV)</span>
-          </button>
+          {!isNhungPhan && (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveTab('students')}
+                className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                  activeTab === 'students'
+                    ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
+                    : 'text-slate-600 hover:text-purple-700 hover:bg-slate-50'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>📋 Xem Tổng Danh Sách Lớp ({classStudents.length} HV)</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('sheet_view')}
-            className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-              activeTab === 'sheet_view'
-                ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
-                : 'text-slate-600 hover:text-purple-700 hover:bg-slate-50'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>📊 Sổ Bảng Điểm & Học Phí</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('sheet_view')}
+                className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                  activeTab === 'sheet_view'
+                    ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
+                    : 'text-slate-600 hover:text-purple-700 hover:bg-slate-50'
+                }`}
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>📊 Sổ Bảng Điểm & Học Phí</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('vocab_tests')}
-            className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-              activeTab === 'vocab_tests'
-                ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
-                : 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-amber-600" />
-            <span>📚 Test Từ Vựng Khóa 1, 2, 3, 4</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('vocab_tests')}
+                className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                  activeTab === 'vocab_tests'
+                    ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
+                    : 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 text-amber-600" />
+                <span>📚 Test Từ Vựng Khóa 1, 2, 3, 4</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* MỤC HỌC VIÊN TRONG LỚP (Chỉ Quản lý và Trợ lý được phân quyền thấy) */}
@@ -1656,7 +1762,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 <BookOpen className="w-4 h-4 text-purple-700" />
                 <span>Bảng Chấm Điểm & Nhật Ký Buổi Học (Hỗ trợ nhiều kĩ năng trong 1 buổi)</span>
               </div>
-              {onAddTeacher && (
+              {onAddTeacher && !isNhungPhan && (
                 <button
                   onClick={() => setIsTeacherModalOpen(true)}
                   className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-colors"
@@ -2837,12 +2943,13 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                   <tr>
                     <th className="py-3 px-3 w-12 text-center">STT</th>
                     <th className="py-3 px-3 min-w-[160px]">Họ và tên học viên</th>
-                    <th className="py-3 px-3 min-w-[190px]">Gmail</th>
-                    <th className="py-3 px-3 min-w-[110px]">Ngày sinh (DOB)</th>
-                    <th className="py-3 px-3 min-w-[150px]">Phụ huynh</th>
-                    <th className="py-3 px-3 w-32 text-center">Trạng thái học viên</th>
-                    <th className="py-3 px-3 min-w-[150px] text-center">Học phí & Cảnh báo</th>
-                    <th className="py-3 px-3 w-28 text-center">Thao tác</th>
+                    <th className="py-3 px-3 min-w-[180px]">Gmail</th>
+                    <th className="py-3 px-3 min-w-[100px]">Ngày sinh (DOB)</th>
+                    <th className="py-3 px-3 min-w-[140px]">Phụ huynh</th>
+                    <th className="py-3 px-3 min-w-[150px]">📅 Ngày học riêng</th>
+                    <th className="py-3 px-3 w-28 text-center">Trạng thái</th>
+                    <th className="py-3 px-3 min-w-[160px] text-center">Học phí & Ngày nộp</th>
+                    <th className="py-3 px-3 w-24 text-center">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
@@ -2862,6 +2969,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                       const cleanEmail =
                         st.email ||
                         `${st.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@gmail.com`;
+                      const k4Info = getStudentK4ProgressInfo(st);
 
                       return (
                         <tr key={st.id} className="hover:bg-purple-50/40 transition-colors">
@@ -2890,6 +2998,16 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                                     </span>
                                   )}
                                 </div>
+                                {k4Info.isK4 && (
+                                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                    <span className="inline-flex items-center text-[9px] font-extrabold bg-blue-600 text-white px-1.5 py-0.2 rounded" title={`Chu kỳ ${k4Info.currentCycle}`}>
+                                      🎯 K4 CK {k4Info.currentCycle}
+                                    </span>
+                                    <span className="text-[9px] text-blue-700 bg-blue-50 px-1 py-0.2 rounded border border-blue-100 font-bold">
+                                      Đã học: {k4Info.attendedCount}b (Buổi {k4Info.sessionsThisCycle}/32)
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -2905,6 +3023,73 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                           <td className="py-3.5 px-3 text-slate-700">
                             <div className="font-semibold text-slate-800">{st.parentName || 'Chưa cập nhật'}</div>
                           </td>
+
+                          {/* Ngày học riêng (Bắt đầu & Kết thúc) */}
+                          <td className="py-3.5 px-3">
+                            <div className="space-y-1.5 bg-blue-50/50 p-2 rounded-xl border border-blue-200/70 text-[10px]">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-blue-900 font-bold shrink-0">BĐ:</span>
+                                <input
+                                  type="date"
+                                  value={st.startDate || st.joinDate || ''}
+                                  onChange={(e) => {
+                                    if (onUpdateStudent) {
+                                      const val = e.target.value;
+                                      onUpdateStudent({
+                                        ...st,
+                                        startDate: val,
+                                        joinDate: val,
+                                      });
+                                    }
+                                  }}
+                                  className="text-[10px] p-0.5 bg-white border border-blue-200 rounded focus:outline-none w-28 text-slate-800 font-medium"
+                                />
+                              </div>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-blue-900 font-bold shrink-0">KT:</span>
+                                <input
+                                  type="date"
+                                  value={st.endDate || ''}
+                                  onChange={(e) => {
+                                    if (onUpdateStudent) {
+                                      onUpdateStudent({
+                                        ...st,
+                                        endDate: e.target.value,
+                                      });
+                                    }
+                                  }}
+                                  className="text-[10px] p-0.5 bg-white border border-blue-200 rounded focus:outline-none w-28 text-slate-800 font-medium"
+                                />
+                              </div>
+
+                              {/* Khóa 4 auto-calculate end date helper */}
+                              {k4Info.isK4 && (
+                                <div className="mt-1 p-1 bg-white border border-blue-200 rounded-lg text-[9px] space-y-0.5 shadow-2xs">
+                                  <div className="text-blue-900 font-bold">🤖 Tự tính:</div>
+                                  <div className="font-mono text-blue-800 text-center bg-blue-50/50 py-0.5 rounded border border-blue-100 font-bold">
+                                    {formatDateVN(k4Info.personalEndDate)}
+                                  </div>
+                                  {st.endDate !== k4Info.personalEndDate && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (onUpdateStudent) {
+                                          onUpdateStudent({
+                                            ...st,
+                                            endDate: k4Info.personalEndDate,
+                                          });
+                                        }
+                                      }}
+                                      className="w-full text-center text-[8.5px] font-black text-white bg-blue-600 hover:bg-blue-700 py-0.5 rounded transition-all active:scale-95 cursor-pointer mt-1"
+                                    >
+                                      💾 Lưu ngày tự tính
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
                           <td className="py-3.5 px-3 text-center">
                             <span
                               className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -2917,24 +3102,70 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                             </span>
                           </td>
                           <td className="py-3.5 px-3 text-center">
-                            <div className="flex flex-col items-center gap-1">
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  st.tuitionStatus === 'Đã đóng đủ'
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : st.tuitionStatus === 'Còn nợ'
-                                    ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
-                                    : 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse'
-                                }`}
-                              >
-                                {st.tuitionStatus || 'Chưa đóng'}
-                              </span>
+                            <div className="flex flex-col items-center gap-1.5">
+                              {k4Info.isK4 ? (
+                                k4Info.isUnpaidForCurrentCycle ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 animate-pulse shadow-3xs" title="Học viên đã học sang chu kỳ mới nhưng chưa đóng học phí chu kỳ này">
+                                    ⚠️ Nợ CK {k4Info.currentCycle}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shadow-3xs">
+                                    <Check className="w-3 h-3 text-emerald-600" /> Đủ CK {k4Info.currentCycle}
+                                  </span>
+                                )
+                              ) : (
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    st.tuitionStatus === 'Đã đóng đủ'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : st.tuitionStatus === 'Còn nợ'
+                                      ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse'
+                                      : 'bg-rose-50 text-rose-700 border border-rose-200 animate-pulse'
+                                  }`}
+                                >
+                                  {st.tuitionStatus || 'Chưa đóng'}
+                                </span>
+                              )}
+
+                              {/* Editable tuitionPaidDate input */}
+                              <div className="w-full max-w-[130px] space-y-0.5 bg-emerald-50/50 p-1.5 rounded-xl border border-emerald-200/60">
+                                {st.tuitionPaidDate ? (
+                                  <div className="text-[10px] font-bold text-emerald-800 flex items-center justify-center gap-0.5 mb-1 bg-white px-1 py-0.2 rounded border border-emerald-100">
+                                    <span>💳 Đã nộp:</span>
+                                    <span>{formatDateVN(st.tuitionPaidDate)}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[9px] text-slate-400 italic block mb-1">Chưa nộp học phí</span>
+                                )}
+                                <input
+                                  type="date"
+                                  value={st.tuitionPaidDate || ''}
+                                  onChange={(e) => {
+                                    if (onUpdateStudent) {
+                                      const val = e.target.value;
+                                      onUpdateStudent({
+                                        ...st,
+                                        tuitionPaidDate: val,
+                                        tuitionStatus: val ? 'Đã đóng đủ' : st.tuitionStatus,
+                                      });
+                                    }
+                                  }}
+                                  className="w-full text-[10px] p-0.5 bg-white border border-emerald-200 rounded focus:outline-none text-slate-800 text-center font-medium"
+                                  title="Chọn ngày nộp học phí riêng"
+                                />
+                              </div>
 
                               {st.balanceOwed && st.balanceOwed > 0 ? (
                                 <div className="text-[10px] font-mono font-bold text-rose-600 bg-rose-50/60 px-1.5 py-0.5 rounded border border-rose-200">
                                   Thiếu: {new Intl.NumberFormat('vi-VN').format(st.balanceOwed)}đ
                                 </div>
                               ) : null}
+
+                              {k4Info.isK4 && k4Info.needsReminder && (
+                                <div className="text-[9px] font-bold text-amber-900 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 max-w-[160px] text-center leading-tight animate-pulse shadow-3xs">
+                                  🔔 {k4Info.reminderMessage}
+                                </div>
+                              )}
 
                               {st.tuitionReminderNote || st.tuitionPromiseNote ? (
                                 <div className="text-[9px] font-bold text-amber-800 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200 max-w-[160px] text-center leading-tight">
@@ -3652,6 +3883,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
           teachers={teachers}
           courses={courses}
           students={allStudents}
+          attendanceRecords={attendanceRecords}
           currentUser={currentUser}
           onUpdateClass={(updated, modifiedSts, newPasted) => {
             onUpdateClass(updated, modifiedSts, newPasted);
@@ -3786,6 +4018,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                   classes={classGroup ? [classGroup] : []}
                   onUpdateStudent={onUpdateStudent || (() => {})}
                   currentUser={currentUser}
+                  attendanceRecords={attendanceRecords}
                 />
               )}
 

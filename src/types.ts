@@ -58,12 +58,15 @@ export interface Student {
   droppedReason?: string;
   waitingForClassId?: string;
   waitingNote?: string;
-  // Quản lý học phí khóa học
+  // Quản lý ngày học riêng từng học viên & Học phí khóa học
+  startDate?: string; // Ngày bắt đầu học riêng từng bạn (nếu khác ngày khai giảng chung của lớp)
+  endDate?: string; // Ngày kết thúc khóa riêng từng bạn (dự kiến hoặc thực tế)
   courseTuitionFee?: number;
   joinedLateSessions?: number;
   tuitionDiscountLate?: number;
   tuitionPayable?: number;
-  tuitionPaidDate?: string;
+  tuitionPaidDate?: string; // Ngày nộp học phí riêng từng bạn
+  tuitionAmountPaid?: number; // Số tiền học phí đã nộp thực tế
   tuitionDeadlineDate?: string; // Hạn nộp học phí quy định
   tuitionReminderCount?: number;
   tuitionReminderNote?: string;
