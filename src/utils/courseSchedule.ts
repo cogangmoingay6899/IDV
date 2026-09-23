@@ -1026,3 +1026,116 @@ ${nextCourseStartDateFormatted ? `- 🌟 Khai giảng khóa mới (${nextCourseN
 
 Trân trọng chúc mừng sự nỗ lực và tiến bộ vượt bậc của các bạn học viên trong suốt khóa học vừa qua!`;
 }
+
+/**
+ * Chuyển đổi mọi định dạng ngày (DD/MM/YYYY, ISO, timestamp...) sang chuẩn YYYY-MM-DD
+ */
+export function toISODateString(dateInput?: string | Date | number | null): string {
+  if (!dateInput) return '';
+  if (dateInput instanceof Date) {
+    if (isNaN(dateInput.getTime())) return '';
+    const y = dateInput.getFullYear();
+    const m = String(dateInput.getMonth() + 1).padStart(2, '0');
+    const d = String(dateInput.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const str = String(dateInput).trim().split('T')[0];
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+    const parts = str.split('/');
+    return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
+    const parts = str.split('-');
+    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime()) && d.getFullYear() > 1900) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return str;
+}
+
+/**
+ * Interface kết quả tính toán học phí theo số buổi (kết thúc sớm < 32 buổi) & cộng nợ khóa trước
+ */
+export interface TuitionCalculationResult {
+  baseTuition: number; // Học phí trọn gói chuẩn cả khóa (mặc định 14.500.000 VNĐ hoặc học phí chuẩn của lớp)
+  standardSessions: number; // 32 buổi chuẩn 1 khóa
+  perSessionRate: number; // Trung bình học phí 1 buổi = baseTuition / 32
+  actualSessions: number; // Số buổi thực tế học (nếu kết thúc sớm < 32 buổi)
+  isEarlyEnd: boolean; // Có kết thúc sớm hơn 32 buổi không
+  proRatedTuition: number; // Số tiền tự động nhảy ra = actualSessions * (baseTuition / 32)
+  previousDebt: number; // Nợ học phí khóa trước (nếu chưa đóng chu kỳ trước)
+  totalDue: number; // Tổng số tiền cần đóng = (isEarlyEnd ? proRatedTuition : baseTuition) + previousDebt
+}
+
+/**
+ * Tự động tính học phí:
+ * 1. Nếu học ít hơn 32 buổi hoặc ngày kết thúc sớm hơn: trung bình số tiền 1 buổi * số buổi học
+ * 2. Nếu khóa trước chưa đóng mà sang chu kỳ mới: tự động cộng nợ học phí khóa trước vào khóa sau
+ */
+export function calculateProRatedTuition(
+  baseTuition: number = 14500000,
+  actualSessions: number = 32,
+  previousDebt: number = 0,
+  standardSessions: number = 32
+): TuitionCalculationResult {
+  const standard = standardSessions > 0 ? standardSessions : 32;
+  const safeBaseTuition = baseTuition > 0 ? baseTuition : 14500000;
+  const perSessionRate = Math.round(safeBaseTuition / standard);
+  const safeActualSessions = typeof actualSessions === 'number' && actualSessions > 0 ? actualSessions : standard;
+  const isEarlyEnd = safeActualSessions < standard;
+  // Tính chính xác: (Học phí gốc / 32) * Số buổi thực tế
+  const proRatedTuition = isEarlyEnd ? Math.round((safeBaseTuition / standard) * safeActualSessions) : safeBaseTuition;
+  const safePreviousDebt = Math.max(0, Number(previousDebt) || 0);
+  const totalDue = (isEarlyEnd ? proRatedTuition : safeBaseTuition) + safePreviousDebt;
+
+  return {
+    baseTuition: safeBaseTuition,
+    standardSessions: standard,
+    perSessionRate,
+    actualSessions: safeActualSessions,
+    isEarlyEnd,
+    proRatedTuition,
+    previousDebt: safePreviousDebt,
+    totalDue,
+  };
+}
+
+/**
+ * Đếm số buổi học thực tế giữa ngày bắt đầu và ngày kết thúc theo lịch học tuần 2 buổi
+ */
+export function countSessionsBetweenDates(
+  startDateStr: string,
+  endDateStr: string,
+  scheduleStr: string,
+  offDates: string[] = []
+): number {
+  if (!startDateStr || !endDateStr) return 32;
+  const startISO = toISODateString(startDateStr);
+  const endISO = toISODateString(endDateStr);
+  if (!startISO || !endISO || startISO > endISO) return 32;
+
+  const scheduleDays = parseScheduleDays(scheduleStr);
+  const offDateSet = new Set((offDates || []).map((d) => toISODateString(d)).filter(Boolean));
+
+  let count = 0;
+  const startParts = startISO.split('-').map(Number);
+  const cur = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+  const endParts = endISO.split('-').map(Number);
+  const end = new Date(endParts[0], endParts[1] - 1, endParts[2]);
+
+  while (cur <= end) {
+    const dayOfWeek = cur.getDay();
+    const curISO = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+    if (scheduleDays.includes(dayOfWeek) && !offDateSet.has(curISO)) {
+      count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  return count > 0 ? count : 32;
+}

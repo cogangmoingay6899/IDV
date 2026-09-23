@@ -40,13 +40,58 @@ async function startServer() {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
+  // File path for tracking deleted IDs across all devices
+  const deletedIdsFilePath = path.join(dataDir, 'deleted_ids.json');
+
+  const getDeletedIds = (): Set<string> => {
+    try {
+      if (fs.existsSync(deletedIdsFilePath)) {
+        const raw = fs.readFileSync(deletedIdsFilePath, 'utf-8');
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) return new Set(list);
+      }
+    } catch (e) {}
+    // Default initial tombstones for cleaned mock classes and tests
+    return new Set([
+      'pt-101', 'pt-102', 'pt-103',
+      'cls-29', 'cls-41', 'cls-50', 'cls-58', 'cls-59', 'cls-61', 'cls-63', 'cls-64', 'cls-65',
+      'cls-66', 'cls-67', 'cls-68', 'cls-69', 'cls-70', 'cls-71', 'cls-72', 'cls-73', 'cls-74',
+      'cls-75', 'cls-76', 'cls-77', 'cls-78', 'cls-79', 'cls-80', 'cls-81', 'cls-82', 'cls-83',
+      'cls-84', 'cls-85', 'cls-86', 'cls-87', 'cls-88', 'cls-89', 'cls-90', 'cls-91', 'cls-92',
+      'cls-93', 'cls-94'
+    ]);
+  };
+
+  const addDeletedIds = (newIds: string[]) => {
+    const current = getDeletedIds();
+    let changed = false;
+    for (const id of newIds) {
+      if (id && !current.has(id)) {
+        current.add(id);
+        changed = true;
+      }
+    }
+    if (changed || !fs.existsSync(deletedIdsFilePath)) {
+      try {
+        fs.writeFileSync(deletedIdsFilePath, JSON.stringify(Array.from(current), null, 2), 'utf-8');
+        broadcastEvent({ type: 'deleted_ids_updated', ids: Array.from(current) });
+      } catch (err) {
+        console.error('[VPS Storage] Error writing deleted_ids.json:', err);
+      }
+    }
+    return current;
+  };
+
+  // Initialize deleted_ids file on start
+  addDeletedIds([]);
+
   // In-memory cache for ultra-fast response times
   const collectionsCache = new Map<string, any[]>();
 
   // SSE client connections for real-time synchronization across devices & tabs
   const sseClients = new Set<express.Response>();
 
-  const broadcastEvent = (eventData: { type: string; collection?: string; id?: string; data?: any }) => {
+  const broadcastEvent = (eventData: { type: string; collection?: string; id?: string; data?: any; ids?: string[] }) => {
     const payload = `data: ${JSON.stringify(eventData)}\n\n`;
     for (const client of sseClients) {
       try {
@@ -94,14 +139,18 @@ async function startServer() {
       const data = readCollectionFromDisk(colName);
       collectionsCache.set(colName, data);
     }
-    return collectionsCache.get(colName) || [];
+    const rawList = collectionsCache.get(colName) || [];
+    const delSet = getDeletedIds();
+    return rawList.filter((item) => !delSet.has(item.id) && item.id !== 'meta_deleted_ids');
   };
 
   const saveCollectionData = (colName: string, items: any[], notifySSE: boolean = true) => {
-    collectionsCache.set(colName, items);
-    writeCollectionToDisk(colName, items);
+    const delSet = getDeletedIds();
+    const cleanItems = items.filter((item) => !delSet.has(item.id) && item.id !== 'meta_deleted_ids');
+    collectionsCache.set(colName, cleanItems);
+    writeCollectionToDisk(colName, cleanItems);
     if (notifySSE) {
-      broadcastEvent({ type: 'sync', collection: colName, data: items });
+      broadcastEvent({ type: 'sync', collection: colName, data: cleanItems });
     }
   };
 
@@ -224,9 +273,11 @@ async function startServer() {
   app.delete('/api/storage/:collection/:id', (req, res) => {
     try {
       const { collection: colName, id } = req.params;
+      addDeletedIds([String(id)]);
       const existing = getCollectionData(colName);
       const filtered = existing.filter((item) => String(item.id) !== String(id));
       saveCollectionData(colName, filtered, true);
+      broadcastEvent({ type: 'delete', collection: colName, id: String(id) });
       res.json({ success: true, message: `Deleted ${id} from ${colName}` });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Server storage error' });
@@ -237,10 +288,34 @@ async function startServer() {
   app.delete('/api/storage/:collection', (req, res) => {
     try {
       const colName = req.params.collection;
+      const existing = getCollectionData(colName);
+      if (existing.length > 0) {
+        addDeletedIds(existing.map((item) => String(item.id)));
+      }
       saveCollectionData(colName, [], true);
       res.json({ success: true, message: `Purged all data in collection ${colName}` });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Server storage error' });
+    }
+  });
+
+  // 5c. GLOBAL DELETED IDS ENDPOINTS FOR CROSS-DEVICE SYNC
+  app.get('/api/deleted-ids', (req, res) => {
+    res.json({ success: true, deletedIds: Array.from(getDeletedIds()) });
+  });
+
+  app.post('/api/deleted-ids', (req, res) => {
+    try {
+      const idsToAdd: string[] = [];
+      if (Array.isArray(req.body?.ids)) {
+        idsToAdd.push(...req.body.ids.map(String));
+      } else if (req.body?.id) {
+        idsToAdd.push(String(req.body.id));
+      }
+      const updated = addDeletedIds(idsToAdd);
+      res.json({ success: true, count: updated.size, deletedIds: Array.from(updated) });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Error updating deleted ids' });
     }
   });
 
@@ -302,6 +377,9 @@ async function startServer() {
       }
       if (!newTest.id) {
         newTest.id = `pt-online-${Date.now()}`;
+      }
+      if (getDeletedIds().has(newTest.id)) {
+        return res.status(400).json({ error: 'This test record was marked as deleted and cannot be re-added.' });
       }
       if (!newTest.submittedAt) {
         newTest.submittedAt = new Date().toISOString();
@@ -431,9 +509,11 @@ async function startServer() {
   app.delete('/api/placement-tests/:id', (req, res) => {
     try {
       const { id } = req.params;
+      addDeletedIds([String(id)]);
       const existing = getCollectionData('placementTests');
       const filtered = existing.filter((t) => t.id !== id);
       saveCollectionData('placementTests', filtered, true);
+      broadcastEvent({ type: 'delete', collection: 'placementTests', id: String(id) });
       res.json({ success: true, message: 'Deleted successfully' });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Server error' });

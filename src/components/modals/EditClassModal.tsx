@@ -41,6 +41,8 @@ import {
   CourseLevelKey,
   detectCourseLevel,
   formatDateVN,
+  calculateProRatedTuition,
+  countSessionsBetweenDates,
 } from '../../utils/courseSchedule';
 import { StandardScheduleSelector } from '../common/StandardScheduleSelector';
 
@@ -175,15 +177,26 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
 
     const isApproachingCycleEnd = sessionsThisCycle >= 28;
 
+    // Pro-rated tuition calculation: (Total Fee / 32) * Actual Sessions
+    // If sessionsThisCycle < 32, calculate tuition for the remaining sessions
+    const sessionRate = (st.customTuitionFee || formData.tuitionFee || 14500000) / 32;
+    const proRatedTuition = Math.round(sessionsThisCycle * sessionRate);
+    
+    // Debt Carry-over: If previous cycle unpaid, carry over debt
+    // Assuming debt = full cycle fee if not paid
+    const cycleFee = (st.customTuitionFee || formData.tuitionFee || 14500000);
+    const carriedOverDebt = isUnpaidForCurrentCycle ? cycleFee : 0;
+    const totalBalanceOwed = (isUnpaidForCurrentCycle ? cycleFee : 0) + (sessionsThisCycle < 32 ? proRatedTuition : 0);
+
     let reminderMessage = '';
     let needsReminder = false;
 
     if (isUnpaidForCurrentCycle) {
       needsReminder = true;
-      reminderMessage = `⚠️ NỢ PHÍ CHU KỲ ${currentCycle}: Đã học sang buổi ${sessionsThisCycle + 32 * (currentCycle - 1)} nhưng chưa nộp tiền đợt mới!`;
+      reminderMessage = `⚠️ NỢ PHÍ CHU KỲ ${currentCycle - 1}: Đã học sang chu kỳ ${currentCycle}. Nợ: ${cycleFee.toLocaleString('vi-VN')} đ.`;
     } else if (isApproachingCycleEnd) {
       needsReminder = true;
-      reminderMessage = `🔔 SẮP HẾT KHÓA: Đã học ${sessionsThisCycle}/32 buổi của Chu kỳ ${currentCycle}. Nhắc đóng học phí cho chu kỳ tiếp theo!`;
+      reminderMessage = `🔔 SẮP HẾT KHÓA: Đã học ${sessionsThisCycle}/32 buổi. Học phí dự kiến: ${proRatedTuition.toLocaleString('vi-VN')} đ.`;
     }
 
     return {
@@ -198,6 +211,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
       isApproachingCycleEnd,
       needsReminder,
       reminderMessage,
+      totalBalanceOwed,
     };
   };
 
@@ -430,22 +444,76 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
 
         const updated = { ...st, [field]: value };
 
-        // If customTuitionFee is updated, recompute balanceOwed and tuitionPayable if needed
+        // When endDate, startDate, or joinDate is modified: automatically calculate sessions & apply pro-rated tuition
+        if (field === 'endDate' || field === 'startDate' || field === 'joinDate') {
+          const finalStart = field === 'startDate' || field === 'joinDate' ? String(value || '') : (updated.startDate || updated.joinDate || formData.startDate || '');
+          const finalEnd = field === 'endDate' ? String(value || '') : (updated.endDate || '');
+
+          if (finalStart && finalEnd) {
+            const counted = countSessionsBetweenDates(finalStart, finalEnd, formData.schedule, offDates);
+            const actualSessions = Math.max(1, Math.min(32, counted));
+            const baseFee = formData.tuitionFee || 14500000;
+            const calc = calculateProRatedTuition(baseFee, actualSessions, updated.previousDebt || updated.carriedOverDebt || 0, 32);
+
+            updated.registeredSessions = actualSessions;
+            updated.earlyEndSessions = actualSessions;
+            updated.customTuitionFee = calc.proRatedTuition;
+            updated.courseTuitionFee = calc.proRatedTuition;
+            updated.proRatedTuitionFee = calc.proRatedTuition;
+            updated.tuitionPayable = calc.totalDue;
+            if (updated.tuitionStatus !== 'Đã đóng đủ' && !updated.tuitionPaidDate) {
+              updated.balanceOwed = calc.totalDue;
+            }
+          }
+        }
+
+        // When registeredSessions or earlyEndSessions is updated directly
+        if (field === 'registeredSessions' || field === 'earlyEndSessions') {
+          const sessions = Math.max(1, Math.min(32, Number(value) || 32));
+          const baseFee = formData.tuitionFee || 14500000;
+          const calc = calculateProRatedTuition(baseFee, sessions, updated.previousDebt || updated.carriedOverDebt || 0, 32);
+
+          updated.registeredSessions = sessions;
+          updated.earlyEndSessions = sessions;
+          updated.customTuitionFee = calc.proRatedTuition;
+          updated.courseTuitionFee = calc.proRatedTuition;
+          updated.proRatedTuitionFee = calc.proRatedTuition;
+          updated.tuitionPayable = calc.totalDue;
+          if (updated.tuitionStatus !== 'Đã đóng đủ' && !updated.tuitionPaidDate) {
+            updated.balanceOwed = calc.totalDue;
+          }
+        }
+
+        // When previous debt is updated
+        if (field === 'previousDebt' || field === 'carriedOverDebt') {
+          const debt = Math.max(0, Number(value) || 0);
+          updated.previousDebt = debt;
+          updated.carriedOverDebt = debt;
+          const feeNow = updated.customTuitionFee ?? formData.tuitionFee ?? 14500000;
+          const currentSessions = updated.registeredSessions ?? updated.earlyEndSessions ?? 32;
+          const calc = calculateProRatedTuition(feeNow, currentSessions, debt, 32);
+          updated.tuitionPayable = calc.totalDue;
+          if (updated.tuitionStatus !== 'Đã đóng đủ' && !updated.tuitionPaidDate) {
+            updated.balanceOwed = calc.totalDue;
+          }
+        }
+
+        // If customTuitionFee is updated manually
         if (field === 'customTuitionFee') {
           const newFee = Number(value) || 0;
           updated.customTuitionFee = newFee;
           updated.courseTuitionFee = newFee;
-          updated.tuitionPayable = newFee;
-          // If status is 'Chưa đóng', balanceOwed = full fee
+          const totalWithDebt = newFee + (updated.previousDebt || 0);
+          updated.tuitionPayable = totalWithDebt;
           if (updated.tuitionStatus === 'Chưa đóng') {
-            updated.balanceOwed = newFee;
+            updated.balanceOwed = totalWithDebt;
           } else if (updated.tuitionStatus === 'Đã đóng đủ') {
             updated.balanceOwed = 0;
           }
         }
 
         if (field === 'tuitionStatus') {
-          const fee = updated.customTuitionFee ?? (classGroup.tuitionFee || 14500000);
+          const fee = (updated.customTuitionFee ?? formData.tuitionFee ?? 14500000) + (updated.previousDebt || 0);
           if (value === 'Đã đóng đủ') {
             updated.balanceOwed = 0;
           } else if (value === 'Chưa đóng') {
@@ -1277,6 +1345,24 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                       const isStudentDisabled = isTeacher && originalStudentIds.has(st.id);
                       const k4Info = getStudentK4ProgressInfo(st);
 
+                      const countedSessionsFromDates = (st.startDate || st.joinDate) && st.endDate
+                        ? countSessionsBetweenDates(st.startDate || st.joinDate || '', st.endDate, formData.schedule, offDates)
+                        : 32;
+                      const effectiveActualSessions = typeof st.registeredSessions === 'number'
+                        ? st.registeredSessions
+                        : (typeof st.earlyEndSessions === 'number'
+                            ? st.earlyEndSessions
+                            : (countedSessionsFromDates < 32 ? countedSessionsFromDates : 32));
+
+                      // Base tuition for 32 standard sessions must be the class tuition fee
+                      const standardFullCourseFee = formData.tuitionFee || 14500000;
+                      const proRatedCalc = calculateProRatedTuition(
+                        standardFullCourseFee,
+                        effectiveActualSessions,
+                        st.previousDebt || st.carriedOverDebt || (k4Info.isUnpaidForCurrentCycle ? standardFullCourseFee : 0),
+                        32
+                      );
+
                       return (
                         <div
                           key={st.id}
@@ -1512,10 +1598,205 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
                                       <span className="font-bold text-slate-500">KT CK {k4Info.currentCycle}:</span>{' '}
                                       <strong className="text-blue-700 font-mono">{formatDateVN(k4Info.personalEndDate)}</strong>
                                     </div>
+                                    <div className="text-[11px] bg-white px-2 py-1 rounded border border-amber-200">
+                                      <span className="font-bold text-slate-500">Học phí dự tính:</span>{' '}
+                                      <strong className="text-amber-700 font-mono">{(k4Info.totalBalanceOwed || 0).toLocaleString('vi-VN')} đ</strong>
+                                    </div>
                                   </div>
                                 )}
 
-                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                                {/* Auto Pro-rated Tuition & Previous Debt Carry-over Box */}
+                                <div className="bg-gradient-to-r from-emerald-50/90 via-teal-50/80 to-purple-50/90 p-3.5 rounded-xl border border-emerald-200/90 space-y-3 shadow-2xs">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-emerald-200/60">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[11px] font-black flex items-center justify-center">
+                                        ⚡
+                                      </span>
+                                      <span className="text-xs font-black text-emerald-950 uppercase tracking-wide">
+                                        Tự động tính học phí theo buổi & Cộng nợ khóa trước
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] text-emerald-800 font-bold bg-white/90 px-2 py-0.5 rounded-md border border-emerald-200">
+                                      Đơn giá TB: <strong className="text-emerald-900 font-black">{formatVND(proRatedCalc.perSessionRate)}/buổi</strong> (32 buổi chuẩn)
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {/* Ô 1: Số buổi học đăng ký / kết thúc sớm */}
+                                    <div className="bg-white p-2.5 rounded-lg border border-emerald-200/80 space-y-1.5">
+                                      <label className="text-[11px] font-bold text-slate-700 block">
+                                        Số buổi học (nếu &lt; 32 buổi):
+                                      </label>
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          max={32}
+                                          value={st.registeredSessions ?? (st.earlyEndSessions ?? (countedSessionsFromDates < 32 ? countedSessionsFromDates : 32))}
+                                          onChange={(e) => {
+                                            const sessions = Math.max(1, Math.min(32, parseInt(e.target.value, 10) || 32));
+                                            handleUpdateStudentField(st.id, 'registeredSessions', sessions);
+                                            handleUpdateStudentField(st.id, 'earlyEndSessions', sessions);
+                                            const newCalc = calculateProRatedTuition(standardFullCourseFee, sessions, st.previousDebt || 0, 32);
+                                            handleUpdateStudentField(st.id, 'proRatedTuitionFee', newCalc.proRatedTuition);
+                                          }}
+                                          className="w-20 bg-emerald-50/60 border border-emerald-300 rounded-lg px-2 py-1 text-xs font-black text-emerald-950 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-center"
+                                          disabled={isStudentDisabled}
+                                        />
+                                        <span className="text-[11px] font-bold text-slate-500">/ 32 buổi</span>
+                                      </div>
+                                      <div className="flex items-center gap-1 flex-wrap text-[9px]">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateStudentField(st.id, 'registeredSessions', 32);
+                                            handleUpdateStudentField(st.id, 'earlyEndSessions', 32);
+                                          }}
+                                          className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold cursor-pointer"
+                                          disabled={isStudentDisabled}
+                                        >
+                                          32b (Đủ)
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateStudentField(st.id, 'registeredSessions', 24);
+                                            handleUpdateStudentField(st.id, 'earlyEndSessions', 24);
+                                          }}
+                                          className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 font-semibold cursor-pointer"
+                                          disabled={isStudentDisabled}
+                                        >
+                                          24b
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateStudentField(st.id, 'registeredSessions', 16);
+                                            handleUpdateStudentField(st.id, 'earlyEndSessions', 16);
+                                          }}
+                                          className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 font-semibold cursor-pointer"
+                                          disabled={isStudentDisabled}
+                                        >
+                                          16b
+                                        </button>
+                                        {countedSessionsFromDates < 32 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              handleUpdateStudentField(st.id, 'registeredSessions', countedSessionsFromDates);
+                                              handleUpdateStudentField(st.id, 'earlyEndSessions', countedSessionsFromDates);
+                                            }}
+                                            className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 hover:bg-blue-200 font-bold cursor-pointer"
+                                            disabled={isStudentDisabled}
+                                          >
+                                            Theo ngày ({countedSessionsFromDates}b)
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Ô 2: Nợ học phí khóa trước cộng dồn sang chu kỳ mới */}
+                                    <div className="bg-white p-2.5 rounded-lg border border-purple-200/80 space-y-1.5">
+                                      <label className="text-[11px] font-bold text-slate-700 block">
+                                        Nợ học phí khóa trước (nếu có):
+                                      </label>
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          type="number"
+                                          step={100000}
+                                          value={st.previousDebt ?? 0}
+                                          onChange={(e) => {
+                                            const debt = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                            handleUpdateStudentField(st.id, 'previousDebt', debt);
+                                            handleUpdateStudentField(st.id, 'carriedOverDebt', debt);
+                                          }}
+                                          className="w-full bg-purple-50/60 border border-purple-300 rounded-lg px-2 py-1 text-xs font-black text-purple-950 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                          placeholder="0 đ"
+                                          disabled={isStudentDisabled}
+                                        />
+                                      </div>
+                                      <div className="flex items-center gap-1 text-[9px]">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateStudentField(st.id, 'previousDebt', formData.tuitionFee);
+                                            handleUpdateStudentField(st.id, 'carriedOverDebt', formData.tuitionFee);
+                                          }}
+                                          className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 hover:bg-purple-200 font-semibold cursor-pointer"
+                                          disabled={isStudentDisabled}
+                                        >
+                                          +1 Khóa ({formatVND(formData.tuitionFee)})
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateStudentField(st.id, 'previousDebt', 0);
+                                            handleUpdateStudentField(st.id, 'carriedOverDebt', 0);
+                                          }}
+                                          className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer"
+                                          disabled={isStudentDisabled}
+                                        >
+                                          Xóa nợ cũ
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Ô 3: Số tiền tự động nhảy ra & nút Áp dụng */}
+                                    <div className="bg-white p-2.5 rounded-lg border border-emerald-300 space-y-1.5 flex flex-col justify-between">
+                                      <div>
+                                        <span className="text-[10px] font-bold text-slate-500 block">
+                                          {proRatedCalc.isEarlyEnd ? `Số tiền tự tính (${proRatedCalc.actualSessions} buổi):` : 'Học phí chuẩn khóa:'}
+                                        </span>
+                                        <div className="text-sm font-black text-emerald-700">
+                                          {formatVND(proRatedCalc.proRatedTuition)}
+                                        </div>
+                                        {proRatedCalc.previousDebt > 0 && (
+                                          <div className="text-[10px] font-bold text-purple-700 mt-0.5">
+                                            + Nợ khóa trước: {formatVND(proRatedCalc.previousDebt)}
+                                            <div className="text-[11px] font-black text-rose-700">
+                                              = Tổng nộp: {formatVND(proRatedCalc.totalDue)}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {!isStudentDisabled && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleUpdateStudentField(st.id, 'customTuitionFee', proRatedCalc.proRatedTuition);
+                                            handleUpdateStudentField(st.id, 'registeredSessions', proRatedCalc.actualSessions);
+                                            handleUpdateStudentField(st.id, 'proRatedTuitionFee', proRatedCalc.proRatedTuition);
+                                            if (proRatedCalc.previousDebt > 0) {
+                                              handleUpdateStudentField(st.id, 'balanceOwed', proRatedCalc.totalDue);
+                                              handleUpdateStudentField(st.id, 'tuitionStatus', 'Chưa đóng');
+                                            } else {
+                                              handleUpdateStudentField(st.id, 'balanceOwed', proRatedCalc.proRatedTuition);
+                                            }
+                                          }}
+                                          className="w-full py-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] rounded-lg transition-all shadow-xs cursor-pointer text-center flex items-center justify-center gap-1"
+                                        >
+                                          <span>⚡ Áp dụng số tiền này</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Breakdown description */}
+                                  <div className="text-[10px] text-slate-600 flex items-center gap-2 flex-wrap bg-white/70 p-2 rounded-lg border border-emerald-100">
+                                    <span className="font-bold text-emerald-900">Chi tiết tính:</span>
+                                    <span>
+                                      {proRatedCalc.actualSessions} buổi × {formatVND(proRatedCalc.perSessionRate)} = <strong>{formatVND(proRatedCalc.proRatedTuition)}</strong>
+                                    </span>
+                                    {proRatedCalc.previousDebt > 0 && (
+                                      <span className="text-purple-800 font-bold">
+                                        + {formatVND(proRatedCalc.previousDebt)} (nợ khóa trước) = <strong className="text-rose-700">{formatVND(proRatedCalc.totalDue)}</strong>
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                                   <div>
                                     <label className="text-[11px] font-bold text-slate-700 block mb-1">
                                       Học phí riêng của học viên (VNĐ):

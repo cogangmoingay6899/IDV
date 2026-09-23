@@ -25,6 +25,10 @@ import {
   Settings,
   Award,
   Link as LinkIcon,
+  XCircle,
+  Eye,
+  FileText,
+  HelpCircle,
 } from 'lucide-react';
 import { VocabTest, VocabTestSubmission, VocabQuestion, ClassGroup, Student, ExamScore, AttendanceRecord, AuthUser } from '../../types';
 import { saveDocument, subscribeCollection, fetchDocument, addSubmissionToTest, fetchCollection } from '../../lib/firestoreService';
@@ -136,20 +140,7 @@ COURSE_CONFIGS.forEach(course => {
       createdDate: '2026-09-10',
       isActive: true,
       questions: sampleQuestions,
-      submissions: lessonNum === 1 && course.prefix === 'k1' ? [
-        {
-          id: 'sub-1',
-          testId: 'vt-k1-01',
-          studentName: 'Nguyễn Văn Minh',
-          studentPhone: '0912345678',
-          score: 10,
-          correctCount: 4,
-          totalQuestions: 4,
-          timeSpentSeconds: 35,
-          tabSwitchViolations: 0,
-          submittedAt: '2026-09-12 14:30',
-        }
-      ] : [],
+      submissions: [],
     });
   }
 });
@@ -210,27 +201,71 @@ REVIEW_COURSE_CONFIGS.forEach(course => {
       createdDate: '2026-09-10',
       isActive: true,
       questions: sampleQuestions,
-      submissions: lessonNum === 1 && course.prefix === 'rev-k1' ? [
-        {
-          id: 'sub-rev-1',
-          testId: 'rev-k1-01',
-          studentName: 'Phạm Nhật Nam',
-          studentPhone: '0988776655',
-          score: 10,
-          correctCount: 3,
-          totalQuestions: 3,
-          timeSpentSeconds: 28,
-          tabSwitchViolations: 0,
-          submittedAt: '2026-09-12 15:00',
-        }
-      ] : [],
+      submissions: [],
     });
   }
 });
 
 export const INITIAL_REVIEW_TESTS: VocabTest[] = generatedReviewTests;
 
-// Helper to strip lesson topic names or obsolete course titles
+// Helper to normalize text for flexible answer matching
+export const normalizeAnswerText = (text: string): string => {
+  return (text || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[.,/#!$%^&*;:{}=\-_`~()?"']/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+// Check if student's typed answer is correct given multiple acceptable answers separated by / or ,
+export const checkIsTypeInputCorrect = (studentAnswer: string, question: VocabQuestion): boolean => {
+  const normStudent = normalizeAnswerText(studentAnswer);
+  if (!normStudent) return false;
+
+  const candidateSet = new Set<string>();
+
+  const addCandidatesFromRaw = (raw?: string) => {
+    if (!raw) return;
+    const rawTokens = raw.split(/[/;|]/);
+    rawTokens.forEach((tok) => {
+      const trimmed = tok.trim();
+      if (trimmed) {
+        candidateSet.add(trimmed);
+        const norm = normalizeAnswerText(trimmed);
+        if (norm) candidateSet.add(norm);
+      }
+      if (tok.includes(',')) {
+        tok.split(',').forEach((subTok) => {
+          const subTrim = subTok.trim();
+          if (subTrim) {
+            candidateSet.add(subTrim);
+            const subNorm = normalizeAnswerText(subTrim);
+            if (subNorm) candidateSet.add(subNorm);
+          }
+        });
+      }
+    });
+  };
+
+  addCandidatesFromRaw(question.meaning);
+  addCandidatesFromRaw(question.word);
+  if (question.options && question.options.length > 0) {
+    addCandidatesFromRaw(question.options[question.correctOptionIndex]);
+    question.options.forEach((opt) => addCandidatesFromRaw(opt));
+  }
+
+  for (const cand of candidateSet) {
+    const normCand = normalizeAnswerText(cand);
+    if (!normCand) continue;
+    if (normStudent === normCand) return true;
+    if (studentAnswer.trim().toLowerCase() === cand.trim().toLowerCase()) return true;
+  }
+
+  return false;
+};
+
+// Helper to strip lesson topic names or obsolete course titles and filter out mock students
 const sanitizeVocabTest = (test: VocabTest): VocabTest => {
   let cleanTitle = (test.title || '').split(':')[0].trim();
   cleanTitle = cleanTitle.replace(/Buổi/gi, 'Bài');
@@ -256,11 +291,22 @@ const sanitizeVocabTest = (test: VocabTest): VocabTest => {
     };
   });
 
+  const cleanedSubmissions = (test.submissions || []).filter(
+    (sub) =>
+      sub.studentName !== 'Nguyễn Văn Minh' &&
+      sub.studentName !== 'Phạm Nhật Nam' &&
+      !sub.studentName?.toLowerCase().includes('nguyễn văn minh') &&
+      !sub.studentName?.toLowerCase().includes('phạm nhật nam') &&
+      sub.id !== 'sub-1' &&
+      sub.id !== 'sub-rev-1'
+  );
+
   return {
     ...test,
     title: cleanTitle,
     unitName: cleanUnit,
     questions: qTypeSanitized,
+    submissions: cleanedSubmissions,
   };
 };
 
@@ -287,6 +333,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   initialVocabTestId,
   initialReviewTestId,
 }) => {
+  const isStudentPortalMode = Boolean(initialVocabTestId || initialReviewTestId);
+  const [isExited, setIsExited] = useState<boolean>(false);
+
   const getQuestionType = (q?: VocabQuestion): 'multiple_choice' | 'matching' | 'type_input' => {
     if (!q) return 'multiple_choice';
     return q.questionType || 'multiple_choice';
@@ -354,6 +403,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
   // Start runner
   const handleStartRunner = (test: VocabTest) => {
+    setIsExited(false);
     setActiveRunnerTest(test);
     setSelectedCourseLevel(test.courseLevel);
     setRunnerStudentName('');
@@ -364,8 +414,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     setSelectedAnswers({});
     setTypedAnswers({});
     setTabSwitchCount(0);
+    tabSwitchCountRef.current = 0;
     setShowAntiCheatWarning(false);
     setTestCompletedSubmission(null);
+    setResultActiveTab('answers');
+    setWasTimeoutAutoSubmit(false);
     
     const firstQ = test.questions[0];
     const firstLimit = getQuestionTimeLimit(firstQ);
@@ -375,6 +428,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   // Auto-launch test if initialVocabTestId is passed from URL
   useEffect(() => {
     if (initialVocabTestId && tests.length > 0) {
+      setActiveTestType('vocab');
       let found = tests.find(
         (t) => t.id === initialVocabTestId || t.id.toLowerCase() === initialVocabTestId.toLowerCase()
       );
@@ -399,6 +453,33 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     }
   }, [initialVocabTestId, tests]);
 
+  // Auto-launch test if initialReviewTestId is passed from URL
+  useEffect(() => {
+    if (initialReviewTestId && reviewTests.length > 0) {
+      setActiveTestType('review');
+      let found = reviewTests.find(
+        (t) => t.id === initialReviewTestId || t.id.toLowerCase() === initialReviewTestId.toLowerCase()
+      );
+
+      if (!found) {
+        const cleanId = initialReviewTestId.toLowerCase();
+        if (cleanId.includes('k2') || cleanId.includes('khoa-2') || cleanId.includes('khóa 2')) {
+          found = reviewTests.find((t) => t.courseLevel === 'Khóa 2');
+        } else if (cleanId.includes('k3') || cleanId.includes('khoa-3') || cleanId.includes('khóa 3')) {
+          found = reviewTests.find((t) => t.courseLevel === 'Khóa 3');
+        } else if (cleanId.includes('k4') || cleanId.includes('khoa-4') || cleanId.includes('khóa 4')) {
+          found = reviewTests.find((t) => t.courseLevel === 'Khóa 4');
+        } else {
+          found = reviewTests.find((t) => t.courseLevel === 'Khóa 1') || reviewTests[0];
+        }
+      }
+
+      if (found) {
+        handleStartRunner(found);
+      }
+    }
+  }, [initialReviewTestId, reviewTests]);
+
   // New Test Creator / Editor Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTestId, setEditingTestId] = useState<string | null>(null);
@@ -421,8 +502,12 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const [showAntiCheatWarning, setShowAntiCheatWarning] = useState<boolean>(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState<boolean>(false);
   const [testCompletedSubmission, setTestCompletedSubmission] = useState<VocabTestSubmission | null>(null);
+  const [resultActiveTab, setResultActiveTab] = useState<'answers' | 'leaderboard'>('answers');
+  const [wasTimeoutAutoSubmit, setWasTimeoutAutoSubmit] = useState<boolean>(false);
   const [customizedQuestions, setCustomizedQuestions] = useState<VocabQuestion[]>([]);
   const [typedAnswers, setTypedAnswers] = useState<Record<number, string>>({});
+  const typedAnswersRef = useRef<Record<number, string>>({});
+  const selectedAnswersRef = useRef<Record<number, number>>({});
 
   // Initialize default questions when opening create modal if empty
   useEffect(() => {
@@ -707,7 +792,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   useEffect(() => {
     if (!runnerStarted || !activeRunnerTest || testCompletedSubmission) return;
     if (questionTimeLeft === 0) {
-      handleNextQuestion();
+      handleNextQuestion(true);
     }
   }, [questionTimeLeft, runnerStarted, activeRunnerTest, testCompletedSubmission]);
 
@@ -727,13 +812,28 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   };
 
   const handleSelectAnswer = (questionIdx: number, optionIdx: number) => {
+    selectedAnswersRef.current = {
+      ...selectedAnswersRef.current,
+      [questionIdx]: optionIdx,
+    };
     setSelectedAnswers((prev) => ({
       ...prev,
       [questionIdx]: optionIdx,
     }));
   };
 
-  const handleNextQuestion = () => {
+  const handleTypeAnswerChange = (questionIdx: number, val: string) => {
+    typedAnswersRef.current = {
+      ...typedAnswersRef.current,
+      [questionIdx]: val,
+    };
+    setTypedAnswers((prev) => ({
+      ...prev,
+      [questionIdx]: val,
+    }));
+  };
+
+  const handleNextQuestion = (isTimeout: boolean = false) => {
     if (!activeRunnerTest) return;
     if (currentQuestionIndex < activeRunnerTest.questions.length - 1) {
       const nextQ = activeRunnerTest.questions[currentQuestionIndex + 1];
@@ -742,27 +842,34 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       setQuestionTimeLeft(nextLimit);
     } else {
       // Finish test!
-      finishVocabTest();
+      if (isTimeout) {
+        setWasTimeoutAutoSubmit(true);
+      }
+      finishVocabTest(isTimeout);
     }
   };
 
-  const finishVocabTest = async () => {
+  const finishVocabTest = async (isTimeout: boolean = false) => {
     if (!activeRunnerTest || isSubmittingRef.current) return;
     isSubmittingRef.current = true;
+    if (isTimeout) {
+      setWasTimeoutAutoSubmit(true);
+    }
 
     const totalQ = activeRunnerTest.questions.length;
     let correctCount = 0;
+    const currentTyped = { ...typedAnswers, ...typedAnswersRef.current };
+    const currentSelected = { ...selectedAnswers, ...selectedAnswersRef.current };
+
     activeRunnerTest.questions.forEach((q, idx) => {
       if (q.questionType === 'type_input') {
-        const typed = (typedAnswers[idx] || '').trim().toLowerCase();
-        const targetMeaning = q.meaning.trim().toLowerCase();
-        const targetOption = (q.options[q.correctOptionIndex] || '').trim().toLowerCase();
-        const isCorrect = typed === targetMeaning || typed === targetOption;
+        const typed = (currentTyped[idx] !== undefined ? currentTyped[idx] : '').trim();
+        const isCorrect = checkIsTypeInputCorrect(typed, q);
         if (isCorrect) {
           correctCount++;
         }
       } else {
-        if (selectedAnswers[idx] === q.correctOptionIndex) {
+        if (currentSelected[idx] === q.correctOptionIndex) {
           correctCount++;
         }
       }
@@ -984,40 +1091,82 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     // Trigger the spreadsheet sync asynchronously
     syncToSpreadsheet();
 
-    showToast(`🎉 Đã nộp bài thành công! Họ tên: ${cleanStudentName} - Lớp: ${targetClassName}. Điểm từ vựng: ${scoreOut10}/10. Đã cập nhật vào buổi học & bảng điểm học viên!`);
+    if (isTimeout) {
+      showToast(`⏰ Hết giờ làm bài! Hệ thống đã tự động nộp bài cho học sinh ${cleanStudentName} - Lớp ${targetClassName} (${scoreOut10}/10 điểm).`);
+    } else {
+      showToast(`🎉 Đã nộp bài thành công! Họ tên: ${cleanStudentName} - Lớp: ${targetClassName}. Điểm từ vựng: ${scoreOut10}/10. Đã cập nhật vào buổi học & bảng điểm học viên!`);
+    }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* DIRECT PORTAL BANNER WHEN ACCESSED VIA LINK */}
-      {initialVocabTestId && !activeRunnerTest && (
-        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-purple-900 text-white rounded-3xl p-6 sm:p-8 shadow-2xl border-2 border-purple-400 text-center space-y-4 animate-in zoom-in-95">
-          <div className="w-16 h-16 rounded-3xl bg-amber-400 text-purple-950 flex items-center justify-center font-black mx-auto shadow-xl border-2 border-amber-300">
-            <BookOpen className="w-8 h-8" />
-          </div>
-          <div>
-            <span className="px-3 py-1 rounded-full text-xs font-black bg-purple-800 text-amber-300 border border-purple-600 uppercase tracking-wide">
-              TRUNG TÂM IELTS DƯƠNG VŨ
+  if (isStudentPortalMode && (isExited || !activeRunnerTest)) {
+    const isReview = Boolean(initialReviewTestId);
+    const targetTest = isReview
+      ? (initialReviewTestId && reviewTests.find((t) => t.id.toLowerCase() === initialReviewTestId.toLowerCase())) ||
+        reviewTests.find((t) => t.courseLevel === selectedCourseLevel) ||
+        reviewTests[0]
+      : (initialVocabTestId && tests.find((t) => t.id.toLowerCase() === initialVocabTestId.toLowerCase())) ||
+        tests.find((t) => t.courseLevel === selectedCourseLevel) ||
+        tests[0];
+
+    return (
+      <div className="max-w-2xl mx-auto my-8 p-6 sm:p-10 bg-white rounded-3xl border border-slate-200 text-center space-y-6 shadow-md animate-in fade-in zoom-in-95">
+        <div className="w-20 h-20 rounded-3xl bg-purple-100 text-purple-700 font-black flex items-center justify-center text-4xl mx-auto shadow-inner border-2 border-purple-200">
+          🎓
+        </div>
+        <div className="space-y-2">
+          <span className="px-3 py-1 rounded-full text-xs font-black bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wider">
+            IELTS DƯƠNG VŨ
+          </span>
+          <h2 className="text-2xl font-black text-slate-900">
+            {isExited ? 'Bạn đã kết thúc / thoát bài kiểm tra' : 'Bài Kiểm Tra Trực Tuyến IELTS Dương Vũ'}
+          </h2>
+          <p className="text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
+            {isExited
+              ? 'Cảm ơn bạn đã tham gia bài kiểm tra! Điểm số và thông tin làm bài đã được hệ thống lưu lại an toàn. Chúc bạn học tập tốt và đạt mục tiêu IELTS!'
+              : 'Vui lòng nhấn nút bên dưới để bắt đầu làm bài kiểm tra. Hệ thống sẽ tự động tính điểm và xếp hạng ngay sau khi hoàn thành.'}
+          </p>
+        </div>
+
+        {targetTest && (
+          <div className="p-4 bg-purple-50/80 rounded-2xl border border-purple-200 text-xs font-bold text-purple-950 flex items-center justify-between">
+            <span className="truncate">{targetTest.title}</span>
+            <span className="px-2.5 py-1 bg-white rounded-lg text-[11px] text-purple-900 border border-purple-200 font-extrabold shrink-0">
+              {targetTest.courseLevel}
             </span>
-            <h3 className="text-xl font-black mt-2">BÀI TEST TỪ VỰNG TRỰC TUYẾN CHÍNH THỨC</h3>
-            <p className="text-xs text-purple-200 mt-1 max-w-lg mx-auto">
-              Nhấn nút bên dưới để nhập Họ tên, Mã lớp và bắt đầu làm bài test từ vựng chống gian lận!
-            </p>
           </div>
+        )}
+
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          {targetTest && !isExited && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsExited(false);
+                handleStartRunner(targetTest);
+              }}
+              className="w-full sm:w-auto px-8 py-3.5 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              <span>Bắt đầu làm bài</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
-              const testToOpen = tests.find((t) => t.id === initialVocabTestId) || tests[0];
-              if (testToOpen) setActiveRunnerTest(testToOpen);
+              window.close();
+              showToast('👉 Bạn có thể đóng tab trình duyệt này để hoàn tất.');
             }}
-            className="px-8 py-4 bg-amber-400 hover:bg-amber-300 text-purple-950 font-black text-base rounded-2xl shadow-xl transition-all active:scale-95 inline-flex items-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto px-8 py-3.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-2xl border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
-            <Play className="w-5 h-5 fill-current" />
-            <span>MỞ BÀI TEST TỪ VỰNG NGAY</span>
+            <span>✕ Đóng Tab Trình Duyệt</span>
           </button>
         </div>
-      )}
+      </div>
+    );
+  }
 
+  return (
+    <div className="space-y-6">
       {/* TOP MODULE TYPE TABS: VOCABULARY TESTS VS KNOWLEDGE REVIEW TESTS */}
       <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
         <button
@@ -1389,7 +1538,16 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
       {/* MODAL 1: BẢNG XẾP HẠNG (LEADERBOARD) AI LÀM NHANH NHẤT & CHÍNH XÁC NHẤT */}
       {activeLeaderboardTest && (() => {
-        const allSubmissions = activeLeaderboardTest.submissions || [];
+        const allSubmissions = (activeLeaderboardTest.submissions || []).filter(
+          (sub) =>
+            sub.studentName &&
+            sub.studentName !== 'Nguyễn Văn Minh' &&
+            sub.studentName !== 'Phạm Nhật Nam' &&
+            !sub.studentName.toLowerCase().includes('nguyễn văn minh') &&
+            !sub.studentName.toLowerCase().includes('phạm nhật nam') &&
+            sub.id !== 'sub-1' &&
+            sub.id !== 'sub-rev-1'
+        );
 
         // Extract list of unique classes present in submissions
         const availableClassList: string[] = Array.from(
@@ -1738,8 +1896,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                             className="bg-purple-50 border border-purple-200 text-purple-900 rounded-lg py-1 px-2 font-bold text-[10px] outline-none cursor-pointer"
                           >
                             <option value="multiple_choice">🎯 Trắc nghiệm (10s)</option>
-                            <option value="matching">🧩 Matching (20s)</option>
-                            <option value="type_input">⌨️ Nhập từ/nghĩa (20s)</option>
+                            <option value="matching">🧩 Ghép nối từ & nghĩa (20s)</option>
+                            <option value="type_input">⌨️ Nhập đáp án / Sửa lỗi sai / Điền từ (20s)</option>
                           </select>
                         </div>
                         <button
@@ -1757,11 +1915,13 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[10px] text-slate-600 block mb-0.5 font-bold">Từ tiếng Anh (Word / Question):</label>
+                          <label className="text-[10px] text-slate-600 block mb-0.5 font-bold">
+                            Câu hỏi / Từ vựng / Đề bài (Tiếng Anh hoặc Tiếng Việt):
+                          </label>
                           <input
                             type="text"
                             required
-                            placeholder="Ví dụ: Punctual"
+                            placeholder="VD: Punctual hoặc She don't like milk. (Sửa lỗi sai) hoặc Đất nước"
                             value={q.word}
                             onChange={(e) => {
                               const updated = [...customizedQuestions];
@@ -1773,11 +1933,13 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                         </div>
 
                         <div>
-                          <label className="text-[10px] text-slate-600 block mb-0.5 font-bold">Nghĩa tiếng Việt (Meaning / Answer):</label>
+                          <label className="text-[10px] text-slate-600 block mb-0.5 font-bold">
+                            Đáp án đúng (Tiếng Việt hoặc Tiếng Anh - Ngăn cách / hoặc ,):
+                          </label>
                           <input
                             type="text"
                             required
-                            placeholder="Ví dụ: Đúng giờ"
+                            placeholder="VD: Đúng giờ / Chuẩn giờ hoặc doesn't / does not hoặc Country / Nation"
                             value={q.meaning}
                             onChange={(e) => {
                               const updated = [...customizedQuestions];
@@ -1830,8 +1992,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       )}
 
                       {q.questionType === 'type_input' && (
-                        <div className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-2 font-medium">
-                          💡 Dạng nhập từ/nghĩa: Học sinh sẽ gõ trực tiếp nghĩa (hoặc từ) khớp với ô "Nghĩa tiếng Việt" ở trên để ghi điểm.
+                        <div className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-2 font-medium leading-relaxed">
+                          💡 <strong>Dạng nhập đáp án / Điền từ / Sửa lỗi sai:</strong> Cho phép nhập 2 hoặc nhiều phương án đúng ở ô "Đáp án đúng" (ngăn cách bởi dấu <code>/</code> hoặc <code>,</code> ví dụ: <em>"doesn't / does not"</em> hoặc <em>"đúng giờ / chuẩn giờ"</em>). Học sinh nhập 1 trong các phương án đó đều được tính <strong>100% full điểm</strong>!
                         </div>
                       )}
                     </div>
@@ -1867,54 +2029,91 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
       {/* MODAL 3: RUNNER BÀI TEST TỪ VỰNG CHỐNG GIAN LẬN & BẤM GIỜ CHO HỌC SINH */}
       {activeRunnerTest && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 animate-in zoom-in-95 space-y-6 relative">
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div
+            className={`bg-white rounded-2xl sm:rounded-3xl ${
+              testCompletedSubmission ? 'max-w-2xl max-h-[94vh] overflow-y-auto' : 'max-w-lg max-h-[94vh] overflow-y-auto'
+            } w-full p-4 sm:p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 space-y-4 sm:space-y-5 relative my-auto`}
+          >
             {/* Close button */}
             <button
               type="button"
-              onClick={() => setActiveRunnerTest(null)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold hover:bg-slate-200"
+              onClick={() => {
+                if (runnerStarted && !testCompletedSubmission) {
+                  if (window.confirm('Bạn có chắc chắn muốn thoát bài kiểm tra? Bài làm chưa nộp sẽ không được tính điểm.')) {
+                    setTestCompletedSubmission(null);
+                    setRunnerStarted(false);
+                    setCurrentQuestionIndex(0);
+                    setSelectedAnswers({});
+                    setTypedAnswers({});
+                    typedAnswersRef.current = {};
+                    selectedAnswersRef.current = {};
+                    setTabSwitchCount(0);
+                    tabSwitchCountRef.current = 0;
+                    isSubmittingRef.current = false;
+                    setWasTimeoutAutoSubmit(false);
+                    setIsExited(true);
+                    setActiveRunnerTest(null);
+                  }
+                } else {
+                  setTestCompletedSubmission(null);
+                  setRunnerStarted(false);
+                  setCurrentQuestionIndex(0);
+                  setSelectedAnswers({});
+                  setTypedAnswers({});
+                  typedAnswersRef.current = {};
+                  selectedAnswersRef.current = {};
+                  setTabSwitchCount(0);
+                  tabSwitchCountRef.current = 0;
+                  isSubmittingRef.current = false;
+                  setWasTimeoutAutoSubmit(false);
+                  setIsExited(true);
+                  setActiveRunnerTest(null);
+                }
+              }}
+              className="absolute top-3 right-3 sm:top-4 sm:right-4 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold hover:bg-slate-200 cursor-pointer z-10 text-xs sm:text-sm"
+              title="Thoát bài kiểm tra"
             >
               ✕
             </button>
 
             {/* STEP A: STUDENT ENTER INFO */}
             {!runnerStarted && !testCompletedSubmission && (
-              <form onSubmit={handleConfirmStudentInfo} className="space-y-5">
-                <div className="text-center space-y-2">
-                  <span className="px-3 py-1 rounded-full text-xs font-black bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wide">
+              <form onSubmit={handleConfirmStudentInfo} className="space-y-3.5 sm:space-y-4">
+                <div className="text-center space-y-1 sm:space-y-1.5">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wide">
                     {activeRunnerTest.courseLevel} • BÀI KIỂM TRA TỪ VỰNG
                   </span>
-                  <h3 className="text-lg font-black text-slate-900">{activeRunnerTest.title}</h3>
-                  <p className="text-xs text-slate-500">{activeRunnerTest.unitName}</p>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">{activeRunnerTest.title}</h3>
+                  <p className="text-[11px] sm:text-xs text-slate-500">{activeRunnerTest.unitName}</p>
                 </div>
 
-                <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl text-xs text-amber-950 space-y-2 font-medium">
+                <div className="bg-amber-50 border border-amber-200 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs text-amber-950 space-y-1.5 font-medium">
                   <div className="font-extrabold text-amber-900 flex items-center gap-1.5">
-                    <ShieldAlert className="w-4 h-4 text-amber-700" />
-                    <span>Quy định làm bài chống gian lận & Bấm giờ:</span>
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>Quy định làm bài & Chống gian lận:</span>
                   </div>
-                  <ul className="list-disc list-inside space-y-1 text-slate-700 pl-1">
-                    <li>Mỗi câu hỏi sẽ có <strong>{activeRunnerTest.timePerQuestionSeconds || 20} giây</strong> để hoàn thành. Hết giờ hệ thống tự chuyển câu!</li>
-                    <li><strong>CHỐNG GIAN LẬN:</strong> Học sinh KHÔNG ĐƯỢC chuyển sang ứng dụng khác hoặc mở tab khác. Mọi hành vi thoát màn hình sẽ bị ghi nhận vào hệ thống!</li>
+                  <ul className="list-disc list-inside space-y-0.5 text-slate-700 pl-0.5 text-[11px]">
+                    <li>Mỗi câu hỏi có <strong>{activeRunnerTest.timePerQuestionSeconds || 20} giây</strong>. Hết giờ hệ thống tự chuyển câu!</li>
+                    <li><strong>CHỐNG GIAN LẬN:</strong> Không chuyển app hoặc mở tab khác khi đang làm bài.</li>
                   </ul>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Họ và Tên Học Sinh (*):</label>
+                    <label className="text-[11px] sm:text-xs font-bold text-slate-700 block mb-1">Họ và Tên Học Sinh (*):</label>
                     <input
                       type="text"
                       required
                       placeholder="Ví dụ: Nguyễn Hoàng Nam"
                       value={runnerStudentName}
                       onChange={(e) => setRunnerStudentName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold focus:ring-2 focus:ring-purple-500/20"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 sm:p-3 text-xs font-bold focus:ring-2 focus:ring-purple-500/20"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Số lớp (*):</label>
+                    <label className="text-[11px] sm:text-xs font-bold text-slate-700 block mb-1">Số lớp (*):</label>
                     <input
                       type="text"
                       required
@@ -1922,7 +2121,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       placeholder="Ví dụ: 88, 89"
                       value={runnerClassName}
                       onChange={(e) => setRunnerClassName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-bold focus:ring-2 focus:ring-purple-500/20"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 sm:p-3 text-xs font-bold focus:ring-2 focus:ring-purple-500/20"
                     />
                     <datalist id="class-suggestions-list">
                       {classes.map((c) => (
@@ -1931,61 +2130,61 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       {classGroup && <option value={classGroup.name} />}
                     </datalist>
                     <p className="text-[10px] text-slate-400 mt-1">
-                      Nhập số lớp (VD: 88, 89) để hệ thống tự động cập nhật kết quả bài test vào buổi học.
+                      Nhập số lớp (VD: 88, 89) để tự động cập nhật kết quả vào buổi học.
                     </p>
                   </div>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3 sm:py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Play className="w-4 h-4" />
-                  <span>BẮT ĐẦU LÀM BÀI KIỂM TRA TỪ VỰNG</span>
+                  <span>BẮT ĐẦU LÀM BÀI KIỂM TRA</span>
                 </button>
               </form>
             )}
 
             {/* STEP B: ACTIVE QUESTION RUNNER */}
             {runnerStarted && !testCompletedSubmission && (
-              <div className="space-y-5 relative">
+              <div className="space-y-3.5 sm:space-y-4 relative">
                 {/* Anti-cheat Alert Banner */}
                 {tabSwitchCount > 0 && (
-                  <div className="bg-rose-50 border-2 border-rose-500 p-3 rounded-2xl text-rose-900 text-xs font-bold flex items-center justify-between gap-2">
+                  <div className="bg-rose-50 border-2 border-rose-500 p-2.5 rounded-xl text-rose-900 text-[11px] sm:text-xs font-bold flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5">
-                      <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
-                      <span>⚠️ ĐÃ GHI NHẬN: Thoát màn hình / Chuyển tab ({tabSwitchCount} lần)!</span>
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>⚠️ ĐÃ GHI NHẬN: Thoát màn hình ({tabSwitchCount} lần)!</span>
                     </span>
                   </div>
                 )}
 
                 {/* Progress & Question Timer Bar */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-extrabold text-slate-700">
-                    <div className="flex items-center gap-2">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] sm:text-xs font-extrabold text-slate-700">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
                       <span>
                         Câu {currentQuestionIndex + 1} / {activeRunnerTest.questions.length}
                       </span>
                       {tabSwitchCount === 0 ? (
-                        <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] sm:text-[10px] font-bold rounded-full flex items-center gap-1">
                           <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                          <span>Trung thực: 0 vi phạm</span>
+                          <span>Trung thực</span>
                         </span>
                       ) : (
-                        <span className="px-2.5 py-0.5 bg-rose-100 text-rose-900 border border-rose-300 text-[10px] font-black rounded-full flex items-center gap-1 animate-pulse">
+                        <span className="px-2 py-0.5 bg-rose-100 text-rose-900 border border-rose-300 text-[9px] sm:text-[10px] font-black rounded-full flex items-center gap-1 animate-pulse">
                           <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          <span>Thoát màn hình: {tabSwitchCount} lần</span>
+                          <span>Thoát: {tabSwitchCount} lần</span>
                         </span>
                       )}
                     </div>
-                    <span className="text-amber-700 font-mono flex items-center gap-1 text-sm">
-                      <Clock className="w-4 h-4 text-amber-600 animate-spin" />
-                      <span>Thời gian: {questionTimeLeft}s</span>
+                    <span className="text-amber-700 font-mono flex items-center gap-1 text-xs sm:text-sm font-black">
+                      <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+                      <span>{questionTimeLeft}s</span>
                     </span>
                   </div>
 
                   {/* Countdown Progress Bar */}
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 sm:h-2 bg-slate-100 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-amber-500 transition-all duration-1000"
                       style={{
@@ -2004,27 +2203,27 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   if (qType === 'matching') {
                     const isSelected = selectedAnswers[currentQuestionIndex] !== undefined;
                     return (
-                      <div className="space-y-4">
+                      <div className="space-y-3 sm:space-y-3.5">
                         <div className="text-center">
-                          <span className="px-3 py-1 bg-amber-100 text-amber-900 text-[10px] font-black rounded-full uppercase tracking-widest border border-amber-300">
-                            🧩 KIỂU CHƠI: NỐI TỪ (MATCHING) - 20 Giây
+                          <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 text-[9px] sm:text-[10px] font-black rounded-full uppercase tracking-widest border border-amber-300">
+                            🧩 NỐI TỪ (MATCHING) - 20 Giây
                           </span>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                           {/* Left Column: English Word Card */}
-                          <div className="flex flex-col items-center justify-center p-6 bg-purple-50 border-2 border-purple-200 rounded-3xl text-center shadow-xs">
-                            <span className="text-[9px] font-black text-purple-500 uppercase tracking-widest">Từ tiếng Anh</span>
-                            <h3 className="text-2xl font-black text-purple-950 mt-1">{currentQ.word}</h3>
+                          <div className="flex flex-col items-center justify-center p-3.5 sm:p-5 bg-purple-50 border border-purple-200 rounded-2xl text-center shadow-xs">
+                            <span className="text-[9px] font-black text-purple-500 uppercase tracking-widest">Từ vựng</span>
+                            <h3 className="text-lg sm:text-xl font-black text-purple-950 mt-0.5">{currentQ.word}</h3>
                             {currentQ.phonetic && (
-                              <p className="text-xs font-mono text-purple-600 mt-1 bg-purple-100/50 px-2.5 py-0.5 rounded-full">{currentQ.phonetic}</p>
+                              <p className="text-[11px] font-mono text-purple-600 mt-0.5 bg-purple-100/60 px-2 py-0.5 rounded-full">{currentQ.phonetic}</p>
                             )}
                           </div>
 
                           {/* Right Column: Vietnamese Cards */}
-                          <div className="space-y-2">
-                            <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">Chọn nghĩa tiếng Việt phù hợp:</span>
-                            <div className="grid grid-cols-1 gap-2">
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">Chọn nghĩa đúng:</span>
+                            <div className="grid grid-cols-1 gap-1.5 sm:gap-2">
                               {currentQ.options.map((optionText, optIdx) => {
                                 const isMatched = selectedAnswers[currentQuestionIndex] === optIdx;
                                 return (
@@ -2032,9 +2231,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                                     key={optIdx}
                                     type="button"
                                     onClick={() => handleSelectAnswer(currentQuestionIndex, optIdx)}
-                                    className={`p-3.5 rounded-2xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                                    className={`p-2.5 sm:p-3 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
                                       isMatched
-                                        ? 'bg-amber-400 text-purple-950 border-amber-300 shadow-md ring-2 ring-amber-300 scale-[1.02]'
+                                        ? 'bg-amber-400 text-purple-950 border-amber-300 shadow-sm ring-2 ring-amber-300 scale-[1.01]'
                                         : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
                                     }`}
                                   >
@@ -2053,9 +2252,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                         </div>
 
                         {isSelected && (
-                          <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 font-extrabold text-[11px] p-2.5 rounded-xl text-center flex items-center justify-center gap-1.5 animate-in fade-in slide-in-from-bottom-1">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            <span>Đã ghép cặp: <strong className="text-purple-950">{currentQ.word}</strong> ⟷ <strong className="text-purple-950">{currentQ.options[selectedAnswers[currentQuestionIndex]]}</strong></span>
+                          <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 font-extrabold text-[10px] sm:text-[11px] p-2 rounded-xl text-center flex items-center justify-center gap-1.5 animate-in fade-in">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Đã chọn: <strong className="text-purple-950">{currentQ.word}</strong> ⟷ <strong className="text-purple-950">{currentQ.options[selectedAnswers[currentQuestionIndex]]}</strong></span>
                           </div>
                         )}
                       </div>
@@ -2064,40 +2263,40 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
                   if (qType === 'type_input') {
                     return (
-                      <div className="space-y-4">
+                      <div className="space-y-3 sm:space-y-3.5">
                         <div className="text-center">
-                          <span className="px-3 py-1 bg-purple-100 text-purple-900 text-[10px] font-black rounded-full uppercase tracking-widest border border-purple-300">
-                            ⌨️ KIỂU CHƠI: NHẬP TỪ / NGHĨA - 20 Giây
+                          <span className="px-2.5 py-0.5 bg-purple-100 text-purple-900 text-[9px] sm:text-[10px] font-black rounded-full uppercase tracking-widest border border-purple-300">
+                            ⌨️ NHẬP ĐÁP ÁN / ĐIỀN TỪ / SỬA LỖI
                           </span>
                         </div>
 
-                        <div className="bg-purple-900 text-white p-6 rounded-3xl space-y-2 text-center shadow-lg">
-                          <span className="text-[10px] font-black uppercase text-amber-300 tracking-wider">Từ tiếng Anh:</span>
-                          <h2 className="text-2xl font-black tracking-wide text-white">
+                        <div className="bg-purple-900 text-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-1 text-center shadow-md">
+                          <span className="text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">Câu hỏi / Đề bài:</span>
+                          <h2 className="text-base sm:text-xl font-black tracking-wide text-white leading-snug">
                             {currentQ.word}
                           </h2>
                           {currentQ.phonetic && (
-                            <p className="text-xs text-purple-200 font-mono">
+                            <p className="text-[11px] sm:text-xs text-purple-200 font-mono">
                               {currentQ.phonetic}
                             </p>
                           )}
                         </div>
 
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
-                          <label className="text-xs font-black text-slate-700 block text-center">
-                            ⌨️ Hãy nhập nghĩa tiếng Việt chính xác của từ trên:
+                        <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 border border-slate-200 space-y-2">
+                          <label className="text-[11px] sm:text-xs font-black text-slate-700 block text-center">
+                            ✍️ Nhập đáp án của bạn:
                           </label>
                           <input
                             type="text"
                             autoFocus
-                            placeholder="Nhập nghĩa tiếng Việt..."
-                            className="w-full p-4 rounded-xl border-2 border-slate-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 font-extrabold text-center text-sm outline-none transition-all bg-white"
-                            value={typedAnswers[currentQuestionIndex] || ''}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck="false"
+                            placeholder="Nhập câu trả lời tại đây..."
+                            className="w-full p-2.5 sm:p-3 rounded-xl border-2 border-slate-200 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 font-extrabold text-center text-xs sm:text-sm outline-none transition-all bg-white"
+                            value={typedAnswers[currentQuestionIndex] !== undefined ? typedAnswers[currentQuestionIndex] : (typedAnswersRef.current[currentQuestionIndex] || '')}
                             onChange={(e) => {
-                              setTypedAnswers((prev) => ({
-                                ...prev,
-                                [currentQuestionIndex]: e.target.value,
-                              }));
+                              handleTypeAnswerChange(currentQuestionIndex, e.target.value);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
@@ -2106,8 +2305,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                               }
                             }}
                           />
-                          <p className="text-[10px] text-slate-400 text-center font-medium">
-                            Nhấn <kbd className="bg-slate-200 px-1 py-0.5 rounded-sm border border-slate-300 text-[9px] font-mono">Enter</kbd> hoặc bấm "Câu tiếp theo" để lưu đáp án.
+                          <p className="text-[9px] sm:text-[10px] text-slate-400 text-center font-medium">
+                            Nhấn <kbd className="bg-slate-200 px-1 py-0.5 rounded-sm border border-slate-300 text-[9px] font-mono">Enter</kbd> hoặc nút "Tiếp theo" để nộp câu này.
                           </p>
                         </div>
                       </div>
@@ -2116,26 +2315,26 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
                   // Default / Multiple Choice
                   return (
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-3.5">
                       <div className="text-center">
-                        <span className="px-3 py-1 bg-sky-100 text-sky-900 text-[10px] font-black rounded-full uppercase tracking-widest border border-sky-300">
-                          🎯 KIỂU CHƠI: TRẮC NGHIỆM - 10 Giây
+                        <span className="px-2.5 py-0.5 bg-sky-100 text-sky-900 text-[9px] sm:text-[10px] font-black rounded-full uppercase tracking-widest border border-sky-300">
+                          🎯 TRẮC NGHIỆM - 10 Giây
                         </span>
                       </div>
 
-                      <div className="bg-purple-900 text-white p-5 rounded-3xl space-y-2 text-center shadow-lg">
-                        <span className="text-[10px] font-black uppercase text-amber-300 tracking-wider">Từ vựng tiếng Anh:</span>
-                        <h2 className="text-2xl font-black tracking-wide text-white">
+                      <div className="bg-purple-900 text-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-1 text-center shadow-md">
+                        <span className="text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">Câu hỏi / Đề bài:</span>
+                        <h2 className="text-base sm:text-xl font-black tracking-wide text-white leading-snug">
                           {currentQ.word}
                         </h2>
                         {currentQ.phonetic && (
-                          <p className="text-xs text-purple-200 font-mono">
+                          <p className="text-[11px] sm:text-xs text-purple-200 font-mono">
                             {currentQ.phonetic}
                           </p>
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                         {currentQ.options.map((optionText, optIdx) => {
                           const isSelected = selectedAnswers[currentQuestionIndex] === optIdx;
                           return (
@@ -2143,9 +2342,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                               key={optIdx}
                               type="button"
                               onClick={() => handleSelectAnswer(currentQuestionIndex, optIdx)}
-                              className={`p-4 rounded-2xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                              className={`p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
                                 isSelected
-                                  ? 'bg-purple-700 text-white border-purple-700 shadow-md ring-2 ring-purple-400'
+                                  ? 'bg-purple-700 text-white border-purple-700 shadow-sm ring-2 ring-purple-400'
                                   : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
                               }`}
                             >
@@ -2160,53 +2359,66 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                 })()}
 
                 {/* Footer Controls */}
-                <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-                  <span className="text-[11px] text-slate-400 font-medium">
+                <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                  <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate max-w-[140px] sm:max-w-none">
                     Học sinh: <strong className="text-slate-700">{runnerStudentName}</strong>
                   </span>
                   <button
                     type="button"
-                    onClick={handleNextQuestion}
-                    className="px-6 py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-2 cursor-pointer"
+                    onClick={() => handleNextQuestion(false)}
+                    className="px-4 py-2 sm:px-6 sm:py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
                     <span>
-                      {currentQuestionIndex < activeRunnerTest.questions.length - 1 ? 'Câu tiếp theo ➔' : 'Hoàn thành & Nộp bài 🏁'}
+                      {currentQuestionIndex < activeRunnerTest.questions.length - 1 ? 'Câu tiếp theo ➔' : 'Nộp bài 🏁'}
                     </span>
                   </button>
                 </div>
               </div>
             )}
 
-            {/* STEP C: RESULT & LEADERBOARD VIEW UPON COMPLETION */}
+            {/* STEP C: RESULT, REVIEW ANSWERS & LEADERBOARD VIEW UPON COMPLETION */}
             {testCompletedSubmission && (
-              <div className="text-center space-y-5">
-                <div className="w-16 h-16 rounded-3xl bg-amber-400 text-purple-950 flex items-center justify-center font-black text-3xl mx-auto shadow-lg border-2 border-amber-300">
-                  🎉
-                </div>
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">HOÀN THÀNH BÀI TEST TỪ VỰNG!</h3>
-                  <p className="text-xs text-slate-500 mt-1">Chúc mừng {testCompletedSubmission.studentName} đã nộp bài thành công</p>
-                </div>
-
-                <div className="bg-slate-50 rounded-3xl p-5 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Điểm số:</span>
-                    <span className="text-2xl font-black text-purple-900">{testCompletedSubmission.score}/10</span>
+              <div className="space-y-3.5 sm:space-y-4">
+                {/* Header Announcement */}
+                <div className="text-center space-y-1.5 sm:space-y-2">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl sm:rounded-3xl bg-amber-400 text-purple-950 flex items-center justify-center font-black text-2xl sm:text-3xl mx-auto shadow-md border-2 border-amber-300">
+                    {wasTimeoutAutoSubmit ? '⏰' : '🎉'}
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Số câu đúng:</span>
-                    <span className="text-2xl font-black text-emerald-600">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase">
+                      {wasTimeoutAutoSubmit
+                        ? 'Hết giờ làm bài - Đã tự động nộp bài!'
+                        : activeTestType === 'review'
+                        ? 'Hoàn thành bài ôn tập kiến thức!'
+                        : 'Hoàn thành bài test từ vựng!'}
+                    </h3>
+                    <p className="text-[11px] sm:text-xs text-slate-500">
+                      Học viên: <strong className="text-purple-900">{testCompletedSubmission.studentName}</strong> • Lớp:{' '}
+                      <strong className="text-purple-900">{testCompletedSubmission.className || 'IELTS Dương Vũ'}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Score and Stats Cards */}
+                <div className="bg-slate-50 rounded-2xl p-2.5 sm:p-3.5 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-purple-100 shadow-xs">
+                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Điểm:</span>
+                    <span className="text-lg sm:text-2xl font-black text-purple-900">{testCompletedSubmission.score}/10</span>
+                  </div>
+                  <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-emerald-100 shadow-xs">
+                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Câu đúng:</span>
+                    <span className="text-lg sm:text-2xl font-black text-emerald-600">
                       {testCompletedSubmission.correctCount}/{testCompletedSubmission.totalQuestions}
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Thời gian:</span>
-                    <span className="text-2xl font-black text-amber-700">{testCompletedSubmission.timeSpentSeconds}s</span>
+                  <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-amber-100 shadow-xs">
+                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Thời gian:</span>
+                    <span className="text-lg sm:text-2xl font-black text-amber-700">{testCompletedSubmission.timeSpentSeconds}s</span>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Vi phạm gian lận:</span>
+                  <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-slate-100 shadow-xs">
+                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Rời tab:</span>
                     <span
-                      className={`text-2xl font-black ${
+                      className={`text-lg sm:text-2xl font-black ${
                         testCompletedSubmission.tabSwitchViolations > 0 ? 'text-rose-600' : 'text-emerald-600'
                       }`}
                     >
@@ -2216,27 +2428,352 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                 </div>
 
                 {testCompletedSubmission.tabSwitchViolations > 0 && (
-                  <div className="text-xs font-bold text-rose-900 bg-rose-50 p-3 rounded-2xl border border-rose-200">
-                    ⚠️ <strong>Lưu ý:</strong> Hệ thống đã ghi nhận <strong>{testCompletedSubmission.tabSwitchViolations} lần</strong> thoát màn hình / chuyển tab làm bài và báo cáo tới Giáo viên.
+                  <div className="text-[11px] font-bold text-rose-900 bg-rose-50 p-2 sm:p-2.5 rounded-xl border border-rose-200 text-center">
+                    ⚠️ Hệ thống đã ghi nhận <strong>{testCompletedSubmission.tabSwitchViolations} lần</strong> rời màn hình làm bài.
                   </div>
                 )}
 
-                <div className="text-xs font-bold text-slate-600 bg-emerald-50 text-emerald-900 p-3 rounded-2xl border border-emerald-200">
-                  ✅ Kết quả bài test từ vựng đã được tự động lưu vào hệ thống bảng điểm học sinh!
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                {/* Tab Switcher: Xem Đáp Án Đúng & Xem Bảng Xếp Hạng */}
+                <div className="flex bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200">
                   <button
                     type="button"
-                    onClick={() => {
-                      setActiveLeaderboardTest(activeRunnerTest);
-                      setActiveRunnerTest(null);
-                    }}
-                    className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-purple-950 font-black text-xs rounded-2xl shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                    onClick={() => setResultActiveTab('answers')}
+                    className={`flex-1 py-2 px-2 rounded-lg font-black text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      resultActiveTab === 'answers'
+                        ? 'bg-purple-700 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
                   >
-                    <span>🏆 Xem Bảng Xếp Hạng Lớp</span>
+                    <Eye className="w-3.5 h-3.5 shrink-0" />
+                    <span>Đáp Án ({testCompletedSubmission.correctCount}/{testCompletedSubmission.totalQuestions})</span>
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => setResultActiveTab('leaderboard')}
+                    className={`flex-1 py-2 px-2 rounded-lg font-black text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      resultActiveTab === 'leaderboard'
+                        ? 'bg-amber-500 text-purple-950 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-purple-950 shrink-0" />
+                    <span>Bảng Xếp Hạng</span>
+                  </button>
+                </div>
+
+                {/* TAB 1: REVIEW OF CORRECT ANSWERS */}
+                {resultActiveTab === 'answers' && (
+                  <div className="space-y-3 pt-1 text-left">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[11px] sm:text-xs font-black text-slate-800 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        Đối chiếu chi tiết đáp án:
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-500">
+                        {activeRunnerTest.questions.length} câu
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5 max-h-[44vh] sm:max-h-[46vh] overflow-y-auto pr-0.5">
+                      {activeRunnerTest.questions.map((q, idx) => {
+                        let isCorrect = false;
+                        let isAnswered = false;
+                        const currentSelected = { ...selectedAnswers, ...selectedAnswersRef.current };
+                        const currentTyped = { ...typedAnswers, ...typedAnswersRef.current };
+                        const studentChoice = currentSelected[idx];
+                        const studentTyped = (currentTyped[idx] !== undefined ? currentTyped[idx] : '').trim();
+
+                        if (q.questionType === 'type_input') {
+                          isAnswered = studentTyped.length > 0;
+                          isCorrect = checkIsTypeInputCorrect(studentTyped, q);
+                        } else {
+                          isAnswered = studentChoice !== undefined;
+                          isCorrect = isAnswered && studentChoice === q.correctOptionIndex;
+                        }
+
+                        return (
+                          <div
+                            key={q.id || idx}
+                            className={`p-3 rounded-xl sm:rounded-2xl border transition-all ${
+                              isCorrect
+                                ? 'bg-emerald-50/40 border-emerald-300'
+                                : 'bg-rose-50/40 border-rose-300'
+                            }`}
+                          >
+                            {/* Question Header Status */}
+                            <div className="flex items-center justify-between gap-2 border-b border-slate-200/60 pb-1.5 mb-2">
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`w-5 h-5 rounded-full font-black text-[10px] flex items-center justify-center text-white ${
+                                    isCorrect ? 'bg-emerald-600' : 'bg-rose-600'
+                                  }`}
+                                >
+                                  {idx + 1}
+                                </span>
+                                <span className="text-[11px] font-black text-slate-800">
+                                  Câu {idx + 1}
+                                </span>
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-800">
+                                  {q.questionType === 'type_input'
+                                    ? '⌨️ Điền từ / Sửa lỗi'
+                                    : q.questionType === 'matching'
+                                    ? '🧩 Nối từ'
+                                    : '🎯 Trắc nghiệm'}
+                                </span>
+                              </div>
+
+                              <div>
+                                {isCorrect ? (
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-black text-[10px] flex items-center gap-1 border border-emerald-300">
+                                    <Check className="w-3 h-3 text-emerald-600" /> Đúng (+1đ)
+                                  </span>
+                                ) : isAnswered ? (
+                                  <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 font-black text-[10px] flex items-center gap-1 border border-rose-300">
+                                    <XCircle className="w-3 h-3 text-rose-600" /> Chưa đúng (0đ)
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-black text-[10px] flex items-center gap-1 border border-amber-300">
+                                    <Clock className="w-3 h-3 text-amber-600" /> Chưa trả lời
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Question Target Word & Meaning */}
+                            <div className="mb-2 space-y-0.5">
+                              <div className="text-xs sm:text-sm font-black text-purple-950">{q.word}</div>
+                              {q.phonetic && (
+                                <div className="text-[10px] font-bold text-slate-500 font-mono">{q.phonetic}</div>
+                              )}
+                              <div className="text-[11px] text-slate-600">
+                                <span className="font-semibold text-slate-500">Đáp án:</span>{' '}
+                                <strong className="text-emerald-800 font-bold">{q.meaning}</strong>
+                              </div>
+                            </div>
+
+                            {/* Options Breakdown for Multiple Choice & Matching */}
+                            {q.questionType !== 'type_input' ? (
+                              <div className="space-y-1 pt-1">
+                                <div className="text-[10px] font-bold text-slate-500 mb-1">Phương án lựa chọn:</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                  {q.options.map((opt, optIdx) => {
+                                    const isCorrectOpt = optIdx === q.correctOptionIndex;
+                                    const isUserPicked = studentChoice === optIdx;
+
+                                    let cardStyle = 'bg-white border-slate-200 text-slate-700 opacity-75';
+                                    let badgeText = null;
+
+                                    if (isUserPicked && isCorrectOpt) {
+                                      cardStyle = 'bg-emerald-100 border-emerald-400 text-emerald-950 font-black shadow-2xs ring-2 ring-emerald-400';
+                                      badgeText = (
+                                        <span className="text-[9px] text-emerald-800 font-black flex items-center gap-1">
+                                          <Check className="w-3 h-3 text-emerald-600" /> Bạn đã chọn (Đúng +1đ)
+                                        </span>
+                                      );
+                                    } else if (isUserPicked && !isCorrectOpt) {
+                                      cardStyle = 'bg-rose-100/80 border-rose-400 text-rose-950 font-bold ring-1 ring-rose-400';
+                                      badgeText = (
+                                        <span className="text-[9px] text-rose-700 font-bold flex items-center gap-1">
+                                          <XCircle className="w-3 h-3 text-rose-600" /> Bạn đã chọn
+                                        </span>
+                                      );
+                                    } else if (isCorrectOpt) {
+                                      cardStyle = 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold';
+                                      badgeText = (
+                                        <span className="text-[9px] text-emerald-800 font-bold flex items-center gap-1">
+                                          <Check className="w-3 h-3 text-emerald-600" /> Đáp án đúng
+                                        </span>
+                                      );
+                                    }
+
+                                    return (
+                                      <div
+                                        key={optIdx}
+                                        className={`p-2 rounded-lg border text-[11px] flex items-center justify-between gap-2 ${cardStyle}`}
+                                      >
+                                        <div className="flex items-center gap-1.5 truncate">
+                                          <span className="w-4 h-4 rounded-md bg-black/5 flex items-center justify-center text-[9px] font-bold shrink-0">
+                                            {String.fromCharCode(65 + optIdx)}
+                                          </span>
+                                          <span className="truncate">{opt}</span>
+                                        </div>
+                                        {badgeText}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              /* Type Input Breakdown */
+                              <div className="space-y-1.5 pt-1">
+                                <div className="p-2 rounded-xl border border-slate-200 bg-white text-xs space-y-0.5">
+                                  <div className="text-[10px] text-slate-500 font-bold">Câu trả lời bạn đã nhập:</div>
+                                  <div
+                                    className={`font-black break-words ${
+                                      isCorrect ? 'text-emerald-700' : studentTyped ? 'text-rose-700' : 'text-slate-400 italic'
+                                    }`}
+                                  >
+                                    {studentTyped ? `"${studentTyped}"` : '(Chưa nhập đáp án)'}
+                                  </div>
+                                  {!isCorrect && studentTyped && (
+                                    <div className="text-[10px] text-rose-600 font-semibold pt-0.5">
+                                      ⚠️ Bạn đã nhập: "{studentTyped}" (khác với đáp án đúng)
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="p-2 rounded-xl border border-emerald-300 bg-emerald-50 text-xs space-y-0.5">
+                                  <div className="text-[10px] text-emerald-700 font-bold">Đáp án đúng:</div>
+                                  <div className="font-black text-emerald-950">"{q.meaning}"</div>
+                                  {(q.meaning?.includes('/') || q.meaning?.includes(',')) && (
+                                    <div className="text-[9px] text-emerald-700 font-medium">
+                                      💡 (Hệ thống chấp nhận bất kỳ đáp án nào trong các phương án trên)
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: EMBEDDED LEADERBOARD (LỚP CỦA CHÍNH HỌC SINH) */}
+                {resultActiveTab === 'leaderboard' && (() => {
+                  const studentClass = (testCompletedSubmission?.className || runnerClassName || '').trim();
+                  const studentClassNum = studentClass.match(/\d+/)?.[0];
+
+                  const isSameClass = (subClassName?: string) => {
+                    if (!subClassName) return !studentClass;
+                    const sClass = subClassName.trim().toLowerCase();
+                    const myClass = studentClass.toLowerCase();
+                    if (sClass === myClass) return true;
+                    const sNum = sClass.match(/\d+/)?.[0];
+                    if (studentClassNum && sNum && studentClassNum === sNum) return true;
+                    return sClass.includes(myClass) || myClass.includes(sClass);
+                  };
+
+                  // Deduplicate by ID
+                  const subMap = new Map<string, VocabTestSubmission>();
+                  (activeRunnerTest.submissions || []).forEach((s) => subMap.set(s.id, s));
+                  if (testCompletedSubmission) subMap.set(testCompletedSubmission.id, testCompletedSubmission);
+
+                  let subList = Array.from(subMap.values()).filter(
+                    (s) =>
+                      s.studentName &&
+                      s.studentName !== 'Nguyễn Văn Minh' &&
+                      s.studentName !== 'Phạm Nhật Nam' &&
+                      !s.studentName.toLowerCase().includes('nguyễn văn minh') &&
+                      !s.studentName.toLowerCase().includes('phạm nhật nam') &&
+                      s.id !== 'sub-1' &&
+                      s.id !== 'sub-rev-1' &&
+                      isSameClass(s.className)
+                  );
+
+                  subList.sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    if (b.correctCount !== a.correctCount) return b.correctCount - a.correctCount;
+                    return a.timeSpentSeconds - b.timeSpentSeconds;
+                  });
+
+                  return (
+                    <div className="space-y-3 pt-1 text-left">
+                      <div className="flex items-center justify-between gap-2 px-1">
+                        <span className="text-[11px] sm:text-xs font-black text-slate-800 flex items-center gap-1.5">
+                          <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          Bảng xếp hạng lớp: <strong className="text-purple-950 font-black">Lớp {studentClass || 'Chung'}</strong>
+                        </span>
+                        <span className="text-[10px] font-bold text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200">
+                          {subList.length} học sinh
+                        </span>
+                      </div>
+
+                      {subList.length === 0 ? (
+                        <div className="text-center py-6 text-slate-400 font-bold text-xs bg-slate-50 rounded-xl border border-slate-200">
+                          Chưa có học sinh nào khác trong lớp {studentClass || ''} nộp bài.
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 max-h-[44vh] sm:max-h-[46vh] overflow-y-auto pr-0.5">
+                          {subList.map((sub, rankIdx) => {
+                            const isCurrentStudent = sub.id === testCompletedSubmission.id;
+
+                            let medalBadge = (
+                              <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 font-black text-[11px] flex items-center justify-center shrink-0">
+                                #{rankIdx + 1}
+                              </span>
+                            );
+
+                            if (rankIdx === 0) {
+                              medalBadge = (
+                                <span className="w-6 h-6 rounded-full bg-amber-400 text-amber-950 font-black text-xs flex items-center justify-center shadow-xs shrink-0">
+                                  🥇
+                                </span>
+                              );
+                            } else if (rankIdx === 1) {
+                              medalBadge = (
+                                <span className="w-6 h-6 rounded-full bg-slate-300 text-slate-800 font-black text-xs flex items-center justify-center shadow-xs shrink-0">
+                                  🥈
+                                </span>
+                              );
+                            } else if (rankIdx === 2) {
+                              medalBadge = (
+                                <span className="w-6 h-6 rounded-full bg-amber-600 text-white font-black text-xs flex items-center justify-center shadow-xs shrink-0">
+                                  🥉
+                                </span>
+                              );
+                            }
+
+                            return (
+                              <div
+                                key={sub.id || rankIdx}
+                                className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all ${
+                                  isCurrentStudent
+                                    ? 'bg-purple-50/90 border-purple-400 shadow-xs ring-1 ring-purple-300'
+                                    : 'bg-white border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  {medalBadge}
+                                  <div className="truncate">
+                                    <div className="font-black text-slate-900 text-xs flex items-center gap-1 truncate">
+                                      <span className="truncate">{sub.studentName}</span>
+                                      {isCurrentStudent && (
+                                        <span className="px-1.5 py-0.2 rounded-full bg-purple-700 text-amber-300 text-[9px] font-black shrink-0">
+                                          ⭐ Bạn
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[9px] text-slate-500 font-bold flex items-center gap-1.5">
+                                      <span>⏱️ {sub.timeSpentSeconds}s</span>
+                                      {sub.tabSwitchViolations > 0 && (
+                                        <span className="text-rose-600">⚠️ Thoát {sub.tabSwitchViolations}l</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="text-right shrink-0">
+                                  <div className="font-black text-purple-900 text-xs sm:text-sm">
+                                    {sub.score}/10đ
+                                  </div>
+                                  <div className="text-[9px] font-bold text-emerald-700">
+                                    {sub.correctCount}/{sub.totalQuestions} đúng
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Footer Action Buttons */}
+                <div className="pt-2 border-t border-slate-200">
                   <button
                     type="button"
                     onClick={() => {
@@ -2244,14 +2781,19 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       setRunnerStarted(false);
                       setCurrentQuestionIndex(0);
                       setSelectedAnswers({});
+                      setTypedAnswers({});
+                      typedAnswersRef.current = {};
+                      selectedAnswersRef.current = {};
                       setTabSwitchCount(0);
                       tabSwitchCountRef.current = 0;
                       isSubmittingRef.current = false;
+                      setWasTimeoutAutoSubmit(false);
+                      setIsExited(true);
                       setActiveRunnerTest(null);
                     }}
-                    className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl shadow-xs border border-slate-200 flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                    className="w-full py-2.5 sm:py-3 bg-purple-900 hover:bg-purple-950 text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
                   >
-                    <span>✕ Đóng</span>
+                    <span>✕ Thoát Bài Kiểm Tra & Kết Thúc</span>
                   </button>
                 </div>
               </div>

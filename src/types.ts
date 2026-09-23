@@ -61,6 +61,12 @@ export interface Student {
   // Quản lý ngày học riêng từng học viên & Học phí khóa học
   startDate?: string; // Ngày bắt đầu học riêng từng bạn (nếu khác ngày khai giảng chung của lớp)
   endDate?: string; // Ngày kết thúc khóa riêng từng bạn (dự kiến hoặc thực tế)
+  registeredSessions?: number; // Số buổi học đăng ký / kết thúc sớm (< 32 buổi)
+  earlyEndSessions?: number; // Số buổi kết thúc sớm (< 32 buổi)
+  proRatedTuitionFee?: number; // Học phí tự tính theo số buổi (< 32 buổi)
+  previousDebt?: number; // Nợ học phí khóa trước / chu kỳ trước cộng dồn sang chu kỳ mới
+  carriedOverDebt?: number; // Tiền nợ khóa trước đã cộng dồn
+  isNewCycleDebtCarriedOver?: boolean; // Đánh dấu đã cộng dồn nợ khóa trước
   courseTuitionFee?: number;
   joinedLateSessions?: number;
   tuitionDiscountLate?: number;

@@ -28,6 +28,154 @@ const activeListeners = new Map<string, Set<CollectionListener<any>>>();
 const cachedCollections = new Map<string, any[]>();
 const firestoreUnsubscribers = new Map<string, Unsubscribe>();
 
+// Known deleted mock/sample items that should never reappear on any device
+const KNOWN_DEFAULT_DELETED_IDS = [
+  'pt-101', 'pt-102', 'pt-103',
+  'cls-29', 'cls-41', 'cls-50', 'cls-58', 'cls-59', 'cls-61', 'cls-63', 'cls-64', 'cls-65',
+  'cls-66', 'cls-67', 'cls-68', 'cls-69', 'cls-70', 'cls-71', 'cls-72', 'cls-73', 'cls-74',
+  'cls-75', 'cls-76', 'cls-77', 'cls-78', 'cls-79', 'cls-80', 'cls-81', 'cls-82', 'cls-83',
+  'cls-84', 'cls-85', 'cls-86', 'cls-87', 'cls-88', 'cls-89', 'cls-90', 'cls-91', 'cls-92',
+  'cls-93', 'cls-94'
+];
+
+// Global in-memory set of deleted IDs synced across all devices and storage backends
+export const globalDeletedIdsSet = new Set<string>(KNOWN_DEFAULT_DELETED_IDS);
+
+// Load any previously remembered deleted IDs from localStorage
+try {
+  if (typeof window !== 'undefined') {
+    const rawGlobal = localStorage.getItem('idv_global_deleted_ids');
+    if (rawGlobal) {
+      const parsed = JSON.parse(rawGlobal);
+      if (Array.isArray(parsed)) parsed.forEach((id: string) => globalDeletedIdsSet.add(String(id)));
+    }
+    const rawClasses = localStorage.getItem('idv_deleted_class_ids');
+    if (rawClasses) {
+      const parsed = JSON.parse(rawClasses);
+      if (Array.isArray(parsed)) parsed.forEach((id: string) => globalDeletedIdsSet.add(String(id)));
+    }
+    const rawPlacement = localStorage.getItem('idv_deleted_placement_test_ids');
+    if (rawPlacement) {
+      const parsed = JSON.parse(rawPlacement);
+      if (Array.isArray(parsed)) parsed.forEach((id: string) => globalDeletedIdsSet.add(String(id)));
+    }
+    const rawStudents = localStorage.getItem('idv_deleted_student_ids');
+    if (rawStudents) {
+      const parsed = JSON.parse(rawStudents);
+      if (Array.isArray(parsed)) parsed.forEach((id: string) => globalDeletedIdsSet.add(String(id)));
+    }
+  }
+} catch (e) {}
+
+/**
+ * Checks if a record ID has been deleted on ANY device in the cloud
+ */
+export function isRecordDeleted(id: string, colName?: string): boolean {
+  if (!id || id === 'meta_deleted_ids') return true;
+  if (globalDeletedIdsSet.has(String(id))) return true;
+  return false;
+}
+
+/**
+ * Helper to purge a deleted item from local in-memory cache and notify subscribers
+ */
+function purgeDeletedItemFromCache(collectionName: string, id: string) {
+  const existing = cachedCollections.get(collectionName) || [];
+  const filtered = existing.filter((item) => String(item.id) !== String(id) && item.id !== 'meta_deleted_ids');
+  cachedCollections.set(collectionName, filtered);
+  try {
+    localStorage.setItem(`vps_col_${collectionName}`, JSON.stringify(filtered));
+  } catch (e) {}
+  const listeners = activeListeners.get(collectionName);
+  if (listeners) {
+    listeners.forEach((cb) => {
+      try {
+        cb(filtered);
+      } catch (e) {}
+    });
+  }
+}
+
+/**
+ * Synchronizes deleted IDs across cloud Firestore and VPS Server
+ */
+export async function syncCloudDeletedRecords(): Promise<void> {
+  // 1. Fetch from server API
+  try {
+    const res = await fetch('/api/deleted-ids');
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.deletedIds)) {
+        json.deletedIds.forEach((id: string) => globalDeletedIdsSet.add(String(id)));
+      }
+    }
+  } catch (e) {}
+
+  // 2. Fetch from Firestore metadata documents for classes, placementTests, students
+  const collectionsWithMeta = ['classes', 'placementTests', 'students'];
+  for (const col of collectionsWithMeta) {
+    try {
+      const metaSnap = await getDoc(doc(db, col, 'meta_deleted_ids'));
+      if (metaSnap.exists()) {
+        const data = metaSnap.data();
+        if (Array.isArray(data?.deletedIds)) {
+          data.deletedIds.forEach((id: string) => globalDeletedIdsSet.add(String(id)));
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Persist updated deleted set to localStorage
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('idv_global_deleted_ids', JSON.stringify(Array.from(globalDeletedIdsSet)));
+    }
+  } catch (e) {}
+
+  // Clean currently cached collections
+  for (const [colName, items] of cachedCollections.entries()) {
+    const clean = items.filter((item) => !isRecordDeleted(item.id, colName));
+    if (clean.length !== items.length) {
+      cachedCollections.set(colName, clean);
+      try {
+        localStorage.setItem(`vps_col_${colName}`, JSON.stringify(clean));
+      } catch (e) {}
+      const listeners = activeListeners.get(colName);
+      if (listeners) {
+        listeners.forEach((cb) => {
+          try {
+            cb(clean);
+          } catch (e) {}
+        });
+      }
+    }
+  }
+}
+
+// Auto-run sync on client startup
+if (typeof window !== 'undefined') {
+  syncCloudDeletedRecords();
+
+  // Listen to SSE events for real-time cross-machine deletion sync
+  try {
+    const sse = new EventSource('/api/storage/events');
+    sse.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'delete' && msg.id) {
+          globalDeletedIdsSet.add(String(msg.id));
+          if (msg.collection) {
+            purgeDeletedItemFromCache(msg.collection, String(msg.id));
+          }
+        } else if (msg.type === 'deleted_ids_updated' && Array.isArray(msg.ids)) {
+          msg.ids.forEach((id: string) => globalDeletedIdsSet.add(String(id)));
+          syncCloudDeletedRecords();
+        }
+      } catch (e) {}
+    };
+  } catch (e) {}
+}
+
 // BroadcastChannel for instant cross-tab communication
 let broadcastBus: BroadcastChannel | null = null;
 try {
@@ -36,12 +184,13 @@ try {
     broadcastBus.onmessage = (event) => {
       const { collection: colName, data } = event.data || {};
       if (colName && Array.isArray(data)) {
-        cachedCollections.set(colName, data);
+        const cleanData = data.filter((item: any) => !isRecordDeleted(item.id, colName));
+        cachedCollections.set(colName, cleanData);
         const listeners = activeListeners.get(colName);
         if (listeners) {
           listeners.forEach((cb) => {
             try {
-              cb(data);
+              cb(cleanData);
             } catch (err) {}
           });
         }
@@ -85,19 +234,13 @@ export function subscribeCollection<T extends { id: string }>(
   listenerSet.add(onData);
 
   // 2. Load from Local Storage cache immediately for instant UI load
-  let initialItems: T[] = initialData || [];
+  let initialItems: T[] = (initialData || []).filter((i) => !isRecordDeleted(i.id, collectionName));
   try {
     const cached = localStorage.getItem(`vps_col_${collectionName}`);
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        if (collectionName === 'classes') {
-          const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
-          const setDel = new Set(deletedIds);
-          initialItems = parsed.filter((c: any) => !setDel.has(c.id));
-        } else {
-          initialItems = parsed;
-        }
+        initialItems = parsed.filter((c: any) => !isRecordDeleted(c.id, collectionName));
       }
     }
   } catch (e) {}
@@ -110,7 +253,7 @@ export function subscribeCollection<T extends { id: string }>(
       );
       if (Array.isArray(candidateSubs) && candidateSubs.length > 0) {
         const initialIds = new Set(initialItems.map((i) => i.id));
-        const missing = candidateSubs.filter((s: any) => !initialIds.has(s.id));
+        const missing = candidateSubs.filter((s: any) => !initialIds.has(s.id) && !isRecordDeleted(s.id, 'placementTests'));
         if (missing.length > 0) {
           initialItems = [...missing, ...initialItems];
         }
@@ -125,11 +268,14 @@ export function subscribeCollection<T extends { id: string }>(
     initialData.length > 0
   ) {
     const existingIds = new Set(initialItems.map((i) => i.id));
-    const missing = initialData.filter((p) => !existingIds.has(p.id));
+    const missing = initialData.filter((p) => !existingIds.has(p.id) && !isRecordDeleted(p.id, collectionName));
     if (missing.length > 0) {
       initialItems = [...missing, ...initialItems];
     }
   }
+
+  // Filter any deleted records from initialItems
+  initialItems = initialItems.filter((i) => !isRecordDeleted(i.id, collectionName));
 
   // Emit immediate cached/seed data so UI renders instantly
   cachedCollections.set(collectionName, initialItems);
@@ -143,24 +289,21 @@ export function subscribeCollection<T extends { id: string }>(
         colRef,
         (snapshot) => {
           if (!snapshot.empty) {
-            let firestoreItems: T[] = snapshot.docs.map((d) => ({
-              id: d.id,
-              ...d.data(),
-            })) as T[];
-
-            if (collectionName === 'classes') {
-              const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
-              if (deletedIds.length > 0) {
-                const setDel = new Set(deletedIds);
-                firestoreItems = firestoreItems.filter((c: any) => !setDel.has(c.id));
-              }
-            } else if (collectionName === 'students') {
-              const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_student_ids') || '[]');
-              if (deletedIds.length > 0) {
-                const setDel = new Set(deletedIds);
-                firestoreItems = firestoreItems.filter((s: any) => !setDel.has(s.id));
+            // Check if snapshot contains meta_deleted_ids document
+            const metaDoc = snapshot.docs.find((d) => d.id === 'meta_deleted_ids');
+            if (metaDoc && metaDoc.exists()) {
+              const metaData = metaDoc.data();
+              if (Array.isArray(metaData?.deletedIds)) {
+                metaData.deletedIds.forEach((id: string) => globalDeletedIdsSet.add(String(id)));
               }
             }
+
+            let firestoreItems: T[] = snapshot.docs
+              .filter((d) => d.id !== 'meta_deleted_ids' && !isRecordDeleted(d.id, collectionName))
+              .map((d) => ({
+                id: d.id,
+                ...d.data(),
+              })) as T[];
 
             cachedCollections.set(collectionName, firestoreItems);
             try {
@@ -176,7 +319,7 @@ export function subscribeCollection<T extends { id: string }>(
               });
             }
           } else {
-            // Snapshot is empty: emit empty array and do NOT seed classes
+            // Snapshot is empty: emit empty array and do NOT seed classes or placement tests
             cachedCollections.set(collectionName, []);
             try {
               localStorage.setItem(`vps_col_${collectionName}`, JSON.stringify([]));
@@ -191,12 +334,15 @@ export function subscribeCollection<T extends { id: string }>(
               });
             }
 
-            if (collectionName !== 'classes' && initialData && initialData.length > 0) {
-              // Seed Firestore with initial records only if NOT classes
-              console.log(`[Firebase Firestore] Seeding initial data for ${collectionName}...`);
-              saveBatchDocuments(collectionName, initialData).catch((err) => {
-                console.warn(`[Firebase Firestore] Seeding error for ${collectionName}:`, err);
-              });
+            // NEVER re-seed classes or placementTests
+            if (collectionName !== 'classes' && collectionName !== 'placementTests' && initialData && initialData.length > 0) {
+              const nonDeletedInitial = initialData.filter((i) => !isRecordDeleted(i.id, collectionName));
+              if (nonDeletedInitial.length > 0) {
+                console.log(`[Firebase Firestore] Seeding initial data for ${collectionName}...`);
+                saveBatchDocuments(collectionName, nonDeletedInitial).catch((err) => {
+                  console.warn(`[Firebase Firestore] Seeding error for ${collectionName}:`, err);
+                });
+              }
             }
           }
         },
@@ -261,10 +407,21 @@ export async function fetchCollection<T extends { id: string }>(
     const colRef = collection(db, collectionName);
     const snapshot = await getDocs(colRef);
     if (!snapshot.empty) {
-      const items: T[] = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as T[];
+      // Check for meta_deleted_ids
+      const metaDoc = snapshot.docs.find((d) => d.id === 'meta_deleted_ids');
+      if (metaDoc && metaDoc.exists()) {
+        const metaData = metaDoc.data();
+        if (Array.isArray(metaData?.deletedIds)) {
+          metaData.deletedIds.forEach((id: string) => globalDeletedIdsSet.add(String(id)));
+        }
+      }
+
+      const items: T[] = snapshot.docs
+        .filter((d) => d.id !== 'meta_deleted_ids' && !isRecordDeleted(d.id, collectionName))
+        .map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as T[];
       cachedCollections.set(collectionName, items);
       try {
         localStorage.setItem(`vps_col_${collectionName}`, JSON.stringify(items));
@@ -283,19 +440,23 @@ export async function fetchCollection<T extends { id: string }>(
     if (res.ok) {
       const json = await res.json();
       if (Array.isArray(json.data) && json.data.length > 0) {
-        cachedCollections.set(collectionName, json.data);
-        return json.data;
+        const clean = json.data.filter((item: any) => !isRecordDeleted(item.id, collectionName));
+        cachedCollections.set(collectionName, clean);
+        return clean;
       }
     }
   } catch (err) {}
 
   // Fallback to local memory/cache
   const cached = cachedCollections.get(collectionName);
-  if (cached) return cached;
+  if (cached) return cached.filter((item: any) => !isRecordDeleted(item.id, collectionName));
 
   try {
     const raw = localStorage.getItem(`vps_col_${collectionName}`);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((item: any) => !isRecordDeleted(item.id, collectionName));
+    }
   } catch (e) {}
 
   return [];
@@ -442,22 +603,38 @@ export async function saveBatchDocuments<T extends { id: string }>(
 }
 
 /**
- * Delete a document from Firestore and local cache
+ * Delete a document from Firestore and local cache with permanent cross-device sync
  */
 export async function deleteDocument(collectionName: string, id: string): Promise<void> {
   const stringId = String(id);
 
-  // 1. Optimistic cache update
+  // 1. Record to global in-memory deleted IDs set
+  globalDeletedIdsSet.add(stringId);
+
+  // 2. Optimistic cache update
   const existingList = cachedCollections.get(collectionName) || [];
   const filtered = existingList.filter((item) => String(item.id) !== stringId);
   cachedCollections.set(collectionName, filtered);
   try {
     localStorage.setItem(`vps_col_${collectionName}`, JSON.stringify(filtered));
+    localStorage.setItem('idv_global_deleted_ids', JSON.stringify(Array.from(globalDeletedIdsSet)));
     if (collectionName === 'classes') {
       const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
       if (!deletedIds.includes(stringId)) {
         deletedIds.push(stringId);
         localStorage.setItem('idv_deleted_class_ids', JSON.stringify(deletedIds));
+      }
+    } else if (collectionName === 'placementTests') {
+      const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_placement_test_ids') || '[]');
+      if (!deletedIds.includes(stringId)) {
+        deletedIds.push(stringId);
+        localStorage.setItem('idv_deleted_placement_test_ids', JSON.stringify(deletedIds));
+      }
+    } else if (collectionName === 'students') {
+      const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_student_ids') || '[]');
+      if (!deletedIds.includes(stringId)) {
+        deletedIds.push(stringId);
+        localStorage.setItem('idv_deleted_student_ids', JSON.stringify(deletedIds));
       }
     }
   } catch (e) {}
@@ -478,7 +655,7 @@ export async function deleteDocument(collectionName: string, id: string): Promis
     } catch (e) {}
   }
 
-  // 2. Delete from Firestore
+  // 3. Delete document from Firestore
   try {
     const docRef = doc(db, collectionName, stringId);
     await deleteDoc(docRef);
@@ -486,13 +663,48 @@ export async function deleteDocument(collectionName: string, id: string): Promis
     console.warn(`[Firebase Firestore] Delete error for ${collectionName}/${stringId}:`, err);
   }
 
-  // 3. Delete from VPS
+  // 4. Save tombstone to Firestore meta_deleted_ids document
+  try {
+    const metaRef = doc(db, collectionName, 'meta_deleted_ids');
+    const metaSnap = await getDoc(metaRef);
+    let currentList: string[] = [];
+    if (metaSnap.exists() && Array.isArray(metaSnap.data()?.deletedIds)) {
+      currentList = metaSnap.data().deletedIds;
+    }
+    if (!currentList.includes(stringId)) {
+      currentList.push(stringId);
+      await setDoc(metaRef, { deletedIds: currentList, updatedAt: new Date().toISOString() }, { merge: true });
+    }
+  } catch (err) {
+    console.warn(`[Firebase Firestore] Could not update meta_deleted_ids for ${collectionName}:`, err);
+  }
+
+  // 5. Post tombstone to VPS server deleted-ids API
+  try {
+    fetch('/api/deleted-ids', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: stringId, collection: collectionName }),
+    }).catch(() => {});
+  } catch (e) {}
+
+  // 6. Delete from VPS backend storage
   try {
     fetch(`/api/storage/${encodeURIComponent(collectionName)}/${encodeURIComponent(stringId)}?_t=${Date.now()}`, {
       method: 'DELETE',
       headers: { 'Cache-Control': 'no-cache' },
     }).catch(() => {});
   } catch (e) {}
+
+  // 7. If placement test, also send DELETE to dedicated placement-tests endpoint
+  if (collectionName === 'placementTests') {
+    try {
+      fetch(`/api/placement-tests/${encodeURIComponent(stringId)}?_t=${Date.now()}`, {
+        method: 'DELETE',
+        headers: { 'Cache-Control': 'no-cache' },
+      }).catch(() => {});
+    } catch (e) {}
+  }
 }
 
 /**

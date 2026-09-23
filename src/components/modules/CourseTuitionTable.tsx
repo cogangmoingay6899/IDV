@@ -34,7 +34,12 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { Student, ClassGroup, AuthUser, AttendanceRecord } from '../../types';
-import { detectCourseLevel, calculateCourseSchedule } from '../../utils/courseSchedule';
+import {
+  detectCourseLevel,
+  calculateCourseSchedule,
+  calculateProRatedTuition,
+  countSessionsBetweenDates,
+} from '../../utils/courseSchedule';
 
 export interface CourseTuitionTableProps {
   courseName: string;
@@ -392,7 +397,7 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
     student: Student,
     updates: Partial<Student>
   ) => {
-    const effectiveBaseFee =
+    let effectiveBaseFee =
       updates.customTuitionFee ??
       updates.courseTuitionFee ??
       student.customTuitionFee ??
@@ -410,6 +415,70 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
       tuitionDiscountLate: discountAmount,
       tuitionPayable: finalFee,
     };
+
+    // When endDate, startDate, or joinDate is modified: automatically calculate sessions & apply pro-rated tuition
+    if (updates.endDate !== undefined || updates.startDate !== undefined || updates.joinDate !== undefined) {
+      const finalStart = updates.startDate ?? updates.joinDate ?? student.startDate ?? student.joinDate ?? '';
+      const finalEnd = updates.endDate ?? student.endDate ?? '';
+
+      if (finalStart && finalEnd) {
+        const studentClass = classes.find((c) => c.id === student.classId);
+        const scheduleStr = studentClass?.schedule || '';
+        const offDays = studentClass?.offDates || [];
+        const counted = countSessionsBetweenDates(finalStart, finalEnd, scheduleStr, offDays);
+        const actualSessions = Math.max(1, Math.min(32, counted));
+        const standardFee = (studentClass?.tuitionFee && studentClass.tuitionFee > 0) ? studentClass.tuitionFee : (courseTuitionFee || 14500000);
+        const feeBasis = (student.customTuitionFee && student.customTuitionFee !== standardFee && !student.registeredSessions)
+          ? student.customTuitionFee
+          : standardFee;
+
+        const debt = updates.previousDebt ?? updates.carriedOverDebt ?? student.previousDebt ?? student.carriedOverDebt ?? 0;
+        const calc = calculateProRatedTuition(feeBasis, actualSessions, debt, 32);
+
+        updated.registeredSessions = actualSessions;
+        updated.earlyEndSessions = actualSessions;
+        updated.customTuitionFee = calc.proRatedTuition;
+        updated.courseTuitionFee = calc.proRatedTuition;
+        updated.proRatedTuitionFee = calc.proRatedTuition;
+        updated.tuitionPayable = calc.totalDue;
+        if (student.tuitionStatus !== 'Đã đóng đủ' && !updates.tuitionPaidDate && !student.tuitionPaidDate) {
+          updated.balanceOwed = calc.totalDue;
+        }
+      }
+    }
+
+    // When registeredSessions or earlyEndSessions is updated directly
+    if (updates.registeredSessions !== undefined || updates.earlyEndSessions !== undefined) {
+      const sessions = Math.max(1, Math.min(32, (updates.registeredSessions ?? updates.earlyEndSessions) || 32));
+      const studentClass = classes.find((c) => c.id === student.classId);
+      const standardFee = (studentClass?.tuitionFee && studentClass.tuitionFee > 0) ? studentClass.tuitionFee : (courseTuitionFee || 14500000);
+      const debt = updates.previousDebt ?? updates.carriedOverDebt ?? student.previousDebt ?? student.carriedOverDebt ?? 0;
+      const calc = calculateProRatedTuition(standardFee, sessions, debt, 32);
+
+      updated.registeredSessions = sessions;
+      updated.earlyEndSessions = sessions;
+      updated.customTuitionFee = calc.proRatedTuition;
+      updated.courseTuitionFee = calc.proRatedTuition;
+      updated.proRatedTuitionFee = calc.proRatedTuition;
+      updated.tuitionPayable = calc.totalDue;
+      if (student.tuitionStatus !== 'Đã đóng đủ' && !updates.tuitionPaidDate && !student.tuitionPaidDate) {
+        updated.balanceOwed = calc.totalDue;
+      }
+    }
+
+    // When previousDebt is updated
+    if (updates.previousDebt !== undefined || updates.carriedOverDebt !== undefined) {
+      const debt = Math.max(0, (updates.previousDebt ?? updates.carriedOverDebt) || 0);
+      const sessions = updated.registeredSessions ?? updated.earlyEndSessions ?? 32;
+      const currentFee = updated.customTuitionFee ?? courseTuitionFee;
+      const calc = calculateProRatedTuition(currentFee, sessions, debt, 32);
+      updated.previousDebt = debt;
+      updated.carriedOverDebt = debt;
+      updated.tuitionPayable = calc.totalDue;
+      if (student.tuitionStatus !== 'Đã đóng đủ' && !updates.tuitionPaidDate && !student.tuitionPaidDate) {
+        updated.balanceOwed = calc.totalDue;
+      }
+    }
 
     if (updates.isExternalStudent !== undefined) {
       updated.isExternalStudent = updates.isExternalStudent;
@@ -455,10 +524,28 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
     mode: 'gentle' | 'formal' = 'gentle',
     targetRecipient: 'parent' | 'student' = 'parent'
   ) => {
-    const effectiveBaseFee = student.courseTuitionFee || courseTuitionFee;
+    const effectiveBaseFee = student.customTuitionFee || student.courseTuitionFee || courseTuitionFee;
     const effectiveLateSessions = student.joinedLateSessions || 0;
-    const { discountAmount, finalFee, isDeductible } = calculateStudentTuition(effectiveBaseFee, effectiveLateSessions);
+    const { discountAmount, finalFee, isDeductible } = calculateStudentTuition(effectiveBaseFee, effectiveLateSessions, student, classes);
     const overdue = checkOverdueStatus(student.tuitionPromiseDate, student.tuitionDeadlineDate, student.tuitionPaidDate, student.tuitionStatus);
+
+    const studentClass = classes.find((c) => c.id === student.classId);
+    const countedSessions = (student.startDate || student.joinDate) && student.endDate
+      ? countSessionsBetweenDates(student.startDate || student.joinDate || '', student.endDate, studentClass?.schedule || '', studentClass?.offDates || [])
+      : 32;
+    const effectiveSessions = typeof student.registeredSessions === 'number'
+      ? student.registeredSessions
+      : (typeof student.earlyEndSessions === 'number'
+          ? student.earlyEndSessions
+          : (countedSessions < 32 ? countedSessions : 32));
+
+    const standardClassFee = studentClass?.tuitionFee && studentClass.tuitionFee > 0 ? studentClass.tuitionFee : (courseTuitionFee || 14500000);
+    const proRatedCalc = calculateProRatedTuition(
+      standardClassFee,
+      effectiveSessions,
+      student.previousDebt || student.carriedOverDebt || 0,
+      32
+    );
 
     const isGentle = mode === 'gentle';
     const isParent = targetRecipient === 'parent';
@@ -478,13 +565,25 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
       msg += `• Lớp học: ${student.className || className || 'Lớp học'}\n`;
       msg += `• Khóa học: ${courseName || student.courseName || 'Khóa học IELTS'}\n\n`;
       msg += `💰 CHI TIẾT HỌC PHÍ CẦN HOÀN TẤT:\n`;
-      msg += `• Học phí chuẩn của khóa: ${effectiveBaseFee.toLocaleString('vi-VN')} đ\n`;
+      msg += `• Học phí chuẩn của khóa (32 buổi): ${effectiveBaseFee.toLocaleString('vi-VN')} đ\n`;
+
+      if (proRatedCalc.isEarlyEnd) {
+        msg += `• Học phí theo số buổi (${proRatedCalc.actualSessions} buổi < 32 buổi): ${proRatedCalc.proRatedTuition.toLocaleString('vi-VN')} đ (Đơn giá TB ${proRatedCalc.perSessionRate.toLocaleString('vi-VN')} đ/buổi)\n`;
+      }
 
       if (isDeductible && effectiveLateSessions >= 4) {
         msg += `• Học viên vào sau ${effectiveLateSessions} buổi: đã áp dụng hỗ trợ giảm trừ -${discountAmount.toLocaleString('vi-VN')} đ (-100.000 đ/buổi)\n`;
       }
 
-      msg += `👉 TỔNG HỌC PHÍ CẦN ĐÓNG: ${finalFee.toLocaleString('vi-VN')} đ\n`;
+      if (proRatedCalc.previousDebt > 0) {
+        msg += `• Nợ học phí khóa trước cộng dồn: +${proRatedCalc.previousDebt.toLocaleString('vi-VN')} đ\n`;
+      }
+
+      const displayFinalFee = proRatedCalc.isEarlyEnd
+        ? (proRatedCalc.proRatedTuition + proRatedCalc.previousDebt)
+        : (finalFee + proRatedCalc.previousDebt);
+
+      msg += `👉 TỔNG HỌC PHÍ CẦN ĐÓNG: ${displayFinalFee.toLocaleString('vi-VN')} đ\n`;
 
       const targetDeadlineStr = student.tuitionPromiseDate || student.tuitionDeadlineDate;
       if (targetDeadlineStr) {
@@ -520,14 +619,26 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
     msg += `• Lớp học: ${student.className || className || 'Lớp học'}\n`;
     msg += `• Khóa học: ${courseName || student.courseName || 'Khóa học IELTS'}\n\n`;
     msg += `THÔNG TIN HỌC PHÍ CẦN NỘP:\n`;
-    msg += `• Học phí gốc khóa học: ${effectiveBaseFee.toLocaleString('vi-VN')} đ\n`;
+    msg += `• Học phí gốc khóa học (32 buổi): ${effectiveBaseFee.toLocaleString('vi-VN')} đ\n`;
+
+    if (proRatedCalc.isEarlyEnd) {
+      msg += `• Học phí theo số buổi thực tế (${proRatedCalc.actualSessions} buổi < 32 buổi): ${proRatedCalc.proRatedTuition.toLocaleString('vi-VN')} đ (Đơn giá TB ${proRatedCalc.perSessionRate.toLocaleString('vi-VN')} đ/buổi)\n`;
+    }
 
     if (isDeductible && effectiveLateSessions >= 4) {
       msg += `• Học viên vào sau: ${effectiveLateSessions} buổi\n`;
       msg += `• Mức hỗ trợ giảm trừ: -${discountAmount.toLocaleString('vi-VN')} đ (-100.000 đ/buổi)\n`;
     }
 
-    msg += `👉 TỔNG HỌC PHÍ PHẢI ĐÓNG: ${finalFee.toLocaleString('vi-VN')} đ\n`;
+    if (proRatedCalc.previousDebt > 0) {
+      msg += `• Nợ học phí khóa trước / chu kỳ trước cộng dồn: +${proRatedCalc.previousDebt.toLocaleString('vi-VN')} đ\n`;
+    }
+
+    const displayFinalFeeFormal = proRatedCalc.isEarlyEnd
+      ? (proRatedCalc.proRatedTuition + proRatedCalc.previousDebt)
+      : (finalFee + proRatedCalc.previousDebt);
+
+    msg += `👉 TỔNG HỌC PHÍ PHẢI ĐÓNG: ${displayFinalFeeFormal.toLocaleString('vi-VN')} đ\n`;
     msg += `• Trạng thái: ${student.tuitionStatus || 'Chưa hoàn tất'}\n`;
 
     const dDate = student.tuitionPromiseDate || student.tuitionDeadlineDate;
@@ -1065,6 +1176,24 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                 const overdue = checkOverdueStatus(st.tuitionPromiseDate, st.tuitionDeadlineDate, st.tuitionPaidDate, st.tuitionStatus);
                 const k4Info = getStudentK4ProgressInfo(st);
 
+                const studentClass = classes.find((c) => c.id === st.classId);
+                const countedSessions = (st.startDate || st.joinDate) && st.endDate
+                  ? countSessionsBetweenDates(st.startDate || st.joinDate || '', st.endDate, studentClass?.schedule || '', studentClass?.offDates || [])
+                  : 32;
+                const effectiveSessions = typeof st.registeredSessions === 'number'
+                  ? st.registeredSessions
+                  : (typeof st.earlyEndSessions === 'number'
+                      ? st.earlyEndSessions
+                      : (countedSessions < 32 ? countedSessions : 32));
+
+                const standardClassFee = studentClass?.tuitionFee && studentClass.tuitionFee > 0 ? studentClass.tuitionFee : (courseTuitionFee || 14500000);
+                const proRatedCalc = calculateProRatedTuition(
+                  standardClassFee,
+                  effectiveSessions,
+                  st.previousDebt || st.carriedOverDebt || 0,
+                  32
+                );
+
                 const isPaid = st.tuitionStatus === 'Đã đóng đủ' || (st.tuitionPaidDate && st.tuitionPaidDate.length > 0);
                 const parentPhone = st.parentPhone;
                 const studentPhone = st.phone;
@@ -1214,9 +1343,9 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                       </div>
                     </td>
 
-                    {/* Học phí cần đóng (theo thiết lập của khóa) - Cho phép nhập tùy chỉnh nếu là Khóa 4 hoặc Học sinh ngoài */}
+                    {/* Học phí cần đóng (theo thiết lập của khóa) - Cho phép nhập tùy chỉnh nếu là Khóa 4 hoặc Học sinh ngoài hoặc kết thúc sớm */}
                     <td className="py-3 px-3 text-right">
-                      {isCourse4 || st.isExternalStudent || st.studentCategory === 'Học sinh ngoài' ? (
+                      {isCourse4 || st.isExternalStudent || st.studentCategory === 'Học sinh ngoài' || proRatedCalc.isEarlyEnd ? (
                         <div className="space-y-1">
                           <div className="flex items-center justify-end gap-1">
                             <input
@@ -1231,26 +1360,52 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                                 });
                               }}
                               className="w-28 px-2 py-1 text-right text-xs font-black text-purple-900 bg-purple-50/70 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30"
-                              title="Khóa 4: Nhập học phí tùy chỉnh khác mặc định cho học viên này"
+                              title="Nhập học phí tùy chỉnh cho học viên này"
                             />
                             <span className="text-[11px] font-bold text-slate-500">đ</span>
                           </div>
-                          <div className="text-[9px] text-right">
-                            {(st.customTuitionFee && st.customTuitionFee !== courseTuitionFee) ||
-                            (st.courseTuitionFee && st.courseTuitionFee !== courseTuitionFee) ? (
-                              <span className="inline-flex items-center gap-0.5 text-purple-700 font-bold bg-purple-100/70 px-1.5 py-0.2 rounded border border-purple-200">
-                                <Sparkles className="w-2.5 h-2.5 text-purple-600" />
-                                Tùy chỉnh
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 font-normal">Mặc định</span>
-                            )}
-                          </div>
+                          
+                          {/* Automatic Pro-rated tuition badge if early end < 32 sessions */}
+                          {proRatedCalc.isEarlyEnd ? (
+                            <div className="space-y-0.5">
+                              <div className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 inline-block text-right">
+                                ⚡ {proRatedCalc.actualSessions}b: {formatVND(proRatedCalc.proRatedTuition)}
+                              </div>
+                              {st.customTuitionFee !== proRatedCalc.proRatedTuition && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleStudentFieldChange(st, {
+                                      customTuitionFee: proRatedCalc.proRatedTuition,
+                                      courseTuitionFee: proRatedCalc.proRatedTuition,
+                                      registeredSessions: proRatedCalc.actualSessions,
+                                    });
+                                  }}
+                                  className="text-[9px] font-extrabold text-emerald-700 hover:text-emerald-900 hover:underline block text-right cursor-pointer"
+                                  title="Áp dụng số tiền tự động tính theo số buổi học"
+                                >
+                                  ⚡ Áp dụng {formatVND(proRatedCalc.proRatedTuition)}
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-[9px] text-right">
+                              {(st.customTuitionFee && st.customTuitionFee !== courseTuitionFee) ||
+                              (st.courseTuitionFee && st.courseTuitionFee !== courseTuitionFee) ? (
+                                <span className="inline-flex items-center gap-0.5 text-purple-700 font-bold bg-purple-100/70 px-1.5 py-0.2 rounded border border-purple-200">
+                                  <Sparkles className="w-2.5 h-2.5 text-purple-600" />
+                                  Tùy chỉnh
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 font-normal">Mặc định</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div>
                           <div className="text-xs font-bold text-slate-700">{formatVND(baseFee)}</div>
-                          <div className="text-[9px] text-slate-400 font-normal">Chuẩn khóa</div>
+                          <div className="text-[9px] text-slate-400 font-normal">Chuẩn khóa (32b)</div>
                         </div>
                       )}
                     </td>
@@ -1293,11 +1448,22 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                       </div>
                     </td>
 
-                    {/* Mức học phí học sinh vào sau phải đóng */}
+                    {/* Mức học phí học sinh phải đóng (có cộng dồn nợ khóa trước nếu có) */}
                     <td className="py-3 px-3 text-right">
                       <div className="text-xs font-black text-purple-900">
-                        {formatVND(finalFee)}
+                        {formatVND(proRatedCalc.isEarlyEnd ? proRatedCalc.proRatedTuition : finalFee)}
                       </div>
+                      
+                      {/* Previous Debt Carry-over display */}
+                      {proRatedCalc.previousDebt > 0 && (
+                        <div className="text-[10px] text-purple-800 font-bold mt-0.5">
+                          <span>+ Nợ cũ: {formatVND(proRatedCalc.previousDebt)}</span>
+                          <div className="text-[11px] font-black text-rose-700">
+                            = {formatVND(proRatedCalc.totalDue)}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mt-0.5">
                         {k4Info.isK4 ? (
                           k4Info.isUnpaidForCurrentCycle ? (
@@ -1375,6 +1541,35 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                             placeholder="Ngày kết thúc..."
                             title="Chọn ngày kết thúc khóa riêng cho học viên này"
                           />
+
+                          {/* Early course end helper (< 32 sessions) */}
+                          {countedSessions < 32 && (
+                            <div className="mt-1 p-1 bg-emerald-50 border border-emerald-200 rounded-lg text-[9px] space-y-0.5">
+                              <div className="text-emerald-950 font-bold flex items-center justify-between">
+                                <span>⚡ Kết thúc sớm:</span>
+                                <span className="font-mono text-emerald-800 font-black">{countedSessions} buổi</span>
+                              </div>
+                              <div className="text-emerald-800 font-semibold">
+                                Số tiền: {formatVND(Math.round((standardClassFee / 32) * countedSessions))}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const pFee = Math.round((standardClassFee / 32) * countedSessions);
+                                  handleStudentFieldChange(st, {
+                                    registeredSessions: countedSessions,
+                                    earlyEndSessions: countedSessions,
+                                    customTuitionFee: pFee,
+                                    courseTuitionFee: pFee,
+                                  });
+                                }}
+                                className="w-full text-center font-black text-white bg-emerald-600 hover:bg-emerald-700 py-0.5 rounded transition-all cursor-pointer"
+                                title="Áp dụng số tiền tự động tính theo số buổi học thực tế"
+                              >
+                                ⚡ Áp dụng {countedSessions} buổi
+                              </button>
+                            </div>
+                          )}
 
                           {/* Khóa 4 auto-calculate end date helper */}
                           {k4Info.isK4 && (

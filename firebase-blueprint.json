@@ -98,9 +98,24 @@
         "ieltsScore": { "type": "string", "description": "IELTS overall achievement" }
       },
       "required": ["id", "name"]
+    },
+    "DeletedRecord": {
+      "title": "DeletedRecord",
+      "description": "Cross-device tombstone tracking for deleted entities (classes, placement tests, students)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Deleted entity ID" },
+        "collection": { "type": "string", "description": "Collection name of the deleted entity" },
+        "deletedAt": { "type": "string", "description": "ISO timestamp of deletion" }
+      },
+      "required": ["id", "collection"]
     }
   },
   "firestore": {
+    "/deleted_records/{docId}": {
+      "schema": { "$ref": "#/entities/DeletedRecord" },
+      "description": "Collection of deleted record tombstones to ensure instant sync across all devices"
+    },
     "/students/{studentId}": {
       "schema": { "$ref": "#/entities/Student" },
       "description": "Collection of enrolled students and their tuition status"

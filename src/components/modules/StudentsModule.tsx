@@ -195,7 +195,13 @@ const StudentsModule: React.FC<StudentsModuleProps> = ({
           isApproachingCycleEnd: is,
           needsReminder: Ns,
           reminderMessage: Ls,
-        }
+        totalBalanceOwed: (function() {
+          const sessionRate = (B.customTuitionFee || (ct ? ct.tuitionFee : 14500000) || 14500000) / 32;
+          const proRatedTuition = Math.round(Me * sessionRate);
+          const cycleFee = (B.customTuitionFee || (ct ? ct.tuitionFee : 14500000) || 14500000);
+          return (Cs ? cycleFee : 0) + (Me < 32 ? proRatedTuition : 0);
+        })(),
+      }
       );
     },
     [Ct, ye] = y.useState(!1),

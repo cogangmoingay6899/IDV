@@ -134,6 +134,7 @@ import {
   deleteDocument,
   clearCollection,
   incrementClassStudentCount,
+  isRecordDeleted,
 } from './lib/firestoreService';
 
 import {
@@ -273,14 +274,6 @@ export default function App() {
   const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
   const [leads, setLeads] = useState<LeadAdmission[]>(INITIAL_LEADS);
   const [placementTests, setPlacementTests] = useState<PlacementTest[]>(() => {
-    let deletedSet = new Set<string>();
-    try {
-      const deletedIds = JSON.parse(localStorage.getItem('idv_deleted_placement_test_ids') || '[]');
-      if (Array.isArray(deletedIds)) {
-        deletedSet = new Set(deletedIds);
-      }
-    } catch (e) {}
-
     try {
       const cached = localStorage.getItem('idv_placement_tests_cache');
       const submitted = localStorage.getItem('idv_submitted_candidate_placement_tests');
@@ -304,15 +297,12 @@ export default function App() {
       }
 
       if (combined.length > 0) {
-        const validCached = combined.filter((p: PlacementTest) => !deletedSet.has(p.id));
-        const parsedIds = new Set(validCached.map((p: PlacementTest) => p.id));
-        const initialMissing = INITIAL_PLACEMENT_TESTS.filter((t) => !parsedIds.has(t.id) && !deletedSet.has(t.id));
-        return [...validCached, ...initialMissing];
+        return combined.filter((p: PlacementTest) => !isRecordDeleted(p.id, 'placementTests'));
       }
     } catch (e) {
       console.warn('Failed to read cached placement tests:', e);
     }
-    return INITIAL_PLACEMENT_TESTS.filter((t) => !deletedSet.has(t.id));
+    return [];
   });
   const [trialStudents, setTrialStudents] = useState<TrialStudent[]>(INITIAL_TRIAL_STUDENTS);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(INITIAL_ATTENDANCE);
@@ -326,29 +316,15 @@ export default function App() {
 
   // Real-time Cloud Database (Firebase Firestore) Sync across all devices
   useEffect(() => {
-    const unsubStudents = subscribeCollection('students', INITIAL_STUDENTS, setStudents);
+    const unsubStudents = subscribeCollection('students', INITIAL_STUDENTS, (items) => {
+      setStudents(items.filter((s) => !isRecordDeleted(s.id, 'students')));
+    });
     const unsubClasses = subscribeCollection('classes', [], (items) => {
-      try {
-        const deletedIds: string[] = JSON.parse(localStorage.getItem('idv_deleted_class_ids') || '[]');
-        if (deletedIds.length > 0) {
-          const setDeleted = new Set(deletedIds);
-          setClasses(items.filter((c) => !setDeleted.has(c.id)));
-          return;
-        }
-      } catch (e) {}
-      setClasses(items);
+      setClasses(items.filter((c) => !isRecordDeleted(c.id, 'classes')));
     });
     const unsubTeachers = subscribeCollection('teachers', INITIAL_TEACHERS, setTeachers);
     const unsubLeads = subscribeCollection('leads', INITIAL_LEADS, setLeads);
-    const unsubPlacement = subscribeCollection('placementTests', INITIAL_PLACEMENT_TESTS, (data) => {
-      let deletedSet = new Set<string>();
-      try {
-        const deletedIds = JSON.parse(localStorage.getItem('idv_deleted_placement_test_ids') || '[]');
-        if (Array.isArray(deletedIds)) {
-          deletedSet = new Set(deletedIds);
-        }
-      } catch (e) {}
-
+    const unsubPlacement = subscribeCollection('placementTests', [], (data) => {
       let cachedSubmissions: PlacementTest[] = [];
       try {
         const rawSubmissions = localStorage.getItem('idv_submitted_candidate_placement_tests');
@@ -358,13 +334,13 @@ export default function App() {
         }
       } catch (e) {}
 
-      const tests = (Array.isArray(data) ? data : []).filter((t) => !deletedSet.has(t.id));
+      const tests = (Array.isArray(data) ? data : []).filter((t) => !isRecordDeleted(t.id, 'placementTests'));
       const testMap = new Map<string, PlacementTest>();
       // Cloud data first
       tests.forEach((t) => testMap.set(t.id, t));
-      // Ensure candidate submitted tests are merged and preserved
+      // Ensure candidate submitted tests are merged and preserved if not deleted
       cachedSubmissions.forEach((t) => {
-        if (!deletedSet.has(t.id)) {
+        if (!isRecordDeleted(t.id, 'placementTests')) {
           testMap.set(t.id, t);
         }
       });
@@ -1326,13 +1302,7 @@ export default function App() {
         console.warn('Sync from Firestore failed:', err);
       }
 
-      let deletedSet = new Set<string>();
-      try {
-        const deletedIds = JSON.parse(localStorage.getItem('idv_deleted_placement_test_ids') || '[]');
-        if (Array.isArray(deletedIds)) deletedSet = new Set(deletedIds);
-      } catch (e) {}
-
-      const validTests = allFetched.filter((t) => !deletedSet.has(t.id));
+      const validTests = allFetched.filter((t) => !isRecordDeleted(t.id, 'placementTests'));
       if (validTests.length > 0) {
         setPlacementTests((prev) => {
           const prevMap = new Map(prev.map((t) => [t.id, t]));
@@ -1678,8 +1648,9 @@ export default function App() {
       )
     : allNavModules;
 
-  // Render standalone Student Vocab Test Portal View when accessed via link (?vocabTestId=...)
-  if (vocabTestIdParam) {
+  // Render standalone Student Vocab / Review Test Portal View when accessed via link (?vocabTestId=... or ?reviewTestId=...)
+  if (vocabTestIdParam || reviewTestIdParam) {
+    const isReview = Boolean(reviewTestIdParam);
     return (
       <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans antialiased">
         {/* Student Vocab Portal Header */}
@@ -1699,7 +1670,7 @@ export default function App() {
                   </span>
                 </div>
                 <h1 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight mt-0.5">
-                  Bài kiểm tra từ vựng - IELTS Dương Vũ
+                  {isReview ? 'Bài ôn tập kiến thức - IELTS Dương Vũ' : 'Bài kiểm tra từ vựng - IELTS Dương Vũ'}
                 </h1>
               </div>
             </div>
@@ -1720,8 +1691,8 @@ export default function App() {
             students={students}
             onAddExamScore={handleAddExamScore}
             onSaveAttendance={handleSaveAttendance}
-            initialVocabTestId={vocabTestIdParam}
-            initialReviewTestId={reviewTestIdParam}
+            initialVocabTestId={vocabTestIdParam || undefined}
+            initialReviewTestId={reviewTestIdParam || undefined}
             showToast={showToast}
           />
         </main>
