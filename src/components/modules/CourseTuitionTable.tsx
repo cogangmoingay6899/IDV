@@ -59,7 +59,8 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
   classes = [],
   currentUser,
 }) => {
-  const canAccessTuition = !currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant';
+  const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
+  const canAccessTuition = !currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant' || isVuNgoc;
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterOverdueOnly, setFilterOverdueOnly] = useState(false);

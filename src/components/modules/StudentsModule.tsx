@@ -155,13 +155,15 @@ export const StudentsModule: React.FC<StudentsModuleProps> = ({
     window.open(`https://zalo.me/${cleanPhone}`, '_blank');
   };
 
-  const isManager = currentUser?.role === 'admin';
+  const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
+  const isDuongVu = currentUser?.email === 'ieltsduongvu@gmail.com' || currentUser?.email === 'ieltsduongvu5@gmail.com' || currentUser?.name?.includes('Dương Vũ');
+  const isManager = currentUser?.role === 'admin' || isDuongVu;
   const [classToDelete, setClassToDelete] = useState<ClassGroup | null>(null);
   const [isDeletingClass, setIsDeletingClass] = useState(false);
   const [showClearAllModal, setShowClearAllModal] = useState(false);
   const [isClearingAllClasses, setIsClearingAllClasses] = useState(false);
 
-  const isCanViewSystemStudents = !currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant';
+  const isCanViewSystemStudents = !currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant' || isDuongVu;
 
   const filteredStudents = students.filter((s) => {
     const matchesSearch =

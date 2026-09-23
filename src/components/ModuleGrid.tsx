@@ -160,7 +160,12 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
   // - Teacher: 'students', 'trial', 'exams', 'teacher_sessions'
   // - Assistant: 'students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'trial'
   // - Admin: All modules
-  const visibleModules = isTeacher
+  const isDuongVu = currentUser?.email === 'ieltsduongvu@gmail.com' || currentUser?.email === 'ieltsduongvu5@gmail.com' || currentUser?.name?.includes('Dương Vũ');
+  const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
+
+  const visibleModules = isTeacher && !isDuongVu
+    ? allModules.filter((m) => m.id === 'trial' || m.id === 'exams' || m.id === 'teacher_sessions')
+    : isTeacher
     ? allModules.filter((m) => m.id === 'students' || m.id === 'trial' || m.id === 'exams' || m.id === 'teacher_sessions')
     : isAssistant
     ? allModules.filter((m) =>

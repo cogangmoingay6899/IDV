@@ -290,8 +290,6 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
           if (sumDebt > 0) {
             initialPreviousDebt = `${sumDebt.toLocaleString('vi-VN')} đ`;
           }
-        } else if (st.balanceOwed && st.balanceOwed > 0) {
-          initialPreviousDebt = `${st.balanceOwed.toLocaleString('vi-VN')} đ`;
         }
       }
 
@@ -1081,25 +1079,6 @@ ${penaltyNotes}${teacherFeedbackSection}━━━━━━━━━━━━━�
                 className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 transition-all"
               >
                 Xoá nợ cả lớp (0đ)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStudentRows((prev) => {
-                    const next = { ...prev };
-                    classStudents.forEach((st) => {
-                      if (next[st.id] && st.balanceOwed && st.balanceOwed > 0) {
-                        next[st.id] = { ...next[st.id], previousDebt: `${st.balanceOwed.toLocaleString('vi-VN')} đ` };
-                      }
-                    });
-                    return next;
-                  });
-                  setToastMessage('Đã đồng bộ số nợ học phí từ hồ sơ học viên!');
-                  setTimeout(() => setToastMessage(null), 2500);
-                }}
-                className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200 transition-all"
-              >
-                Đồng bộ nợ từ hồ sơ HV
               </button>
             </div>
             <p className="text-[10px] text-amber-800 italic">

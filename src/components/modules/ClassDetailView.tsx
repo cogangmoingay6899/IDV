@@ -147,9 +147,10 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   onDeleteClass,
   currentUser,
 }) => {
-  // Permission: Only Center Managers (admin) and Assistants (assistant) are allowed to access Course Management & Student Tuition
-  const canAccessCourseTuition = !currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant';
-  const isManager = currentUser?.role === 'admin';
+  const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
+  // Permission: Only Center Managers (admin), Assistants (assistant), and Vũ Ngọc are allowed to access Course Management & Student Tuition
+  const canAccessCourseTuition = !currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant' || isVuNgoc;
+  const isManager = currentUser?.role === 'admin' || isVuNgoc;
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeletingClass, setIsDeletingClass] = useState(false);
 

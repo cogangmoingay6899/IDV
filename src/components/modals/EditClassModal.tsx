@@ -102,7 +102,8 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
   const [customTeacherInput, setCustomTeacherInput] = useState('');
 
-  const isTeacher = currentUser?.role === 'teacher';
+  const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
+  const isTeacher = (currentUser?.role === 'teacher') && !isVuNgoc;
   const [originalStudentIds, setOriginalStudentIds] = useState<Set<string>>(new Set());
 
   // Local state for existing class students being edited

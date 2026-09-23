@@ -50,6 +50,11 @@ service cloud.firestore {
       allow write: if isValidId(resultId);
     }
 
+    // Class spreadsheets collection
+    match /class_spreadsheets/{docId} {
+      allow read, write: if true;
+    }
+
     // Default catch-all rule
     match /{document=**} {
       allow read, write: if request.auth != null;
