@@ -801,16 +801,40 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
   };
 
   const [isSyncingWebhook, setIsSyncingWebhook] = useState<boolean>(false);
+  const [syncedIds, setSyncedIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('idv_synced_to_sheet_test_ids') || '[]');
+    } catch {
+      return [];
+    }
+  });
 
-  const handleSyncAllToWebhook = async () => {
+  // Calculate new/unsynced tests recorded by the system
+  const unsyncedTests = placementTests.filter((t) => !syncedIds.includes(t.id));
+
+  const handleSyncToWebhook = async (mode: 'newest' | 'all' = 'newest') => {
     const targetWebhook = webhookUrl.trim() || 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+    
+    // Determine tests to sync: either only latest/unsynced or all
+    let testsToPush = mode === 'newest' ? unsyncedTests : placementTests;
+    
+    // If mode is 'newest' but all are already marked synced, push the most recent 10 tests as latest
+    if (mode === 'newest' && testsToPush.length === 0) {
+      testsToPush = [...placementTests].slice(-10);
+    }
+
+    if (testsToPush.length === 0) {
+      showToast('ℹ️ Không có bài test nào để đồng bộ!');
+      return;
+    }
+
     setIsSyncingWebhook(true);
-    showToast('⏳ Đang đồng bộ tất cả bài test sang Google Sheet qua Webhook...');
+    showToast(`⏳ Đang đồng bộ 1 chiều ${testsToPush.length} bài test sang Google Sheet (Sheet New)...`);
 
     try {
-      // 1. Client-side push in batch to Google Apps Script
-      for (let i = 0; i < placementTests.length; i++) {
-        const test = placementTests[i];
+      // 1. Client-side push in batch to Google Apps Script Webhook
+      for (let i = 0; i < testsToPush.length; i++) {
+        const test = testsToPush[i];
         const rowData = extractTestRowValues(test, i);
         const payload = JSON.stringify({
           headers: PLACEMENT_SHEET_COLUMNS,
@@ -826,19 +850,75 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
         }).catch(() => {});
       }
 
-      // 2. Server-side proxy sync
+      // 2. Server-side proxy sync to guarantee delivery
       await fetch('/api/sync-placement-webhook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookUrl: targetWebhook }),
+        body: JSON.stringify({
+          webhookUrl: targetWebhook,
+          tests: testsToPush,
+        }),
       }).catch(() => {});
 
-      showToast(`✅ Đã đẩy thành công ${placementTests.length} bài test sang Google Sheet!`);
+      // Mark these tests as synced in local memory
+      const updatedSynced = Array.from(new Set([...syncedIds, ...testsToPush.map((t) => t.id)]));
+      setSyncedIds(updatedSynced);
+      localStorage.setItem('idv_synced_to_sheet_test_ids', JSON.stringify(updatedSynced));
+
+      showToast(`✅ Đã đẩy thành công ${testsToPush.length} bài test sang Google Sheet (1 chiều)!`);
     } catch (err: any) {
       console.error(err);
       showToast('⚠️ Có lỗi khi đồng bộ Webhook: ' + (err?.message || 'Lỗi không xác định'));
     } finally {
       setIsSyncingWebhook(false);
+    }
+  };
+
+  const handleSyncAllToWebhook = () => handleSyncToWebhook('all');
+  const handleSyncNewestToWebhook = () => handleSyncToWebhook('newest');
+
+  const [isTestingWebhook, setIsTestingWebhook] = useState<boolean>(false);
+  const [webhookTestResult, setWebhookTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleTestWebhook = async () => {
+    const target = webhookUrl.trim();
+    if (!target) {
+      showToast('⚠️ Vui lòng dán Webhook URL trước khi kiểm tra!');
+      return;
+    }
+    setIsTestingWebhook(true);
+    setWebhookTestResult(null);
+    try {
+      const testPing = {
+        headers: ['Timestamp', 'Score', 'Họ tên của em', 'Số điện thoại của em'],
+        row: [new Date().toLocaleString('vi-VN'), '100/100', '🧪 [Test Kết Nối Webhook]', '0999999999'],
+      };
+
+      const res = await fetch('/api/test-webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhookUrl: target, pingData: testPing }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWebhookTestResult({
+          success: true,
+          message: data.message || '🎉 Kết nối Webhook thành công! Google Sheet đã ghi nhận dòng dữ liệu kiểm tra.'
+        });
+        showToast('🎉 Kết nối Webhook thành công!');
+      } else {
+        setWebhookTestResult({
+          success: false,
+          message: data.message || '⚠️ Google trả về lỗi. Hãy kiểm tra bạn đã chọn quyền "Bất kỳ ai (Anyone)" khi Triển khai Web App chưa.'
+        });
+      }
+    } catch (e: any) {
+      setWebhookTestResult({
+        success: false,
+        message: '⚠️ Không thể gửi tới Webhook: ' + (e?.message || 'Lỗi kết nối')
+      });
+    } finally {
+      setIsTestingWebhook(false);
     }
   };
 
@@ -1079,11 +1159,14 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
                   </h3>
                   <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    {webhookUrl ? 'Đã kích hoạt Webhook tự động' : 'Chưa cài Webhook'}
+                    {webhookUrl ? 'Đã kích hoạt Webhook 1 Chiều' : 'Chưa cài Webhook'}
+                  </span>
+                  <span className="text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full">
+                    🛡️ 1 Chiều (App ➔ Sheet New - Không đồng bộ ngược)
                   </span>
                 </div>
                 <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-                  Cấu hình Webhook để mỗi khi học sinh làm test xong và nộp bài, hệ thống sẽ tự động thêm ngay 1 dòng với đủ 57 cột vào Google Sheet của bạn.
+                  Tự động đẩy các bài làm mới nhất sang tab <strong>Sheet New</strong> trên Google Sheet của bạn ngay khi thí sinh nộp bài. Tuyệt đối không can thiệp hay đồng bộ ngược từ Sheet về hệ thống.
                 </p>
               </div>
 
@@ -1091,13 +1174,24 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
-                  onClick={handleSyncAllToWebhook}
+                  onClick={handleSyncNewestToWebhook}
                   disabled={isSyncingWebhook}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-xl text-xs font-black shadow-md border border-emerald-300/50 transition-all cursor-pointer disabled:opacity-50"
-                  title="Đẩy tất cả bài test sang Google Sheet qua Webhook"
+                  title="Chỉ đồng bộ các bài test mới nhất được ghi nhận sang Google Sheet (1 chiều)"
                 >
                   <RefreshCw className={`w-4 h-4 ${isSyncingWebhook ? 'animate-spin' : ''}`} />
-                  <span>{isSyncingWebhook ? 'Đang đồng bộ...' : 'Đồng Bộ Sang Sheet'}</span>
+                  <span>{isSyncingWebhook ? 'Đang đồng bộ...' : `Đồng Bộ Bài Mới (${unsyncedTests.length > 0 ? unsyncedTests.length : 'Mới nhất'})`}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSyncAllToWebhook}
+                  disabled={isSyncingWebhook}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 transition-all cursor-pointer disabled:opacity-50"
+                  title="Đẩy lại toàn bộ danh sách bài test sang Google Sheet (1 chiều)"
+                >
+                  <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Đồng Bộ Tất Cả ({placementTests.length})</span>
                 </button>
 
                 <button
@@ -2741,20 +2835,22 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
               <div className="p-3.5 bg-purple-50 rounded-2xl border border-purple-200 space-y-2">
                 <div className="font-bold text-purple-950 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-purple-600" />
-                  <span>Hướng dẫn cài đặt webhook trong 1 phút:</span>
+                  <span>Hướng dẫn cài đặt webhook tự động (Rất quan trọng):</span>
                 </div>
-                <ol className="list-decimal list-inside space-y-1 text-[11px] text-purple-900 leading-relaxed">
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-purple-900 leading-relaxed">
                   <li>Mở Google Sheet của bạn &gt; Chọn menu <strong>Tiện ích mở rộng (Extensions)</strong> &gt; Chọn <strong>Apps Script</strong>.</li>
-                  <li>Xóa toàn bộ mã cũ, sau đó dán đoạn mã bên dưới vào.</li>
+                  <li>Xóa toàn bộ mã cũ trong file <code className="bg-purple-100 px-1 py-0.5 rounded font-mono">Code.gs</code>, sau đó dán đoạn mã bên dưới vào.</li>
                   <li>Bấm <strong>Triển khai (Deploy)</strong> &gt; <strong>Triển khai mới (New deployment)</strong> &gt; Chọn loại <strong>Ứng dụng web (Web app)</strong>.</li>
-                  <li>Mục <em>Who has access</em> chọn <strong>Anyone (Bất kỳ ai)</strong> &gt; Bấm <strong>Triển khai</strong> và cấp quyền.</li>
-                  <li>Copy đường link Web App nhận được và dán vào ô bên dưới!</li>
+                  <li className="font-bold text-rose-700 bg-rose-50 p-1 rounded border border-rose-200">
+                    ⚠️ Tại mục &quot;Ai có quyền truy cập&quot; (Who has access): BẮT BUỘC PHẢI CHỌN &quot;Bất kỳ ai&quot; (Anyone). Nếu chọn &quot;Chỉ mình tôi&quot;, Google sẽ chặn không cho website ghi bài thi vào!
+                  </li>
+                  <li>Bấm <strong>Triển khai</strong>, cấp quyền truy cập, copy đường link Web App (kết thúc bằng <code className="bg-purple-100 px-1 rounded font-mono">/exec</code>) và dán vào ô bên dưới.</li>
                 </ol>
               </div>
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-800 text-xs">Mã Google Apps Script (Copy để dán vào Sheet):</label>
+                  <label className="font-bold text-slate-800 text-xs">Mã Google Apps Script (Đã tối ưu ghi vào &quot;Sheet New&quot;):</label>
                   <button
                     type="button"
                     onClick={() => {
@@ -2778,14 +2874,64 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
               </div>
 
               <div className="space-y-1.5 pt-2 border-t border-slate-200">
-                <label className="font-bold text-slate-800 text-xs">Dán Link Web App đã Deploy (Webhook URL):</label>
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 text-xs">Dán Link Web App đã Deploy (Webhook URL):</label>
+                  <button
+                    type="button"
+                    onClick={handleTestWebhook}
+                    disabled={isTestingWebhook || !webhookUrl.trim()}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isTestingWebhook ? 'animate-spin' : ''}`} />
+                    <span>{isTestingWebhook ? 'Đang kiểm tra...' : 'Kiểm tra kết nối Webhook'}</span>
+                  </button>
+                </div>
                 <input
                   type="url"
                   placeholder="https://script.google.com/macros/s/.../exec"
                   value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  onChange={(e) => {
+                    setWebhookUrl(e.target.value);
+                    setWebhookTestResult(null);
+                  }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:ring-2 focus:ring-purple-500/20"
                 />
+
+                {webhookTestResult && (
+                  <div
+                    className={`p-3 rounded-xl border text-[11px] leading-relaxed flex items-start gap-2 ${
+                      webhookTestResult.success
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-rose-50 border-rose-200 text-rose-900'
+                    }`}
+                  >
+                    {webhookTestResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="font-bold">{webhookTestResult.success ? 'Kết nối thành công!' : 'Chưa thể kết nối Webhook:'}</div>
+                      <div>{webhookTestResult.message}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick direct copy banner */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-2">
+                <div>
+                  <div className="font-bold text-slate-800 text-xs">Cần nạp ngay kết quả vào Sheet New?</div>
+                  <div className="text-[11px] text-slate-500">Sao chép nhanh toàn bộ 57 cột của tất cả bài test để dán trực tiếp vào Google Sheet (Ctrl+V)</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyGoogleSheetsTSV}
+                  className="shrink-0 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Sao Chép 57 Cột</span>
+                </button>
               </div>
             </div>
 

@@ -337,19 +337,81 @@ async function startServer() {
     }
   });
 
-  // --- MANUAL / BATCH SYNC TO GOOGLE APPS SCRIPT WEBHOOK ---
+  // --- TEST GOOGLE APPS SCRIPT WEBHOOK ---
+  app.post('/api/test-webhook', async (req, res) => {
+    try {
+      const webhookUrl = req.body?.webhookUrl;
+      if (!webhookUrl || !webhookUrl.startsWith('http')) {
+        return res.json({ success: false, message: 'URL Webhook không hợp lệ.' });
+      }
+
+      const pingData = req.body?.pingData || {
+        headers: ['Timestamp', 'Score', 'Họ tên của em', 'Số điện thoại của em'],
+        row: [new Date().toLocaleString('vi-VN'), '100/100', '🧪 [Test Kết Nối]', '0999999999'],
+      };
+
+      const gRes = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pingData),
+      });
+
+      const text = await gRes.text();
+      let isSuccess = false;
+      let parsedMsg = '';
+
+      try {
+        const json = JSON.parse(text);
+        if (json.status === 'success' || json.status === 'online') {
+          isSuccess = true;
+          parsedMsg = `Google Sheet phản hồi: OK (Sheet: ${json.sheetName || 'Mặc định'}, Tổng dòng: ${json.totalRows || 'Đã thêm'})`;
+        } else {
+          parsedMsg = json.message || JSON.stringify(json);
+        }
+      } catch (pe) {
+        if (text.includes('html') || text.includes('<!DOCTYPE') || text.includes('Google')) {
+          isSuccess = false;
+          parsedMsg = 'Google chặn truy cập hoặc chưa cấp quyền. Lưu ý: Khi Triển khai (Deploy) Web App trong Apps Script, tại mục "Ai có quyền truy cập" (Who has access), bạn BẮT BUỘC phải chọn "Bất kỳ ai" (Anyone).';
+        } else {
+          parsedMsg = text.slice(0, 150);
+        }
+      }
+
+      res.json({
+        success: isSuccess,
+        status: gRes.status,
+        message: parsedMsg || (isSuccess ? 'Đã gửi thành công' : 'Lỗi kết nối Webhook'),
+      });
+    } catch (err: any) {
+      res.json({
+        success: false,
+        message: 'Lỗi khi gọi Webhook: ' + (err?.message || 'Không thể kết nối'),
+      });
+    }
+  });
+
+  // --- MANUAL / BATCH SYNC TO GOOGLE APPS SCRIPT WEBHOOK (STRICTLY 1-WAY: APP -> GOOGLE SHEET) ---
   app.post('/api/sync-placement-webhook', async (req, res) => {
     try {
       const webhookUrl = req.body?.webhookUrl || 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
-      const tests = getCollectionData('placementTests');
+      const providedTests = req.body?.tests;
+      const testsToSync = (Array.isArray(providedTests) && providedTests.length > 0)
+        ? providedTests
+        : getCollectionData('placementTests');
+
+      const { PLACEMENT_SHEET_COLUMNS, extractTestRowValues } = await import('./src/utils/placementGoogleSheets');
 
       let successCount = 0;
-      for (const t of tests) {
+      for (let i = 0; i < testsToSync.length; i++) {
+        const t = testsToSync[i];
         try {
+          const rowData = extractTestRowValues(t, i);
           await fetch(webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              headers: PLACEMENT_SHEET_COLUMNS,
+              row: rowData,
               test: t,
               candidateName: t.candidateName,
               phone: t.phone,
@@ -360,7 +422,7 @@ async function startServer() {
         } catch (e) {}
       }
 
-      res.json({ success: true, count: successCount, total: tests.length, webhookUrl });
+      res.json({ success: true, count: successCount, total: testsToSync.length, webhookUrl });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Webhook sync error' });
     }

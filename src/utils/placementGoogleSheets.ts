@@ -205,24 +205,57 @@ export function generatePlacementSheetCSV(tests: PlacementTest[]): string {
  */
 export const SAMPLE_GOOGLE_APPS_SCRIPT = `function doPost(e) {
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    var data = JSON.parse(e.postData.contents);
-    
-    // Nếu sheet chưa có tiêu đề cột, ghi dòng đầu tiên
-    if (sheet.getLastRow() === 0 && data.headers) {
-      sheet.appendRow(data.headers);
-      var headerRange = sheet.getRange(1, 1, 1, data.headers.length);
-      headerRange.setBackground("#4C1D95").setFontColor("#FFFFFF").setFontWeight("bold");
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    // Tự động tìm hoặc tạo sheet "Sheet New"
+    var sheet = ss.getSheetByName("Sheet New") || 
+                ss.getSheetByName("sheet new") || 
+                ss.getSheetByName("Sheet new") || 
+                ss.getSheetByName("New") || 
+                ss.getActiveSheet();
+                
+    if (!sheet) {
+      sheet = ss.insertSheet("Sheet New");
     }
     
-    if (data.row) {
+    var data = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        data = JSON.parse(e.postData.contents);
+      } catch(parseErr) {
+        data = e.parameter || {};
+      }
+    } else if (e && e.parameter) {
+      data = e.parameter;
+    }
+    
+    // Nếu sheet chưa có tiêu đề cột (dòng 1 trống), tự động ghi 57 cột tiêu đề
+    if (sheet.getLastRow() === 0 && data.headers && Array.isArray(data.headers)) {
+      sheet.appendRow(data.headers);
+      var headerRange = sheet.getRange(1, 1, 1, data.headers.length);
+      headerRange.setBackground("#059669").setFontColor("#FFFFFF").setFontWeight("bold");
+    }
+    
+    // Thêm dòng kết quả làm bài của học sinh
+    if (data.row && Array.isArray(data.row)) {
       sheet.appendRow(data.row);
     }
     
-    return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "success", 
+      sheetName: sheet.getName(),
+      totalRows: sheet.getLastRow() 
+    })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: "error", 
+      message: err.toString() 
+    })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({ 
+    status: "online", 
+    message: "✅ Webhook IELTS Dương Vũ đã sẵn sàng nhận dữ liệu làm bài của học sinh!" 
+  })).setMimeType(ContentService.MimeType.JSON);
 }`;
