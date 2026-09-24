@@ -52,7 +52,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Student, ClassGroup, Teacher, AttendanceRecord, ExamScore, CurriculumCourse, AuthUser } from '../../types';
-import { ClassSpreadsheetGradebookModule } from './ClassSpreadsheetGradebookModule';
 import { ClassVocabTestModule } from './ClassVocabTestModule';
 import { ClassPronunciationModule } from './ClassPronunciationModule';
 import { CreateTeacherModal } from '../modals/CreateTeacherModal';
@@ -155,11 +154,12 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   // Note: Assistant Nhung Phan is restricted to only viewing and entering the daily log & grading (Nhật ký & Chấm điểm buổi học)
   const canAccessCourseTuition = !isNhungPhan && (!currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant' || isVuNgoc);
   const isManager = !isNhungPhan && (currentUser?.role === 'admin' || isVuNgoc);
+  const isTeacherUser = currentUser?.role === 'teacher';
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeletingClass, setIsDeletingClass] = useState(false);
 
   // Default directly to grading log as requested by user
-  const [activeTab, setActiveTab] = useState<'daily_log' | 'students' | 'sheet_view' | 'vocab_tests' | 'pronunciation'>('daily_log');
+  const [activeTab, setActiveTab] = useState<'daily_log' | 'students' | 'vocab_tests' | 'pronunciation'>('daily_log');
 
   useEffect(() => {
     if (isNhungPhan && activeTab !== 'daily_log') {
@@ -1692,18 +1692,6 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 <span>📋 Xem Tổng Danh Sách Lớp ({classStudents.length} HV)</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setActiveTab('sheet_view')}
-                className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
-                  activeTab === 'sheet_view'
-                    ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
-                    : 'text-slate-600 hover:text-purple-700 hover:bg-slate-50'
-                }`}
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>📊 Sổ Bảng Điểm & Học Phí</span>
-              </button>
 
               <button
                 type="button"
@@ -1883,119 +1871,121 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
             </div>
 
             {/* Penalty Setting & Auto-calculated Total Amount */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-              {/* Box 1: Điền & gán nhanh mức phạt và nợ cũ */}
-              <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/90 shadow-xs space-y-2 flex flex-col justify-between">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
-                    <Coins className="w-4 h-4 text-amber-600" />
-                    <span>3. Mức phạt nộp bài & nợ cũ (Trợ lý điền số tiền):</span>
-                  </label>
-                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200">
-                    Tự động cộng dồn
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] font-bold text-slate-600">Phạt buổi này:</span>
-                  {(['10k', '20k', '50k', ''] as const).map((amt) => (
+            {!isTeacherUser && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                {/* Box 1: Điền & gán nhanh mức phạt và nợ cũ */}
+                <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/90 shadow-xs space-y-2 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
+                      <Coins className="w-4 h-4 text-amber-600" />
+                      <span>3. Mức phạt nộp bài & nợ cũ (Trợ lý điền số tiền):</span>
+                    </label>
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200">
+                      Tự động cộng dồn
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-bold text-slate-600">Phạt buổi này:</span>
+                    {(['10k', '20k', '50k', ''] as const).map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => handleSetAllPenaltyFees(amt)}
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-white text-amber-900 border border-amber-300 hover:bg-amber-100/80 shadow-2xs transition-all active:scale-95"
+                      >
+                        {amt === '' ? 'Xoá sạch' : `Gán ${amt}`}
+                      </button>
+                    ))}
                     <button
-                      key={amt}
                       type="button"
-                      onClick={() => handleSetAllPenaltyFees(amt)}
-                      className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-white text-amber-900 border border-amber-300 hover:bg-amber-100/80 shadow-2xs transition-all active:scale-95"
-                    >
-                      {amt === '' ? 'Xoá sạch' : `Gán ${amt}`}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStudentRows((prev) => {
-                        const next = { ...prev };
-                        classStudents.forEach((st) => {
-                          if (next[st.id]) {
-                            let missingCount = 0;
-                            if (next[st.id].homeworkStatus === 'Chưa làm' || next[st.id].homeworkStatus === 'Thiếu') {
-                              missingCount++;
+                      onClick={() => {
+                        setStudentRows((prev) => {
+                          const next = { ...prev };
+                          classStudents.forEach((st) => {
+                            if (next[st.id]) {
+                              let missingCount = 0;
+                              if (next[st.id].homeworkStatus === 'Chưa làm' || next[st.id].homeworkStatus === 'Thiếu') {
+                                missingCount++;
+                              }
+                              if (next[st.id].quizletStatus === 'Chưa học') {
+                                missingCount++;
+                              }
+                              const fee = missingCount * 10000;
+                              next[st.id] = {
+                                ...next[st.id],
+                                penaltyFee: fee > 0 ? `${fee / 1000}k` : '',
+                              };
                             }
-                            if (next[st.id].quizletStatus === 'Chưa học') {
-                              missingCount++;
-                            }
-                            const fee = missingCount * 10000;
-                            next[st.id] = {
-                              ...next[st.id],
-                              penaltyFee: fee > 0 ? `${fee / 1000}k` : '',
-                            };
-                          }
+                          });
+                          return next;
                         });
-                        return next;
-                      });
-                      setToastMessage('Đã gán phạt 10k cho mỗi mục thiếu (BTVN, Quizlet)!');
-                      setTimeout(() => setToastMessage(null), 2500);
-                    }}
-                    className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-amber-600 text-white hover:bg-amber-700 shadow-2xs transition-all"
-                  >
-                    + Phạt 10k/mỗi mục thiếu (BTVN, Quizlet)
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-amber-200/50">
-                  <span className="text-[11px] font-bold text-rose-700">Nợ phạt cũ:</span>
-                  <button
-                    type="button"
-                    onClick={() => handleSetAllPreviousDebts('')}
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 transition-all"
-                  >
-                    Xoá trống cả lớp
-                  </button>
-                </div>
-                <p className="text-[10px] text-amber-800 italic">
-                  💡 Trợ lý có thể điền số tiền phạt và số tiền nợ chưa nộp các buổi trước trực tiếp cho từng học sinh ở bảng bên dưới.
-                </p>
-              </div>
-
-              {/* Box 2: TỔNG SỐ TIỀN NỘP PHẠT & NỢ CỦA LỚP TỰ ĐỘNG CỘNG & GHI CHÚ TO */}
-              <div className="bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/5 p-3.5 rounded-2xl border-2 border-amber-400 shadow-xs flex flex-col justify-between gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
-                    <Coins className="w-4 h-4 text-amber-600" />
-                    <span>Tổng tiền phạt & nợ cũ của lớp:</span>
-                  </span>
-                  <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300 font-mono">
-                    {countStudentsWithPenalty} phạt • {countStudentsWithPreviousDebt} nợ
-                  </span>
+                        setToastMessage('Đã gán phạt 10k cho mỗi mục thiếu (BTVN, Quizlet)!');
+                        setTimeout(() => setToastMessage(null), 2500);
+                      }}
+                      className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-amber-600 text-white hover:bg-amber-700 shadow-2xs transition-all"
+                    >
+                      + Phạt 10k/mỗi mục thiếu (BTVN, Quizlet)
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-amber-200/50">
+                    <span className="text-[11px] font-bold text-rose-700">Nợ phạt cũ:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleSetAllPreviousDebts('')}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 transition-all"
+                    >
+                      Xoá trống cả lớp
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-amber-800 italic">
+                    💡 Trợ lý có thể điền số tiền phạt và số tiền nợ chưa nộp các buổi trước trực tiếp cho từng học sinh ở bảng bên dưới.
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 bg-white/80 p-2 rounded-xl border border-amber-300/80">
-                  <div>
-                    <span className="text-[10px] font-bold text-amber-800 uppercase block">Phạt buổi này:</span>
-                    <span className="text-lg sm:text-xl font-black text-amber-900 font-mono">
-                      {formattedTotalPenaltyFee}
+                {/* Box 2: TỔNG SỐ TIỀN NỘP PHẠT & NỢ CỦA LỚP TỰ ĐỘNG CỘNG & GHI CHÚ TO */}
+                <div className="bg-gradient-to-br from-amber-500/15 via-orange-500/10 to-amber-500/5 p-3.5 rounded-2xl border-2 border-amber-400 shadow-xs flex flex-col justify-between gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                      <Coins className="w-4 h-4 text-amber-600" />
+                      <span>Tổng tiền phạt & nợ cũ của lớp:</span>
+                    </span>
+                    <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300 font-mono">
+                      {countStudentsWithPenalty} phạt • {countStudentsWithPreviousDebt} nợ
                     </span>
                   </div>
-                  <div className="border-l border-amber-200 pl-2">
-                    <span className="text-[10px] font-bold text-rose-700 uppercase block">Nợ các buổi trước:</span>
-                    <span className="text-lg sm:text-xl font-black text-rose-700 font-mono">
-                      {formattedTotalPreviousDebt}
+
+                  <div className="grid grid-cols-2 gap-2 bg-white/80 p-2 rounded-xl border border-amber-300/80">
+                    <div>
+                      <span className="text-[10px] font-bold text-amber-800 uppercase block">Phạt buổi này:</span>
+                      <span className="text-lg sm:text-xl font-black text-amber-900 font-mono">
+                        {formattedTotalPenaltyFee}
+                      </span>
+                    </div>
+                    <div className="border-l border-amber-200 pl-2">
+                      <span className="text-[10px] font-bold text-rose-700 uppercase block">Nợ các buổi trước:</span>
+                      <span className="text-lg sm:text-xl font-black text-rose-700 font-mono">
+                        {formattedTotalPreviousDebt}
+                      </span>
+                    </div>
+                  </div>
+
+                  {grandTotalReceivable > 0 && (
+                    <div className="flex items-center justify-between bg-amber-200/60 px-2.5 py-1 rounded-lg border border-amber-400">
+                      <span className="text-xs font-black text-amber-950">👉 TỔNG TIỀN PHẢI THU CẢ LỚP:</span>
+                      <span className="text-sm font-black text-amber-950 font-mono">{formattedGrandTotalReceivable}</span>
+                    </div>
+                  )}
+
+                  {/* Ghi chú to ở phiếu gửi phụ huynh ngay cạnh ô nộp phạt */}
+                  <div className="p-2.5 bg-rose-50 border-2 border-rose-300 rounded-xl text-rose-900 text-xs font-black flex items-start gap-2 shadow-2xs leading-snug">
+                    <span className="text-base shrink-0">⚠️</span>
+                    <span>
+                      Lưu ý: PH/HS chuyển khoản nộp phạt vào STK cá nhân của trợ lý, không chuyển khoản tiền nộp phạt vào STK công ty.
                     </span>
                   </div>
                 </div>
-
-                {grandTotalReceivable > 0 && (
-                  <div className="flex items-center justify-between bg-amber-200/60 px-2.5 py-1 rounded-lg border border-amber-400">
-                    <span className="text-xs font-black text-amber-950">👉 TỔNG TIỀN PHẢI THU CẢ LỚP:</span>
-                    <span className="text-sm font-black text-amber-950 font-mono">{formattedGrandTotalReceivable}</span>
-                  </div>
-                )}
-
-                {/* Ghi chú to ở phiếu gửi phụ huynh ngay cạnh ô nộp phạt */}
-                <div className="p-2.5 bg-rose-50 border-2 border-rose-300 rounded-xl text-rose-900 text-xs font-black flex items-start gap-2 shadow-2xs leading-snug">
-                  <span className="text-base shrink-0">⚠️</span>
-                  <span>
-                    Lưu ý: PH/HS chuyển khoản nộp phạt vào STK cá nhân của trợ lý, không chuyển khoản tiền nộp phạt vào STK công ty.
-                  </span>
-                </div>
               </div>
-            </div>
+            )}
 
             {/* Topic input */}
             <div>
@@ -2818,15 +2808,6 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
         </div>
       )}
 
-      {/* VIEW: BẢNG ĐIỂM & HỌC PHÍ CHUẨN GOOGLE SHEETS */}
-      {activeTab === 'sheet_view' && (
-        <div className="animate-in fade-in space-y-4">
-          <ClassSpreadsheetGradebookModule
-            classes={[classGroup]}
-            students={allStudents}
-          />
-        </div>
-      )}
 
       {/* VIEW: BÀI TEST TỪ VỰNG KHÓA 1, 2, 3, 4 CHỐNG GIAN LẬN */}
       {activeTab === 'vocab_tests' && (

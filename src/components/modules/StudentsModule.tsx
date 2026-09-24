@@ -402,17 +402,7 @@ const StudentsModule: React.FC<StudentsModuleProps> = ({
               }),
             ],
           }),
-          !isNhungPhan &&
-            e.jsxs("button", {
-              onClick: () => {
-                (F(void 0), k("sheet_gradebook"));
-              },
-              className: `px-4 py-2 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 ${j === "sheet_gradebook" ? "bg-emerald-700 text-white shadow-xs" : "text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200"}`,
-              children: [
-                e.jsx(Kr, { className: "w-3.5 h-3.5" }),
-                e.jsx("span", { children: "Sổ Lớp & Bảng Điểm (Google Sheet)" }),
-              ],
-            }),
+
           !isNhungPhan &&
             e.jsxs("button", {
               onClick: () => k("vocab_tests"),
@@ -1608,17 +1598,7 @@ const StudentsModule: React.FC<StudentsModuleProps> = ({
             ],
           })
         : j === "sheet_gradebook"
-          ? e.jsx("div", {
-              className: "space-y-4",
-              children: e.jsx(K5, {
-                classes: t,
-                students: n,
-                attendanceRecords: l,
-                transactions: o,
-                onOpenQuickTuition: le,
-                initialClassId: R,
-              }),
-            })
+          ? null
           : j === "vocab_tests"
             ? e.jsx("div", {
                 className: "space-y-4",
