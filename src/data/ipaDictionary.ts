@@ -644,7 +644,78 @@ export function getWordIPA(rawWord: string, isBold: boolean = false): string {
   }
 
   const cleanNoApos = clean.replace(/'/g, '');
-  return WORD_TO_IPA[clean] || WORD_TO_IPA[cleanNoApos] || clean;
+  if (WORD_TO_IPA[clean]) return WORD_TO_IPA[clean];
+  if (WORD_TO_IPA[cleanNoApos]) return WORD_TO_IPA[cleanNoApos];
+
+  // Intelligent suffix & rule-based IPA generation fallback
+  // 1. Suffix -ing
+  if (clean.endsWith('ing') && clean.length > 4) {
+    const base = clean.slice(0, -3);
+    const baseIpa = WORD_TO_IPA[base] || WORD_TO_IPA[base + 'e'] || base;
+    return (baseIpa.replace(/\/$/, '') + 'ɪŋ').replace(/^\//, '');
+  }
+  // 2. Suffix -ed
+  if (clean.endsWith('ed') && clean.length > 3) {
+    const base = clean.slice(0, -2);
+    const baseIpa = WORD_TO_IPA[base] || WORD_TO_IPA[base + 'e'] || base;
+    return (baseIpa.replace(/\/$/, '') + 'ɪd').replace(/^\//, '');
+  }
+  // 3. Suffix -ly
+  if (clean.endsWith('ly') && clean.length > 3) {
+    const base = clean.slice(0, -2);
+    const baseIpa = WORD_TO_IPA[base] || base;
+    return (baseIpa.replace(/\/$/, '') + 'li').replace(/^\//, '');
+  }
+  // 4. Suffix -s / -es
+  if (clean.endsWith('es') && clean.length > 3) {
+    const base = clean.slice(0, -2);
+    const baseIpa = WORD_TO_IPA[base] || base;
+    return (baseIpa.replace(/\/$/, '') + 'ɪz').replace(/^\//, '');
+  }
+  if (clean.endsWith('s') && clean.length > 3 && !clean.endsWith('ss')) {
+    const base = clean.slice(0, -1);
+    const baseIpa = WORD_TO_IPA[base] || base;
+    return (baseIpa.replace(/\/$/, '') + 'z').replace(/^\//, '');
+  }
+  // 5. Suffix -er
+  if (clean.endsWith('er') && clean.length > 3) {
+    const base = clean.slice(0, -2);
+    const baseIpa = WORD_TO_IPA[base] || base;
+    return (baseIpa.replace(/\/$/, '') + 'ər').replace(/^\//, '');
+  }
+
+  // General grapheme-to-phoneme phonetic approximation for any remaining unlisted word
+  let phoneme = clean
+    .replace(/tion/g, 'ʃən')
+    .replace(/sion/g, 'ʒən')
+    .replace(/ch/g, 'tʃ')
+    .replace(/sh/g, 'ʃ')
+    .replace(/th/g, 'θ')
+    .replace(/ph/g, 'f')
+    .replace(/gh/g, '')
+    .replace(/ee/g, 'iː')
+    .replace(/oo/g, 'uː')
+    .replace(/ai/g, 'eɪ')
+    .replace(/ay/g, 'eɪ')
+    .replace(/ea/g, 'iː')
+    .replace(/ou/g, 'aʊ')
+    .replace(/ow/g, 'aʊ')
+    .replace(/igh/g, 'aɪ')
+    .replace(/ar/g, 'ɑːr')
+    .replace(/er/g, 'ər')
+    .replace(/ir/g, 'ɜːr')
+    .replace(/or/g, 'ɔːr')
+    .replace(/ur/g, 'ɜːr')
+    .replace(/a/g, 'æ')
+    .replace(/e/g, 'e')
+    .replace(/i/g, 'ɪ')
+    .replace(/o/g, 'ɑː')
+    .replace(/u/g, 'ʌ')
+    .replace(/c/g, 'k')
+    .replace(/g/g, 'ɡ')
+    .replace(/x/g, 'ks');
+
+  return phoneme;
 }
 
 export function clauseToIPA(words: { text: string; bold: boolean }[]): string {

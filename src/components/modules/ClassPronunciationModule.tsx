@@ -443,6 +443,47 @@ export const ClassPronunciationModule: React.FC<ClassPronunciationModuleProps> =
     }
   }, [classGroup]);
 
+  // Background prefetch all audio for the current lesson for instant 0s playback
+  useEffect(() => {
+    if (!currentLesson) return;
+    const textsToPrefetch: string[] = [
+      currentLesson.fullText,
+    ];
+    currentLesson.chunkRows.forEach((row) => {
+      row.pills.forEach((pill) => {
+        const pillText = pill.words.map((w) => w.text).join(' ');
+        if (pillText) textsToPrefetch.push(pillText);
+      });
+    });
+
+    const prefetchAudio = async () => {
+      for (const text of textsToPrefetch) {
+        const cleanText = text.trim();
+        if (!cleanText || audioBlobCacheRef.current.has(cleanText)) continue;
+        try {
+          const res = await fetch('/api/ai/tts-kore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: cleanText, voice: 'Kore' }),
+          });
+          if (res.ok) {
+            const blob = await res.blob();
+            const audioUrl = URL.createObjectURL(blob);
+            audioBlobCacheRef.current.set(cleanText, audioUrl);
+          }
+        } catch {
+          // background prefetch failure ignored
+        }
+      }
+    };
+
+    const timer = setTimeout(() => {
+      prefetchAudio();
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [currentLesson?.id]);
+
   // Timer logic for logged-in practicing student
   useEffect(() => {
     if (activeStudent && activeViewMode === 'student') {
