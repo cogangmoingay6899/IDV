@@ -178,12 +178,12 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
           badgeColor: 'bg-purple-100 text-purple-900 font-bold',
         }))
     : isTeacher && !isDuongVu
-    ? allModules.filter((m) => m.id === 'exams' || m.id === 'teacher_sessions' || m.id === 'speaking_practice')
+    ? allModules.filter((m) => m.id === 'teacher_sessions')
     : isTeacher
-    ? allModules.filter((m) => m.id === 'students' || m.id === 'exams' || m.id === 'teacher_sessions' || m.id === 'speaking_practice')
+    ? allModules.filter((m) => m.id === 'students' || m.id === 'teacher_sessions')
     : isAssistant
     ? allModules.filter((m) =>
-        ['students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'speaking_practice'].includes(m.id)
+        ['students', 'curriculum', 'admissions', 'teacher_sessions', 'contact_book', 'placement'].includes(m.id)
       )
     : allModules;
 

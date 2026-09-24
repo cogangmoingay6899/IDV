@@ -1686,10 +1686,10 @@ export default function App() {
   const moduleNavList = isNhungPhan
     ? [{ id: 'students' as ModuleId, title: 'Nhật Ký & Chấm Điểm', icon: <BookOpen className="w-3.5 h-3.5 text-purple-600" /> }]
     : isTeacher
-    ? allNavModules.filter((m) => m.id === 'students' || m.id === 'exams' || m.id === 'teacher_sessions' || m.id === 'speaking_practice')
+    ? allNavModules.filter((m) => m.id === 'students' || m.id === 'teacher_sessions')
     : isAssistant
     ? allNavModules.filter((m) =>
-        ['students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'speaking_practice'].includes(m.id)
+        ['students', 'curriculum', 'admissions', 'teacher_sessions', 'contact_book', 'placement'].includes(m.id)
       )
     : allNavModules;
 

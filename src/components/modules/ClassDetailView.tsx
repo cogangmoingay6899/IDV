@@ -677,24 +677,57 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
     return classStudents.filter((st) => parsePenaltyAmount(studentRows[st.id]?.previousDebt) > 0).length;
   }, [classStudents, studentRows]);
 
+  // Past sessions of this class
+  const pastSessions = useMemo(() => {
+    const classHistoryMap = new Map<string, { date: string; sessionNumber: number; teacherName: string; skillsTaught: string[]; records: AttendanceRecord[] }>();
+    attendanceRecords.filter((r) => r.classId === classGroup.id).forEach((r) => {
+      const key = `${r.date}-${r.sessionNumber}`;
+      if (!classHistoryMap.has(key)) {
+        classHistoryMap.set(key, {
+          date: r.date,
+          sessionNumber: r.sessionNumber,
+          teacherName: r.teacherName || classGroup.teacherName || 'Giáo viên IDV',
+          skillsTaught: r.skillsTaught && r.skillsTaught.length > 0 ? r.skillsTaught : [r.skillTaught || 'IELTS'],
+          records: [],
+        });
+      }
+      classHistoryMap.get(key)!.records.push(r);
+    });
+    return Array.from(classHistoryMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [attendanceRecords, classGroup.id, classGroup.teacherName]);
+
   const grandTotalReceivable = totalCalculatedPenaltyFee + totalCalculatedPreviousDebt;
   const formattedGrandTotalReceivable = grandTotalReceivable > 0 ? `${grandTotalReceivable / 1000}k` : '0k';
 
+  // When sessionNumber is changed manually, check if it matches a past session and load its date/teacher
+  useEffect(() => {
+    const matchingSession = pastSessions.find(ps => ps.sessionNumber === sessionNumber);
+    if (matchingSession) {
+      if (currentDate !== matchingSession.date) {
+        setCurrentDate(matchingSession.date);
+      }
+      if (teacherName !== matchingSession.teacherName) {
+        setTeacherName(matchingSession.teacherName);
+      }
+    }
+  }, [sessionNumber]);
+
   // Sync session rows when date, class or skills change
   useEffect(() => {
+    // If this session number exists in history, optionally load metadata (teacher, skills)
+    const sessionSample = attendanceRecords.find(r => r.classId === classGroup.id && r.sessionNumber === sessionNumber);
+    if (sessionSample) {
+      if (sessionSample.teacherName) setTeacherName(sessionSample.teacherName);
+      if (sessionSample.skillsTaught && sessionSample.skillsTaught.length > 0) {
+        setSelectedSkills(sessionSample.skillsTaught);
+      }
+    }
+
     const initial: Record<string, StudentRowState> = {};
     classStudents.forEach((st) => {
       const existing = attendanceRecords.find(
-        (r) => r.classId === classGroup.id && r.studentId === st.id && r.date === currentDate
+        (r) => r.classId === classGroup.id && r.studentId === st.id && r.sessionNumber === sessionNumber
       );
-      if (existing) {
-        if (existing.teacherName) setTeacherName(existing.teacherName);
-        if (existing.skillsTaught && existing.skillsTaught.length > 0) {
-          setSelectedSkills(existing.skillsTaught);
-        } else if (existing.skillTaught) {
-          setSelectedSkills([existing.skillTaught]);
-        }
-      }
 
       // Initial skill scores map
       const initialSkillScores: Record<string, string> = {};
@@ -766,7 +799,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
       };
     });
     setStudentRows(initial);
-  }, [classGroup.id, currentDate, classStudents.length]);
+  }, [classGroup.id, currentDate, sessionNumber, classStudents.length]);
 
   // When selectedSkills list changes, ensure every studentRow has keys for all skills
   const toggleSkill = (skill: string) => {
@@ -1328,23 +1361,6 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
       setToastMessage(null);
     }, 3000);
   };
-
-  // Past sessions of this class
-  const classHistoryMap = new Map<string, { date: string; sessionNumber: number; teacherName: string; skillsTaught: string[]; records: AttendanceRecord[] }>();
-  attendanceRecords.filter((r) => r.classId === classGroup.id).forEach((r) => {
-    const key = `${r.date}-${r.sessionNumber}`;
-    if (!classHistoryMap.has(key)) {
-      classHistoryMap.set(key, {
-        date: r.date,
-        sessionNumber: r.sessionNumber,
-        teacherName: r.teacherName || classGroup.teacherName || 'Giáo viên IDV',
-        skillsTaught: r.skillsTaught && r.skillsTaught.length > 0 ? r.skillsTaught : [r.skillTaught || 'IELTS'],
-        records: [],
-      });
-    }
-    classHistoryMap.get(key)!.records.push(r);
-  });
-  const pastSessions = Array.from(classHistoryMap.values()).sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div className="space-y-6">
