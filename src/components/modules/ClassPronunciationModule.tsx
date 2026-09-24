@@ -458,6 +458,29 @@ export const ClassPronunciationModule: React.FC<ClassPronunciationModuleProps> =
     };
   }, [activeStudent, activeViewMode]);
 
+  // Pause timer when student leaves tab / switches tabs
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (practiceTimerRef.current) {
+          clearInterval(practiceTimerRef.current);
+          practiceTimerRef.current = null;
+        }
+      } else {
+        if (activeStudent && activeViewMode === 'student' && !practiceTimerRef.current) {
+          practiceTimerRef.current = setInterval(() => {
+            setPracticeTimeSeconds((prev) => prev + 1);
+          }, 1000);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [activeStudent, activeViewMode]);
+
   // Periodic sync practice time to server every 30s
   useEffect(() => {
     if (!activeStudent || practiceTimeSeconds === 0) return;
@@ -934,13 +957,15 @@ export const ClassPronunciationModule: React.FC<ClassPronunciationModuleProps> =
 
         {/* Share Link & View Switcher */}
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={handleCopyShareableLink}
-            className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            {isLinkCopied ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span>{isLinkCopied ? 'Đã chép link!' : '🔗 Copy Link Cho Học Sinh'}</span>
-          </button>
+          {!standalonePortalMode && activeViewMode === 'teacher' && (
+            <button
+              onClick={handleCopyShareableLink}
+              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              {isLinkCopied ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+              <span>{isLinkCopied ? 'Đã chép link!' : '🔗 Copy Link Cho Học Sinh'}</span>
+            </button>
+          )}
 
           {!standalonePortalMode && (
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
@@ -1777,33 +1802,86 @@ export const ClassPronunciationModule: React.FC<ClassPronunciationModuleProps> =
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {activeSound.words.map((word, wIdx) => (
-                      <button
-                        key={wIdx}
-                        onClick={() => handlePlayTTS(word.text)}
-                        className="group p-3 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40 text-left transition-all flex items-start gap-2.5 cursor-pointer hover:shadow-2xs"
-                        title={`Bấm để nghe phát âm từ "${word.text}"`}
-                      >
-                        <span className="w-7 h-7 rounded-lg bg-indigo-50 group-hover:bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 transition-colors">
-                          <Volume2 className="w-3.5 h-3.5" />
-                        </span>
-                        <div className="space-y-1 overflow-hidden">
-                          <div className="flex items-baseline gap-1.5 flex-wrap">
-                            <span className="font-black text-slate-900 text-sm leading-none group-hover:text-indigo-950">
-                              {word.text}
-                            </span>
-                            <span className="text-[10px] font-mono font-bold text-emerald-800 tracking-wide">
-                              /{word.ipa}/
-                            </span>
+                  {activeSound.id === 'image-vs-imagine' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {Array.from({ length: Math.ceil(activeSound.words.length / 2) }).map((_, pairIdx) => {
+                        const w1 = activeSound.words[pairIdx * 2];
+                        const w2 = activeSound.words[pairIdx * 2 + 1];
+                        if (!w1) return null;
+                        return (
+                          <div key={pairIdx} className="p-3 rounded-xl border border-indigo-200 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-slate-50 flex items-center justify-between gap-2 shadow-2xs">
+                            {/* Word 1 */}
+                            <button
+                              onClick={() => handlePlayTTS(w1.text)}
+                              className="group flex-1 p-2 rounded-lg hover:bg-indigo-100/60 text-left transition-all flex items-center gap-2 cursor-pointer"
+                              title={`Bấm để nghe ${w1.text}`}
+                            >
+                              <span className="w-6 h-6 rounded-md bg-indigo-100 group-hover:bg-indigo-200 text-indigo-700 flex items-center justify-center shrink-0">
+                                <Volume2 className="w-3 h-3" />
+                              </span>
+                              <div className="overflow-hidden">
+                                <div className="flex items-baseline gap-1">
+                                  <span className="font-black text-slate-900 text-xs group-hover:text-indigo-950">{w1.text}</span>
+                                  <span className="text-[9px] font-mono font-bold text-emerald-800">/{w1.ipa}/</span>
+                                </div>
+                                <p className="text-[9px] text-slate-500 truncate">{w1.meaning}</p>
+                              </div>
+                            </button>
+
+                            <span className="text-[10px] font-black text-indigo-600 bg-indigo-100 px-2 py-1 rounded-md shrink-0">VS</span>
+
+                            {/* Word 2 */}
+                            {w2 ? (
+                              <button
+                                onClick={() => handlePlayTTS(w2.text)}
+                                className="group flex-1 p-2 rounded-lg hover:bg-indigo-100/60 text-left transition-all flex items-center gap-2 cursor-pointer"
+                                title={`Bấm để nghe ${w2.text}`}
+                              >
+                                <span className="w-6 h-6 rounded-md bg-indigo-100 group-hover:bg-indigo-200 text-indigo-700 flex items-center justify-center shrink-0">
+                                  <Volume2 className="w-3 h-3" />
+                                </span>
+                                <div className="overflow-hidden">
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="font-black text-slate-900 text-xs group-hover:text-indigo-950">{w2.text}</span>
+                                    <span className="text-[9px] font-mono font-bold text-emerald-800">/{w2.ipa}/</span>
+                                  </div>
+                                  <p className="text-[9px] text-slate-500 truncate">{w2.meaning}</p>
+                                </div>
+                              </button>
+                            ) : <div className="flex-1" />}
                           </div>
-                          <p className="text-[10px] text-slate-500 font-medium leading-none truncate group-hover:text-slate-700">
-                            {word.meaning}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {activeSound.words.map((word, wIdx) => (
+                        <button
+                          key={wIdx}
+                          onClick={() => handlePlayTTS(word.text)}
+                          className="group p-3 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40 text-left transition-all flex items-start gap-2.5 cursor-pointer hover:shadow-2xs"
+                          title={`Bấm để nghe phát âm từ "${word.text}"`}
+                        >
+                          <span className="w-7 h-7 rounded-lg bg-indigo-50 group-hover:bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 transition-colors">
+                            <Volume2 className="w-3.5 h-3.5" />
+                          </span>
+                          <div className="space-y-1 overflow-hidden">
+                            <div className="flex items-baseline gap-1.5 flex-wrap">
+                              <span className="font-black text-slate-900 text-sm leading-none group-hover:text-indigo-950">
+                                {word.text}
+                              </span>
+                              <span className="text-[10px] font-mono font-bold text-emerald-800 tracking-wide">
+                                /{word.ipa}/
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 font-medium leading-none truncate group-hover:text-slate-700">
+                              {word.meaning}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
               </div>
