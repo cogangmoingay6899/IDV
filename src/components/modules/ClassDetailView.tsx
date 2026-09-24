@@ -1790,11 +1790,11 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                   setToastMessage('Đã sao chép link Luyện Speaking AI cho Học sinh!');
                   setTimeout(() => setToastMessage(null), 3000);
                 }}
-                className="px-3 py-2.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-xs flex items-center gap-1.5 transition-all"
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500 rounded-xl text-xs font-black flex items-center gap-2 transition-all shadow-md shadow-emerald-200 active:scale-95"
                 title="Sao chép link gửi cho học sinh"
               >
                 <Share2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Gửi link Speaking AI</span>
+                <span>🔗 Gửi link Speaking AI</span>
               </button>
             </>
           )}

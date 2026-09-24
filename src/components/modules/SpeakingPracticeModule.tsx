@@ -13,13 +13,19 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
   const [activeStudent, setActiveStudent] = useState(initialActiveStudent);
   const [seconds, setSeconds] = useState(0);
   const [loginName, setLoginName] = useState('');
+  const [loginClassCode, setLoginClassCode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('classCode') || '';
+    }
+    return '';
+  });
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!activeStudent) return;
 
     const logId = `log-${activeStudent.id}-${Date.now()}`;
-    const classCodeFromUrl = new URLSearchParams(window.location.search).get('classCode') || 'IDV-CLASS';
+    const currentClassCode = activeStudent.classCode || new URLSearchParams(window.location.search).get('classCode') || 'IDV-CLASS';
 
     // Record Entry immediately
     const recordEntry = async () => {
@@ -31,7 +37,7 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
             id: logId,
             studentId: activeStudent.id,
             studentName: activeStudent.name || activeStudent.studentName,
-            classCode: classCodeFromUrl,
+            classCode: currentClassCode,
             entryTime: new Date().toISOString(),
             durationMinutes: 0,
             status: 'active'
@@ -77,7 +83,7 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
           id: logId,
           studentId: activeStudent.id,
           studentName: activeStudent.name || activeStudent.studentName,
-          classCode: classCodeFromUrl,
+          classCode: currentClassCode,
           durationMinutes: totalMinutes,
           lastActiveAt: new Date().toISOString(),
           status: 'completed'
@@ -88,38 +94,55 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
 
   if (standalonePortalMode && !activeStudent) {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-3xl shadow-xl border border-slate-200 p-8 mt-10">
+      <div className="max-w-md mx-auto bg-white rounded-3xl shadow-xl border border-slate-200 p-8 mt-10 animate-in fade-in slide-in-from-bottom-4">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-indigo-100 text-indigo-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-indigo-100 text-indigo-700 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
             <User className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-bold text-slate-900">Đăng nhập luyện tập AI</h2>
-          <p className="text-slate-500 mt-1">Vui lòng nhập họ tên để bắt đầu ghi nhận</p>
+          <h2 className="text-2xl font-bold text-slate-900">Cổng Luyện Speaking AI</h2>
+          <p className="text-slate-500 mt-1 font-medium text-sm">Vui lòng đăng nhập để bắt đầu ghi nhận</p>
         </div>
 
         <form onSubmit={(e) => {
           e.preventDefault();
-          if (loginName.trim()) {
-            setActiveStudent({ name: loginName.trim(), id: 'portal-' + Date.now() });
+          if (loginName.trim() && loginClassCode.trim()) {
+            setActiveStudent({ 
+              name: loginName.trim(), 
+              classCode: loginClassCode.trim(),
+              id: 'portal-' + Date.now() 
+            });
           }
-        }} className="space-y-4">
+        }} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Họ và tên học sinh:</label>
+            <label className="block text-[11px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">Họ và tên học sinh:</label>
             <input
               type="text"
               required
               value={loginName}
               onChange={(e) => setLoginName(e.target.value)}
-              placeholder="Ví dụ: Nguyễn Văn A"
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+              placeholder="Nhập đầy đủ họ tên..."
+              className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 bg-slate-50/50"
             />
           </div>
+
+          <div>
+            <label className="block text-[11px] font-black text-slate-500 mb-1.5 uppercase tracking-wider">Mã lớp học:</label>
+            <input
+              type="text"
+              required
+              value={loginClassCode}
+              onChange={(e) => setLoginClassCode(e.target.value)}
+              placeholder="Ví dụ: PRE-K1-01"
+              className="w-full px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 bg-slate-50/50"
+            />
+          </div>
+
           <button
             type="submit"
-            className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+            className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 active:scale-[0.98] text-sm uppercase tracking-wide"
           >
-            Bắt đầu luyện tập
-            <ArrowRight className="w-4 h-4" />
+            Vào phòng luyện tập AI
+            <ArrowRight className="w-5 h-5" />
           </button>
         </form>
       </div>
