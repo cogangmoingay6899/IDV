@@ -72,6 +72,22 @@ const isPronunciationPortalUrl = () => {
   );
 };
 
+// Helper to check if URL is requesting the Student Speaking AI Portal
+const isSpeakingPortalUrl = () => {
+  if (typeof window === 'undefined') return false;
+  const href = window.location.href;
+  const params = new URLSearchParams(window.location.search);
+  const hash = window.location.hash;
+  return (
+    params.get('mode') === 'speaking' ||
+    params.get('practice') === 'speaking' ||
+    params.get('view') === 'speaking' ||
+    href.includes('mode=speaking') ||
+    href.includes('speaking-ai') ||
+    hash.includes('speaking-ai')
+  );
+};
+
 const getVocabTestIdParam = () => {
   if (typeof window === 'undefined') return null;
   const href = window.location.href;
@@ -243,6 +259,7 @@ export default function App() {
   // Public Student Entrance Test & Vocab Test & Pronunciation Portal Mode
   const [isStudentPortal, setIsStudentPortal] = useState<boolean>(() => isPlacementTestUrl());
   const [isPronunciationPortal, setIsPronunciationPortal] = useState<boolean>(() => isPronunciationPortalUrl());
+  const [isSpeakingPortal, setIsSpeakingPortal] = useState<boolean>(() => isSpeakingPortalUrl());
   const [vocabTestIdParam, setVocabTestIdParam] = useState<string | null>(() => getVocabTestIdParam());
   const [reviewTestIdParam, setReviewTestIdParam] = useState<string | null>(() => getReviewTestIdParam());
 
@@ -250,10 +267,12 @@ export default function App() {
     const handleUrlChange = () => {
       const isPortal = isPlacementTestUrl();
       const isPronPortal = isPronunciationPortalUrl();
+      const isSpeakPortal = isSpeakingPortalUrl();
       const vocabId = getVocabTestIdParam();
       const reviewId = getReviewTestIdParam();
       setIsStudentPortal(isPortal);
       setIsPronunciationPortal(isPronPortal);
+      setIsSpeakingPortal(isSpeakPortal);
       setVocabTestIdParam(vocabId);
       setReviewTestIdParam(reviewId);
 
@@ -261,6 +280,8 @@ export default function App() {
         document.title = 'Bài kiểm tra trực tuyến - IELTS Dương Vũ';
       } else if (isPortal) {
         document.title = 'Bài kiểm tra đầu vào IELTS - IELTS Dương Vũ';
+      } else if (isSpeakPortal) {
+        document.title = 'Luyện Speaking AI - IELTS Dương Vũ';
       } else {
         document.title = 'Hệ Thống Quản Trị - IELTS Dương Vũ';
       }
@@ -1791,6 +1812,63 @@ export default function App() {
         </main>
 
         {/* Global Toast Banner */}
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs font-bold flex items-center gap-2 backdrop-blur-md max-w-md">
+            <span>{toastMessage}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Render standalone Student Speaking AI Portal View when accessed via link (?mode=speaking)
+  if (isSpeakingPortal) {
+    const classCodeFromUrl = new URLSearchParams(window.location.search).get('classCode') || '';
+    const matchingClass =
+      classes.find(
+        (c) =>
+          c.code.toLowerCase() === classCodeFromUrl.toLowerCase() ||
+          c.name.toLowerCase().includes(classCodeFromUrl.toLowerCase())
+      ) ||
+      classes[0] || {
+        id: 'class-default',
+        name: classCodeFromUrl || 'Lớp IELTS',
+        code: classCodeFromUrl || 'IDV-CLASS',
+        branch: 'Kiến An',
+        teacherName: 'Giáo viên IDV',
+        courseName: 'IELTS Preparation',
+      };
+
+    return (
+      <div className="min-h-screen bg-white text-slate-900 flex flex-col font-sans antialiased">
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white font-black flex items-center justify-center text-lg shadow-md border-2 border-indigo-400">
+                🗣️
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200 uppercase tracking-wide">
+                    IELTS DƯƠNG VŨ
+                  </span>
+                  <span className="text-[11px] text-slate-500 hidden sm:inline">CỔNG LUYỆN SPEAKING AI</span>
+                </div>
+                <h1 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight mt-0.5">
+                  Phòng Luyện Tập Lớp: {matchingClass.name}
+                </h1>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-4xl mx-auto w-full p-4 sm:p-6 md:p-8 flex-1">
+          <SpeakingPracticeModule
+            activeStudent={null} // Will show login inside module if null and standalone
+            standalonePortalMode={true}
+          />
+        </main>
+
         {toastMessage && (
           <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs font-bold flex items-center gap-2 backdrop-blur-md max-w-md">
             <span>{toastMessage}</span>

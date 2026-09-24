@@ -1733,7 +1733,22 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 }`}
               >
                 <MessageCircle className="w-4 h-4 text-emerald-600" />
-                <span>🗣️ Luyện Speaking 1-1</span>
+                <span>🗣️ Luyện Speaking AI</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const link = `${window.location.origin}${window.location.pathname}?mode=speaking&classCode=${encodeURIComponent(classGroup.code || classGroup.name)}`;
+                  navigator.clipboard.writeText(link);
+                  setToastMessage('Đã sao chép link Luyện Speaking AI cho Học sinh!');
+                  setTimeout(() => setToastMessage(null), 3000);
+                }}
+                className="px-3 py-2.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl text-xs flex items-center gap-1.5 transition-all"
+                title="Sao chép link gửi cho học sinh"
+              >
+                <Share2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Gửi link Speaking AI</span>
               </button>
             </>
           )}
