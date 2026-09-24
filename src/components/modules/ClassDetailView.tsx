@@ -51,7 +51,7 @@ import {
   Sliders,
   Trash2,
 } from 'lucide-react';
-import { Student, ClassGroup, Teacher, AttendanceRecord, ExamScore, CurriculumCourse, AuthUser } from '../../types';
+import { Student, ClassGroup, Teacher, AttendanceRecord, ExamScore, CurriculumCourse, AuthUser, SpeakingLog } from '../../types';
 import { ClassVocabTestModule } from './ClassVocabTestModule';
 import { ClassPronunciationModule } from './ClassPronunciationModule';
 import { SpeakingPracticeModule } from './SpeakingPracticeModule';
@@ -176,6 +176,36 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   const [studentToRemove, setStudentToRemove] = useState<Student | null>(null);
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [speakingLogs, setSpeakingLogs] = useState<SpeakingLog[]>([]);
+
+  useEffect(() => {
+    if (activeTab === 'speaking') {
+      const fetchLogs = async () => {
+        try {
+          const res = await fetch(`/api/storage/speaking_logs?_t=${Date.now()}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && Array.isArray(json.data)) {
+              // Filter by class code if provided
+              const filtered = json.data.filter((log: SpeakingLog) => 
+                log.classCode === classGroup.code || 
+                log.classCode === classGroup.name ||
+                log.classCode === 'IDV-CLASS' // Default fallback from portal
+              );
+              setSpeakingLogs(filtered.sort((a: SpeakingLog, b: SpeakingLog) => 
+                new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime()
+              ));
+            }
+          }
+        } catch (e) {
+          console.error('Failed to fetch speaking logs:', e);
+        }
+      };
+      fetchLogs();
+      const interval = setInterval(fetchLogs, 10000); // Poll every 10s
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, classGroup.code, classGroup.name]);
 
   // States for course term management
   const [isTermHistoryModalOpen, setIsTermHistoryModalOpen] = useState(false);
@@ -2886,13 +2916,74 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
 
       {/* VIEW: MỤC LUYỆN SPEAKING (CHATGPT AI) */}
       {activeTab === 'speaking' && (
-        <div className="animate-in fade-in space-y-4">
-          <SpeakingPracticeModule 
-            activeStudent={{ 
-              id: activeStudentName || 'anonymous',
-              name: activeStudentName || 'Học viên' 
-            }} 
-          />
+        <div className="animate-in fade-in space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <SpeakingPracticeModule 
+                activeStudent={{ 
+                  id: activeStudentName || 'anonymous',
+                  name: activeStudentName || 'Học viên' 
+                }} 
+              />
+            </div>
+            
+            {/* Right Column: Practice Logs for Teacher/Admin */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full min-h-[400px]">
+              <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <History className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-bold text-slate-800">Lịch sử luyện tập AI</h3>
+                </div>
+                <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full uppercase tracking-wider">
+                  {speakingLogs.length} lượt
+                </span>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-[500px]">
+                {speakingLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                    <History className="w-12 h-12 opacity-20 mb-2" />
+                    <p className="text-sm">Chưa có dữ liệu luyện tập</p>
+                  </div>
+                ) : (
+                  speakingLogs.map((log) => (
+                    <div key={log.id} className="p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-bold text-slate-900 text-sm">{log.studentName}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                          log.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {log.status === 'active' ? 'Đang học' : 'Xong'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(log.entryTime).toLocaleDateString('vi-VN')}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {new Date(log.entryTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        {log.durationMinutes > 0 && (
+                          <div className="flex items-center gap-1 font-bold text-indigo-600">
+                            <Plus className="w-3 h-3" />
+                            {log.durationMinutes} phút
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              
+              <div className="p-3 bg-slate-50 border-t border-slate-200">
+                <p className="text-[10px] text-slate-400 text-center italic">
+                  Dữ liệu được cập nhật tự động khi học sinh thoát tab luyện tập.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

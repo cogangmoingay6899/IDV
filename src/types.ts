@@ -518,3 +518,15 @@ export interface PronunciationSession {
   lastPracticedAt: string;
 }
 
+export interface SpeakingLog {
+  id: string;
+  studentId: string;
+  studentName: string;
+  classCode: string;
+  className?: string;
+  entryTime: string;
+  durationMinutes: number;
+  status: 'active' | 'completed';
+  lastActiveAt?: string;
+}
+

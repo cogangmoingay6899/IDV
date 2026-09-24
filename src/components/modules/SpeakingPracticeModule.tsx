@@ -18,6 +18,32 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
   useEffect(() => {
     if (!activeStudent) return;
 
+    const logId = `log-${activeStudent.id}-${Date.now()}`;
+    const classCodeFromUrl = new URLSearchParams(window.location.search).get('classCode') || 'IDV-CLASS';
+
+    // Record Entry immediately
+    const recordEntry = async () => {
+      try {
+        await fetch(`/api/storage/speaking_logs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: logId,
+            studentId: activeStudent.id,
+            studentName: activeStudent.name || activeStudent.studentName,
+            classCode: classCodeFromUrl,
+            entryTime: new Date().toISOString(),
+            durationMinutes: 0,
+            status: 'active'
+          })
+        });
+      } catch (e) {
+        console.error('Failed to log entry:', e);
+      }
+    };
+
+    recordEntry();
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
         if (timerRef.current) {
@@ -45,16 +71,20 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
 
       const totalMinutes = Math.floor(seconds / 60);
       
-      if (activeStudent && totalMinutes > 0) {
-        navigator.sendBeacon('/api/log-study-time', JSON.stringify({
-          studentId: activeStudent.id || 'unknown',
-          studentName: activeStudent.name || activeStudent.studentName || 'unknown',
+      // Ghi nhận thời gian khi thoát trang
+      if (activeStudent) {
+        navigator.sendBeacon('/api/storage/speaking_logs', JSON.stringify({
+          id: logId,
+          studentId: activeStudent.id,
+          studentName: activeStudent.name || activeStudent.studentName,
+          classCode: classCodeFromUrl,
           durationMinutes: totalMinutes,
-          course: "IELTS Speaking Trainer AI"
+          lastActiveAt: new Date().toISOString(),
+          status: 'completed'
         }));
       }
     };
-  }, [seconds, activeStudent]);
+  }, [activeStudent]); // Remove seconds from dependency to only run on login/logout
 
   if (standalonePortalMode && !activeStudent) {
     return (
