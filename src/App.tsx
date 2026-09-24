@@ -1654,7 +1654,7 @@ export default function App() {
     { id: 'teacher_sessions', title: 'Số buổi dạy', icon: <CalendarDays className="w-3.5 h-3.5" /> },
     { id: 'contact_book', title: 'Sổ liên lạc', icon: <MessageSquareText className="w-3.5 h-3.5" /> },
     { id: 'placement', title: 'Test đầu vào', icon: <ClipboardList className="w-3.5 h-3.5" /> },
-    { id: 'trial', title: 'Học thử', icon: <BookOpenCheck className="w-3.5 h-3.5" /> },
+    { id: 'speaking_practice', title: 'Luyện Speaking', icon: <MessageSquareText className="w-3.5 h-3.5" /> },
     { id: 'hr', title: 'Nhân sự', icon: <Users2 className="w-3.5 h-3.5" /> },
     { id: 'reports', title: 'Báo cáo', icon: <BarChart3 className="w-3.5 h-3.5" /> },
     { id: 'kpi', title: 'Chỉ tiêu', icon: <Target className="w-3.5 h-3.5" /> },
@@ -1665,10 +1665,10 @@ export default function App() {
   const moduleNavList = isNhungPhan
     ? [{ id: 'students' as ModuleId, title: 'Nhật Ký & Chấm Điểm', icon: <BookOpen className="w-3.5 h-3.5 text-purple-600" /> }]
     : isTeacher
-    ? allNavModules.filter((m) => m.id === 'students' || m.id === 'exams' || m.id === 'teacher_sessions' || m.id === 'trial')
+    ? allNavModules.filter((m) => m.id === 'students' || m.id === 'exams' || m.id === 'teacher_sessions' || m.id === 'speaking_practice')
     : isAssistant
     ? allNavModules.filter((m) =>
-        ['students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'trial'].includes(m.id)
+        ['students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'speaking_practice'].includes(m.id)
       )
     : allNavModules;
 
