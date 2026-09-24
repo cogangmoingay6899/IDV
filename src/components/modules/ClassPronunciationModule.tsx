@@ -844,6 +844,56 @@ export const ClassPronunciationModule: React.FC<ClassPronunciationModuleProps> =
 
   return (
     <div className="space-y-6 font-sans">
+      {activeViewMode === 'student' && !activeStudent && (
+        <div className="max-w-xl mx-auto my-12 bg-white rounded-3xl border border-slate-200 p-8 sm:p-10 shadow-2xl space-y-6 text-center">
+          <div className="w-20 h-20 rounded-3xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto text-3xl font-black shadow-inner border border-indigo-200">
+            🎓
+          </div>
+          <div className="space-y-3">
+            <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50 px-3.5 py-1.5 rounded-full border border-indigo-200 uppercase tracking-widest">
+              Xác Thực Học Viên Lớp {classGroup?.name || classGroup?.code || 'IDV'}
+            </span>
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              Vào Lớp Luyện Phát Âm
+            </h3>
+            <p className="text-sm text-slate-600 leading-relaxed font-medium">
+              Học sinh vui lòng nhập đúng <strong>Họ và Tên</strong> và <strong>Mã Lớp</strong> của mình (ví dụ: <span className="text-indigo-600 font-bold">73</span>, <span className="text-indigo-600 font-bold">74</span>) để tham gia lớp và hiển thị giao diện luyện tập.
+            </p>
+          </div>
+
+          <form onSubmit={handleStudentLogin} className="space-y-4 text-left pt-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Họ và Tên học sinh:</label>
+              <input
+                type="text"
+                placeholder="Nhập họ và tên đầy đủ..."
+                value={studentLoginName}
+                onChange={(e) => setStudentLoginName(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Mã Lớp (hoặc Số Lớp):</label>
+              <input
+                type="text"
+                placeholder="Ví dụ: 73, 74..."
+                value={studentLoginClassCode}
+                onChange={(e) => setStudentLoginClassCode(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-xl shadow-emerald-600/25 transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <span>🚀 Vào Lớp Luyện Phát Âm</span>
+            </button>
+          </form>
+        </div>
+      )}
+
+      {(activeViewMode === 'teacher' || (activeViewMode === 'student' && activeStudent)) && (
+        <>
       {/* TOP HEADER & TOP NAVIGATION TABS */}
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-2 sm:p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         {/* Navigation Tabs */}
@@ -1843,6 +1893,8 @@ export const ClassPronunciationModule: React.FC<ClassPronunciationModuleProps> =
             </button>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );
