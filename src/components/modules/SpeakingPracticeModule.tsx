@@ -247,7 +247,58 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
 
   return (
     <div className="space-y-6 font-sans">
+      {/* GUEST / STUDENT LOGIN GATE: Required name entry before seeing practice link */}
+      {activeViewMode === 'student' && !activeStudent && (
+        <div className="max-w-xl mx-auto my-10 bg-white rounded-3xl border border-slate-200 p-8 sm:p-10 shadow-2xl space-y-6 text-center animate-in fade-in">
+          <div className="w-20 h-20 rounded-3xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto text-3xl font-black shadow-inner border border-indigo-200">
+            🎓
+          </div>
+          <div className="space-y-3">
+            <span className="text-xs font-extrabold text-indigo-700 bg-indigo-50 px-3.5 py-1.5 rounded-full border border-indigo-200 uppercase tracking-widest">
+              Xác Thực Học Viên Lớp {effectiveClass?.name || effectiveClass?.code || 'IDV'}
+            </span>
+            <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              Vào Lớp Luyện Speaking AI
+            </h3>
+            <p className="text-sm text-slate-600 leading-relaxed font-medium">
+              Học sinh vui lòng nhập đúng <strong>Họ và Tên</strong> và <strong>Mã Lớp</strong> của mình để vào phòng luyện tập và hiển thị link mở trợ lý AI.
+            </p>
+          </div>
+
+          <form onSubmit={handleStudentLogin} className="space-y-4 text-left pt-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Họ và Tên học sinh:</label>
+              <input
+                type="text"
+                placeholder="Nhập họ và tên đầy đủ..."
+                value={studentLoginName}
+                onChange={(e) => setStudentLoginName(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wider">Mã Lớp (hoặc Số Lớp):</label>
+              <input
+                type="text"
+                placeholder="Ví dụ: 73, 74..."
+                value={studentLoginClassCode}
+                onChange={(e) => setStudentLoginClassCode(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm shadow-xl shadow-emerald-600/25 transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
+            >
+              <span>🚀 Vào Lớp Luyện Speaking AI</span>
+            </button>
+          </form>
+        </div>
+      )}
+
       {/* 1. TOP HEADER & NAVIGATION BAR */}
+      {(activeViewMode === 'teacher' || (activeViewMode === 'student' && activeStudent)) && (
+      <>
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-2 sm:p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         {/* Navigation Tabs & Class Selector */}
         <div className="flex items-center flex-wrap gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
@@ -312,9 +363,6 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
                 type="button"
                 onClick={() => {
                   setActiveViewMode('student');
-                  if (!activeStudent && classStudents.length > 0) {
-                    setStudentLoginName(classStudents[0].name);
-                  }
                 }}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeViewMode === 'student'
@@ -530,36 +578,34 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
               Nhấn nút bên dưới để mở giao diện Custom GPT. Hãy nói trực tiếp vào micro trên máy tính hoặc điện thoại để AI phản hồi, sửa lỗi ngữ pháp, phát âm và gợi ý từ vựng Band 7.0+.
             </p>
 
-            <div className="pt-2 flex flex-wrap items-center gap-3">
-              <a
-                href="https://chatgpt.com/g/g-6a7bf1b6300481919015f37ad8e49df3-ielts-speaking-trainer-idv"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  if (!activeStudent) {
-                    // Auto activate student or prompt
-                    const guest = {
-                      id: `std-guest-${Date.now()}`,
-                      name: currentUser?.name || 'Học viên',
-                      classCode: effectiveClass?.code || 'IDV-CLASS'
-                    };
-                    setActiveStudent(guest);
-                  }
-                }}
-                className="px-6 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/20 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
-              >
-                <span>🚀 Mở IELTS Speaking Trainer (Custom GPT)</span>
-                <ExternalLink className="w-4 h-4" />
-              </a>
-
-              <button
-                type="button"
-                onClick={handleCopyShareableLink}
-                className="px-4 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 flex items-center gap-2 transition-all cursor-pointer"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>Gửi link cho học sinh lớp này</span>
-              </button>
+            <div className="pt-2">
+              {!activeStudent ? (
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 max-w-lg space-y-2.5">
+                  <div className="flex items-center gap-2 text-amber-300 font-extrabold text-xs">
+                    <UserCheck className="w-4 h-4 shrink-0" />
+                    <span>Học sinh phải nhập tên vào hệ thống để mở link luyện tập</span>
+                  </div>
+                  <p className="text-[11px] text-indigo-100 leading-relaxed font-medium">
+                    Nhập Họ & Tên và Mã Lớp của bạn ở thanh đăng nhập phía trên rồi bấm <strong>"Vào Lớp Luyện Speaking AI"</strong> để hệ thống ghi nhận thời gian và hiển thị link phòng luyện AI.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                  <a
+                    href="https://chatgpt.com/g/g-6a7bf1b6300481919015f37ad8e49df3-ielts-speaking-trainer-idv"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm shadow-xl shadow-emerald-500/20 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+                  >
+                    <span>🚀 Mở IELTS Speaking Trainer (Custom GPT)</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                  <div className="text-xs text-emerald-300 font-bold flex items-center gap-1.5 bg-white/10 px-3 py-2 rounded-xl border border-white/10">
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>Học sinh: {activeStudent.name || activeStudent.studentName} (Đang tính thời gian)</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -594,6 +640,8 @@ export const SpeakingPracticeModule: React.FC<SpeakingPracticeModuleProps> = ({
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* 5. MODAL: XEM NHẬT KÝ CHI TIẾT CỦA HỌC VIÊN */}
       {selectedStudentForDetail && (

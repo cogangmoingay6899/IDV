@@ -409,7 +409,7 @@ const StudentsModule: React.FC<StudentsModuleProps> = ({
               className: `px-4 py-2 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 ${j === "vocab_tests" ? "bg-purple-700 text-white shadow-xs" : "text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200"}`,
               children: [
                 e.jsx(jn, { className: "w-3.5 h-3.5 text-amber-600" }),
-                e.jsx("span", { children: "Bài Test Từ Vựng Khóa 1, 2, 3, 4" }),
+                e.jsx("span", { children: "Bài test" }),
               ],
             }),
           !isNhungPhan &&
