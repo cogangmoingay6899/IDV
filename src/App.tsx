@@ -1862,10 +1862,13 @@ export default function App() {
           </div>
         </header>
 
-        <main className="max-w-4xl mx-auto w-full p-4 sm:p-6 md:p-8 flex-1">
+        <main className="max-w-6xl mx-auto w-full p-4 sm:p-6 md:p-8 flex-1">
           <SpeakingPracticeModule
-            activeStudent={null} // Will show login inside module if null and standalone
+            activeStudent={null}
             standalonePortalMode={true}
+            classGroup={matchingClass as any}
+            students={students.filter((s) => s.classId === matchingClass.id || s.className === matchingClass.name)}
+            showToast={showToast}
           />
         </main>
 
@@ -2181,7 +2184,12 @@ export default function App() {
 
         {/* Speaking Practice: accessible for teacher, assistant and admin */}
         {currentModule === 'speaking_practice' && (
-          <SpeakingPracticeModule activeStudent={currentUser} />
+          <SpeakingPracticeModule 
+            classes={effectiveClasses}
+            students={students}
+            currentUser={currentUser}
+            showToast={showToast}
+          />
         )}
 
         {/* Students & Classes: accessible for both teacher and admin */}
