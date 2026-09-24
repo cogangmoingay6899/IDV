@@ -89,13 +89,6 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
       badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     },
     {
-      id: 'trial',
-      title: 'Quản lý học thử',
-      icon: <BookOpenCheck className="w-6 h-6" />,
-      subtitle: 'Lịch học thử, đánh giá trải nghiệm, tỷ lệ chuyển đổi lớp mới',
-      badge: 'Học thử',
-    },
-    {
       id: 'placement',
       title: 'Quản lý kiểm tra đầu vào',
       icon: <ClipboardList className="w-6 h-6" />,
@@ -149,6 +142,14 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
       badge: 'Chỉ tiêu',
     },
     {
+      id: 'speaking_practice',
+      title: 'Luyện Speaking cùng IDV AI',
+      icon: <MessageSquareText className="w-6 h-6" />,
+      subtitle: 'Phòng luyện tập Speaking 1-1 cùng IDV AI Trainer',
+      badge: 'New',
+      badgeColor: 'bg-green-50 text-green-700 border-green-200',
+    },
+    {
       id: 'curriculum',
       title: 'Quản lý khóa học & Học phí',
       icon: <BookMarked className="w-6 h-6" />,
@@ -159,8 +160,8 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
   ];
 
   // RBAC Filtering according to exact prompt specifications:
-  // - Teacher: 'students', 'trial', 'exams', 'teacher_sessions'
-  // - Assistant: 'students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'trial'
+  // - Teacher: 'students', 'exams', 'teacher_sessions', 'speaking_practice'
+  // - Assistant: 'students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'speaking_practice'
   // - Admin: All modules
   const isDuongVu = currentUser?.email === 'ieltsduongvu@gmail.com' || currentUser?.email === 'ieltsduongvu5@gmail.com' || currentUser?.name?.includes('Dương Vũ');
   const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
@@ -177,12 +178,12 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
           badgeColor: 'bg-purple-100 text-purple-900 font-bold',
         }))
     : isTeacher && !isDuongVu
-    ? allModules.filter((m) => m.id === 'trial' || m.id === 'exams' || m.id === 'teacher_sessions')
+    ? allModules.filter((m) => m.id === 'exams' || m.id === 'teacher_sessions' || m.id === 'speaking_practice')
     : isTeacher
-    ? allModules.filter((m) => m.id === 'students' || m.id === 'trial' || m.id === 'exams' || m.id === 'teacher_sessions')
+    ? allModules.filter((m) => m.id === 'students' || m.id === 'exams' || m.id === 'teacher_sessions' || m.id === 'speaking_practice')
     : isAssistant
     ? allModules.filter((m) =>
-        ['students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'trial'].includes(m.id)
+        ['students', 'curriculum', 'admissions', 'exams', 'teacher_sessions', 'contact_book', 'placement', 'speaking_practice'].includes(m.id)
       )
     : allModules;
 

@@ -28,7 +28,8 @@ export type ModuleId =
   | 'teacher_sessions'
   | 'kpi'
   | 'curriculum'
-  | 'inventory';
+  | 'inventory'
+  | 'speaking_practice';
 
 export interface Student {
   id: string;

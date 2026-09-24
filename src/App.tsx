@@ -32,6 +32,7 @@ import { ImportSheetModal } from './components/modals/ImportSheetModal';
 import { OnlinePlacementTestForm } from './components/modules/OnlinePlacementTestForm';
 import { ClassVocabTestModule } from './components/modules/ClassVocabTestModule';
 import { ClassPronunciationModule } from './components/modules/ClassPronunciationModule';
+import { SpeakingPracticeModule } from './components/modules/SpeakingPracticeModule';
 import { exportCenterDataToExcel } from './lib/excelExportService';
 
 // Helper to check if URL is requesting the Online Placement Test Portal
@@ -2098,6 +2099,11 @@ export default function App() {
             attendanceRecords={attendance}
             currentUser={currentUser}
           />
+        )}
+
+        {/* Speaking Practice: accessible for teacher, assistant and admin */}
+        {currentModule === 'speaking_practice' && (
+          <SpeakingPracticeModule activeStudent={currentUser} />
         )}
 
         {/* Students & Classes: accessible for both teacher and admin */}
