@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Plus,
   BookOpen,
+  Bot,
   Award,
   Save,
   Check,
@@ -177,6 +178,8 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [speakingLogs, setSpeakingLogs] = useState<SpeakingLog[]>([]);
+  const [isSpeakingDiaryModalOpen, setIsSpeakingDiaryModalOpen] = useState(false);
+  const [selectedStudentForSpeaking, setSelectedStudentForSpeaking] = useState<Student | null>(null);
 
   useEffect(() => {
     if (activeTab === 'speaking') {
@@ -1781,21 +1784,6 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 <MessageCircle className="w-4 h-4 text-emerald-600" />
                 <span>🗣️ Luyện Speaking AI</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const link = `${window.location.origin}${window.location.pathname}?mode=speaking&classCode=${encodeURIComponent(classGroup.code || classGroup.name)}`;
-                  navigator.clipboard.writeText(link);
-                  setToastMessage('Đã sao chép link Luyện Speaking AI cho Học sinh!');
-                  setTimeout(() => setToastMessage(null), 3000);
-                }}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500 rounded-xl text-xs font-black flex items-center gap-2 transition-all shadow-md shadow-emerald-200 active:scale-95"
-                title="Sao chép link gửi cho học sinh"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>🔗 Gửi link Speaking AI</span>
-              </button>
             </>
           )}
         </div>
@@ -2917,70 +2905,160 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
       {/* VIEW: MỤC LUYỆN SPEAKING (CHATGPT AI) */}
       {activeTab === 'speaking' && (
         <div className="animate-in fade-in space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
+          {/* Header Actions for Speaking */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900 rounded-3xl p-5 border border-white/10 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg border border-indigo-400">
+                <Bot className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white leading-tight">Luyện Speaking AI</h3>
+                <p className="text-indigo-300 text-xs font-medium">Luyện tập giao tiếp với trợ lý ảo chuyên sâu IELTS</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const link = `${window.location.origin}${window.location.pathname}?mode=speaking&classCode=${encodeURIComponent(classGroup.code || classGroup.name)}`;
+                  navigator.clipboard.writeText(link);
+                  setToastMessage('Đã sao chép link Luyện Speaking AI cho Học sinh!');
+                  setTimeout(() => setToastMessage(null), 3000);
+                }}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-500 rounded-xl text-xs font-black flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Copy Link Cho Học Sinh</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Student Stats Table */}
+            <div className="lg:col-span-8 space-y-4">
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+                  <h4 className="font-black text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider">
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    Thống Kê Số Phút Luyện Speaking AI Của Lớp {classGroup.name}
+                  </h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="p-4 text-[11px] font-black text-slate-500 uppercase tracking-widest text-center w-16">STT</th>
+                        <th className="p-4 text-[11px] font-black text-slate-500 uppercase tracking-widest">Học Viên</th>
+                        <th className="p-4 text-[11px] font-black text-slate-500 uppercase tracking-widest text-center">Vào Link (Tháng {new Date().getMonth() + 1})</th>
+                        <th className="p-4 text-[11px] font-black text-slate-500 uppercase tracking-widest text-center">Tổng Thời Gian (Phút)</th>
+                        <th className="p-4 text-[11px] font-black text-slate-500 uppercase tracking-widest text-center">Nhật Ký</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classStudents.map((st, idx) => {
+                        const studentLogs = speakingLogs.filter(log => 
+                          log.studentName.trim().toLowerCase() === st.name.trim().toLowerCase()
+                        );
+                        
+                        const currentMonth = new Date().getMonth();
+                        const currentYear = new Date().getFullYear();
+                        
+                        const monthlyEntries = studentLogs.filter(log => {
+                          const date = new Date(log.entryTime);
+                          return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+                        }).length;
+
+                        const totalMinutes = studentLogs.reduce((acc, curr) => acc + curr.durationMinutes, 0);
+                        
+                        return (
+                          <tr key={st.id} className="border-b border-slate-100 hover:bg-indigo-50/30 transition-colors">
+                            <td className="p-4 text-center text-sm font-bold text-slate-400">{idx + 1}</td>
+                            <td className="p-4">
+                              <div className="font-extrabold text-slate-900">{st.name}</div>
+                              <div className="text-[10px] text-slate-400 font-bold uppercase">{st.code}</div>
+                            </td>
+                            <td className="p-4 text-center">
+                              <div className="flex flex-col items-center">
+                                <span className="text-sm font-black text-slate-700">{monthlyEntries} lần</span>
+                                <div className="w-12 h-1 bg-slate-100 rounded-full mt-1 overflow-hidden">
+                                  <div 
+                                    className="h-full bg-indigo-500 rounded-full" 
+                                    style={{ width: `${Math.min(monthlyEntries * 10, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-black border ${
+                                totalMinutes > 0 ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-400 border-slate-100'
+                              }`}>
+                                {totalMinutes} Phút
+                              </span>
+                            </td>
+                            <td className="p-4 text-center">
+                              <button 
+                                onClick={() => {
+                                  setSelectedStudentForSpeaking(st);
+                                  setIsSpeakingDiaryModalOpen(true);
+                                }}
+                                className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors border border-indigo-200 uppercase"
+                              >
+                                Chi tiết
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Practice & Recent Logs */}
+            <div className="lg:col-span-4 space-y-6">
               <SpeakingPracticeModule 
                 activeStudent={{ 
                   id: activeStudentName || 'anonymous',
                   name: activeStudentName || 'Học viên' 
                 }} 
               />
-            </div>
-            
-            {/* Right Column: Practice Logs for Teacher/Admin */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full min-h-[400px]">
-              <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <History className="w-5 h-5 text-indigo-600" />
-                  <h3 className="font-bold text-slate-800">Lịch sử luyện tập AI</h3>
-                </div>
-                <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full uppercase tracking-wider">
-                  {speakingLogs.length} lượt
-                </span>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-[500px]">
-                {speakingLogs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                    <History className="w-12 h-12 opacity-20 mb-2" />
-                    <p className="text-sm">Chưa có dữ liệu luyện tập</p>
+
+              {/* Recent Logs List */}
+              <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <History className="w-4 h-4 text-indigo-600" />
+                    <h3 className="font-bold text-slate-800 text-sm">Lượt luyện tập gần đây</h3>
                   </div>
-                ) : (
-                  speakingLogs.map((log) => (
-                    <div key={log.id} className="p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="font-bold text-slate-900 text-sm">{log.studentName}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
-                          log.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                        }`}>
-                          {log.status === 'active' ? 'Đang học' : 'Xong'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(log.entryTime).toLocaleDateString('vi-VN')}
+                  <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full uppercase">
+                    {speakingLogs.length}
+                  </span>
+                </div>
+                
+                <div className="p-2 space-y-2 overflow-y-auto max-h-[300px]">
+                  {speakingLogs.length === 0 ? (
+                    <p className="text-center py-6 text-slate-400 text-xs italic">Chưa có dữ liệu</p>
+                  ) : (
+                    speakingLogs.slice(0, 10).map((log) => (
+                      <div key={log.id} className="p-3 rounded-xl border border-slate-50 hover:bg-slate-50 transition-all">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-bold text-slate-900 text-[13px]">{log.studentName}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                            log.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {log.status === 'active' ? 'Đang học' : 'Xong'}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(log.entryTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                          <span>{new Date(log.entryTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {new Date(log.entryTime).toLocaleDateString('vi-VN')}</span>
+                          {log.durationMinutes > 0 && <span className="font-black text-indigo-600">+{log.durationMinutes}p</span>}
                         </div>
-                        {log.durationMinutes > 0 && (
-                          <div className="flex items-center gap-1 font-bold text-indigo-600">
-                            <Plus className="w-3 h-3" />
-                            {log.durationMinutes} phút
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              
-              <div className="p-3 bg-slate-50 border-t border-slate-200">
-                <p className="text-[10px] text-slate-400 text-center italic">
-                  Dữ liệu được cập nhật tự động khi học sinh thoát tab luyện tập.
-                </p>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -4670,6 +4748,129 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 className="px-5 py-2 bg-slate-900 hover:bg-black text-white rounded-xl font-bold transition-colors"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NHẬT KÝ CHI TIẾT LUYỆN SPEAKING AI */}
+      {isSpeakingDiaryModalOpen && selectedStudentForSpeaking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg border border-indigo-400">
+                  <Bot className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black leading-tight">Nhật Ký Speaking AI</h3>
+                  <p className="text-indigo-300 text-xs font-bold uppercase tracking-wider mt-0.5">
+                    Học viên: {selectedStudentForSpeaking.name} ({selectedStudentForSpeaking.code})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsSpeakingDiaryModalOpen(false);
+                  setSelectedStudentForSpeaking(null);
+                }}
+                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            {/* Monthly Summary Cards */}
+            <div className="p-4 bg-indigo-50/50 border-b border-indigo-100 shrink-0">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-white p-3 rounded-2xl border border-indigo-100 shadow-sm text-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Số lần vào link</p>
+                  <p className="text-xl font-black text-indigo-700">
+                    {speakingLogs.filter(log => log.studentName.trim().toLowerCase() === selectedStudentForSpeaking.name.trim().toLowerCase()).length}
+                  </p>
+                </div>
+                <div className="bg-white p-3 rounded-2xl border border-indigo-100 shadow-sm text-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Tháng {new Date().getMonth() + 1}</p>
+                  <p className="text-xl font-black text-indigo-700">
+                    {speakingLogs.filter(log => {
+                      const date = new Date(log.entryTime);
+                      return log.studentName.trim().toLowerCase() === selectedStudentForSpeaking.name.trim().toLowerCase() &&
+                             date.getMonth() === new Date().getMonth() &&
+                             date.getFullYear() === new Date().getFullYear();
+                    }).length}
+                  </p>
+                </div>
+                <div className="bg-white p-3 rounded-2xl border border-indigo-100 shadow-sm text-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Tổng thời gian</p>
+                  <p className="text-xl font-black text-emerald-700">
+                    {speakingLogs
+                      .filter(log => log.studentName.trim().toLowerCase() === selectedStudentForSpeaking.name.trim().toLowerCase())
+                      .reduce((acc, curr) => acc + curr.durationMinutes, 0)}p
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Logs List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2">Lịch sử chi tiết (Gần đây nhất)</h4>
+              {speakingLogs
+                .filter(log => log.studentName.trim().toLowerCase() === selectedStudentForSpeaking.name.trim().toLowerCase())
+                .sort((a, b) => new Date(b.entryTime).getTime() - new Date(a.entryTime).getTime())
+                .map((log, index) => (
+                  <div key={log.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50/30 flex items-center justify-between hover:border-indigo-200 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-black text-slate-800">
+                            {new Date(log.entryTime).toLocaleDateString('vi-VN')}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {new Date(log.entryTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase ${
+                            log.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {log.status === 'active' ? 'Đang hoạt động' : 'Đã hoàn thành'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 italic">Mã lớp: {log.classCode}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-black text-indigo-600">
+                        {log.durationMinutes} phút
+                      </div>
+                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Thời lượng học</div>
+                    </div>
+                  </div>
+                ))}
+
+              {speakingLogs.filter(log => log.studentName.trim().toLowerCase() === selectedStudentForSpeaking.name.trim().toLowerCase()).length === 0 && (
+                <div className="py-20 text-center">
+                  <History className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-slate-400">Học viên này chưa có lượt luyện tập nào</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+              <button
+                onClick={() => {
+                  setIsSpeakingDiaryModalOpen(false);
+                  setSelectedStudentForSpeaking(null);
+                }}
+                className="px-8 py-2.5 bg-slate-900 hover:bg-black text-white font-black rounded-xl text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95"
+              >
+                Đóng Nhật Ký
               </button>
             </div>
           </div>
