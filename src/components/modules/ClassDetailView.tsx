@@ -54,6 +54,8 @@ import {
 import { Student, ClassGroup, Teacher, AttendanceRecord, ExamScore, CurriculumCourse, AuthUser } from '../../types';
 import { ClassVocabTestModule } from './ClassVocabTestModule';
 import { ClassPronunciationModule } from './ClassPronunciationModule';
+import { SpeakingPracticeModule } from './SpeakingPracticeModule';
+import { StudentLoginModal } from '../modals/StudentLoginModal';
 import { CreateTeacherModal } from '../modals/CreateTeacherModal';
 import { EditClassModal } from '../modals/EditClassModal';
 import { ClassScoreExportModal } from '../modals/ClassScoreExportModal';
@@ -159,7 +161,9 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   const [isDeletingClass, setIsDeletingClass] = useState(false);
 
   // Default directly to grading log as requested by user
-  const [activeTab, setActiveTab] = useState<'daily_log' | 'students' | 'vocab_tests' | 'pronunciation'>('daily_log');
+  const [activeTab, setActiveTab] = useState<'daily_log' | 'students' | 'vocab_tests' | 'pronunciation' | 'speaking'>('daily_log');
+  const [isStudentLoginModalOpen, setIsStudentLoginModalOpen] = useState(false);
+  const [activeStudentName, setActiveStudentName] = useState<string | null>(null);
 
   useEffect(() => {
     if (isNhungPhan && activeTab !== 'daily_log') {
@@ -1718,6 +1722,19 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 <Mic className="w-4 h-4 text-indigo-600" />
                 <span>🎙️ Luyện Phát Âm (Thời Gian & AI)</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setIsStudentLoginModalOpen(true)}
+                className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                  activeTab === 'speaking'
+                    ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
+                    : 'text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80'
+                }`}
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-600" />
+                <span>🗣️ Luyện Speaking 1-1</span>
+              </button>
             </>
           )}
         </div>
@@ -2832,6 +2849,18 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
             students={classStudents}
             currentUser={currentUser}
             showToast={(msg) => setToastMessage(msg)}
+          />
+        </div>
+      )}
+
+      {/* VIEW: MỤC LUYỆN SPEAKING (CHATGPT AI) */}
+      {activeTab === 'speaking' && (
+        <div className="animate-in fade-in space-y-4">
+          <SpeakingPracticeModule 
+            activeStudent={{ 
+              id: activeStudentName || 'anonymous',
+              name: activeStudentName || 'Học viên' 
+            }} 
           />
         </div>
       )}
@@ -4659,6 +4688,16 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
         isOpen={isFullScheduleModalOpen}
         onClose={() => setIsFullScheduleModalOpen(false)}
         classGroup={classGroup}
+      />
+
+      {/* STUDENT LOGIN MODAL FOR SPEAKING */}
+      <StudentLoginModal
+        isOpen={isStudentLoginModalOpen}
+        onClose={() => setIsStudentLoginModalOpen(false)}
+        onLogin={(name) => {
+          setActiveStudentName(name);
+          setActiveTab('speaking');
+        }}
       />
 
       {/* MODAL: Xác nhận xóa lớp học (Dành riêng cho Quản lý) */}
