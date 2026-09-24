@@ -18,18 +18,21 @@ import {
   Search,
   DollarSign
 } from 'lucide-react';
-import { Student, TuitionTransaction, ClassGroup } from '../../types';
+import { Student, TuitionTransaction, ClassGroup, Teacher } from '../../types';
+import { exportCenterDataToExcel } from '../../lib/excelExportService';
 
 interface ReportsModuleProps {
   students: Student[];
   transactions: TuitionTransaction[];
   classes: ClassGroup[];
+  teachers?: Teacher[];
 }
 
 export const ReportsModule: React.FC<ReportsModuleProps> = ({
   students,
   transactions,
   classes,
+  teachers = [],
 }) => {
   const [selectedPeriod, setSelectedPeriod] = useState('2026-Q3');
   const [activeTab, setActiveTab] = useState<'revenue_breakdown' | 'trends_and_kpis'>('revenue_breakdown');
@@ -195,11 +198,12 @@ export const ReportsModule: React.FC<ReportsModuleProps> = ({
           </select>
 
           <button
-            onClick={() => alert('Đã xuất file báo cáo doanh thu theo lớp và cơ sở: PSE_Revenue_Report_2026.xlsx')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-colors shadow-2xs"
+            onClick={() => exportCenterDataToExcel({ classes, students, teachers, transactions })}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Tải file Excel báo cáo toàn trung tâm (Mỗi lớp 1 sheet)"
           >
-            <Download className="w-4 h-4" />
-            <span>Xuất Excel</span>
+            <Download className="w-4 h-4 text-white" />
+            <span>Tải Excel Trung Tâm (Mỗi lớp 1 sheet)</span>
           </button>
         </div>
       </div>

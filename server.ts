@@ -520,7 +520,160 @@ async function startServer() {
     }
   });
 
-  // Vite middleware setup (development vs production)
+  // --- AI PRONUNCIATION EVALUATION ENDPOINT ---
+  app.post('/api/ai/evaluate-pronunciation', async (req, res) => {
+    try {
+      const { targetText, spokenText } = req.body;
+      if (!targetText) {
+        return res.status(400).json({ error: 'targetText is required' });
+      }
+
+      const cleanTarget = String(targetText).trim();
+      const cleanSpoken = String(spokenText || '').trim();
+
+      // Check if Gemini API Key exists
+      const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+
+      if (apiKey) {
+        try {
+          const { GoogleGenAI } = await import('@google/genai');
+          const ai = new GoogleGenAI({ apiKey });
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Bạn là chuyên gia chấm điểm phát âm IELTS Speaking của trung tâm IELTS DƯƠNG VŨ.
+Hãy đánh giá kết quả học viên đọc phát âm sau đây:
+- Câu gốc cần đọc (Target Sentence): "${cleanTarget}"
+- Nhận diện giọng nói thực tế của học viên (Spoken Text): "${cleanSpoken}"
+
+Hãy trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm Markdown codeblock \`\`\`json) với cấu trúc:
+{
+  "accuracyScore": 85, // Số nguyên từ 0 đến 100 thể hiện độ chính xác phát âm
+  "feedbackNotes": "Nhận xét ngắn gọn 1-2 câu khen ngợi hoặc lưu ý cách phát âm trọng âm, nối âm (bằng tiếng Việt)",
+  "mispronouncedWords": ["từ1", "từ2"] // Danh sách các từ học viên phát âm chưa chuẩn hoặc đọc thiếu
+}`,
+          });
+
+          const resText = response.text || '';
+          const cleanedJson = resText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanedJson);
+          return res.json({
+            success: true,
+            accuracyScore: parsed.accuracyScore ?? 80,
+            feedbackNotes: parsed.feedbackNotes || 'Phát âm tương đối rõ ràng. Hãy chú ý nối âm và trọng âm nhé!',
+            mispronouncedWords: parsed.mispronouncedWords || [],
+          });
+        } catch (geminiErr: any) {
+          console.warn('[Gemini AI] Error in pronunciation evaluation, fallback to algorithm:', geminiErr?.message);
+        }
+      }
+
+      // Algorithmic Fallback evaluation
+      const targetWords = cleanTarget.toLowerCase().replace(/[^a-z0-9\s]/gi, '').split(/\s+/).filter(Boolean);
+      const spokenWords = cleanSpoken.toLowerCase().replace(/[^a-z0-9\s]/gi, '').split(/\s+/).filter(Boolean);
+
+      if (targetWords.length === 0) {
+        return res.json({ success: true, accuracyScore: 100, feedbackNotes: 'Rất tốt!', mispronouncedWords: [] });
+      }
+
+      let matchCount = 0;
+      const mispronounced: string[] = [];
+
+      targetWords.forEach((tw) => {
+        if (spokenWords.includes(tw)) {
+          matchCount++;
+        } else {
+          mispronounced.push(tw);
+        }
+      });
+
+      const score = Math.min(100, Math.round((matchCount / targetWords.length) * 100));
+      let feedback = 'Phát âm tròn vàõ rõ tiếng!';
+      if (score < 50) feedback = 'Cần chú ý đọc lại kĩ từng từ theo mẫu IPA nhé!';
+      else if (score < 80) feedback = 'Đã phát âm khá tốt, chú ý nhấn trọng âm các từ chưa chuẩn.';
+
+      res.json({
+        success: true,
+        accuracyScore: score,
+        feedbackNotes: feedback,
+        mispronouncedWords: mispronounced,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Server error' });
+    }
+  });
+
+  // --- DEDICATED HIGH-QUALITY KORE VOICE TTS ENDPOINT WITH DISK CACHE ---
+  const audioCacheDir = path.join(dataDir, 'tts-cache');
+  if (!fs.existsSync(audioCacheDir)) {
+    fs.mkdirSync(audioCacheDir, { recursive: true });
+  }
+
+  app.post('/api/ai/tts-kore', async (req, res) => {
+    try {
+      const { text, voice = 'Kore' } = req.body;
+      if (!text || typeof text !== 'string') {
+        return res.status(400).json({ error: 'text is required' });
+      }
+
+      const cleanText = text.trim();
+      const crypto = await import('crypto');
+      const hash = crypto.createHash('md5').update(`${voice}:${cleanText}`).digest('hex');
+      const cacheFilePath = path.join(audioCacheDir, `${hash}.wav`);
+
+      // 1. Return immediately from disk cache if already generated (offline on disk)
+      if (fs.existsSync(cacheFilePath)) {
+        res.setHeader('Content-Type', 'audio/wav');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        const stream = fs.createReadStream(cacheFilePath);
+        return stream.pipe(res);
+      }
+
+      // 2. Generate using flagship Kore voice with gemini-3.8-flash-lite-tts
+      const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({ error: 'Gemini API Key not configured on server' });
+      }
+
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey });
+
+      const aiResponse = await ai.models.generateContent({
+        model: 'gemini-3.8-flash-lite-tts',
+        contents: cleanText,
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = aiResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!base64Audio) {
+        return res.status(500).json({ error: 'No audio returned from Gemini Kore voice' });
+      }
+
+      const audioBuffer = Buffer.from(base64Audio, 'base64');
+
+      // Save to disk cache for future instant offline playback
+      try {
+        fs.writeFileSync(cacheFilePath, audioBuffer);
+      } catch (writeErr) {
+        console.warn('[TTS Cache] Failed to write cache:', writeErr);
+      }
+
+      res.setHeader('Content-Type', 'audio/wav');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.send(audioBuffer);
+    } catch (err: any) {
+      console.error('[TTS Kore Error]:', err);
+      res.status(500).json({ error: err?.message || 'Failed to synthesize speech with Kore' });
+    }
+  });
+
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

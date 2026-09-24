@@ -19,6 +19,7 @@ import {
   Layers,
   Users2,
   BookOpen,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { ModuleId, AuthUser } from '../types';
 
@@ -31,6 +32,7 @@ interface HeaderProps {
   onOpenLogin: () => void;
   onLogout?: () => void;
   onOpenStaffManagement?: () => void;
+  onExportExcel?: () => void;
   currentUser: AuthUser | null;
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -48,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLogin,
   onLogout,
   onOpenStaffManagement,
+  onExportExcel,
   currentUser,
   searchQuery,
   onSearchChange,
@@ -209,6 +212,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <PlusCircle className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Thêm học viên</span>
                 </button>
+
+                {onExportExcel && (
+                  <button
+                    onClick={onExportExcel}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200 border border-emerald-300 rounded-xl shadow-xs transition-all active:scale-95 whitespace-nowrap cursor-pointer"
+                    title="Tải toàn bộ dữ liệu trung tâm (Các lớp, học sinh, giáo viên, học phí) về file Excel chia thành nhiều Sheet"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                    <span className="hidden md:inline">Tải Excel Trung Tâm</span>
+                    <span className="md:hidden">Excel</span>
+                  </button>
+                )}
               </>
             )}
 
@@ -389,6 +404,19 @@ export const Header: React.FC<HeaderProps> = ({
                     >
                       <UserCheck className="w-4 h-4 text-purple-700" />
                       <span>Quản lý Gmail nhân sự & Mã PIN</span>
+                    </button>
+                  )}
+
+                  {isAdmin && onExportExcel && (
+                    <button
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onExportExcel();
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-bold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors flex items-center gap-2 border border-emerald-200/80 my-1 cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                      <span>Tải Excel Toàn Trung Tâm (Mỗi lớp 1 sheet)</span>
                     </button>
                   )}
 

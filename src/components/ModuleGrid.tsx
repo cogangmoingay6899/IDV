@@ -30,6 +30,7 @@ interface ModuleGridProps {
   onSelectModule: (module: ModuleId) => void;
   onOpenCreateClass: () => void;
   onOpenLogin: () => void;
+  onExportExcel?: () => void;
   currentUser: AuthUser;
   stats: {
     totalStudents: number;
@@ -54,6 +55,7 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
   onSelectModule,
   onOpenCreateClass,
   onOpenLogin,
+  onExportExcel,
   currentUser,
   stats,
 }) => {
@@ -328,13 +330,25 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
           </div>
 
           {isAdmin && (
-            <button
-              onClick={() => onSelectModule('inventory')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl border border-purple-200/80 transition-colors"
-            >
-              <PackageCheck className="w-3.5 h-3.5" />
-              <span>Kho hàng & Đồng phục</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {onExportExcel && (
+                <button
+                  onClick={onExportExcel}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-900 bg-emerald-100 hover:bg-emerald-200 rounded-xl border border-emerald-300 transition-colors shadow-2xs cursor-pointer"
+                  title="Tải toàn bộ dữ liệu trung tâm (Các lớp, học sinh, giáo viên, học phí) về file Excel chia thành nhiều Sheet"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                  <span>Tải Excel Trung Tâm (Mỗi lớp 1 sheet)</span>
+                </button>
+              )}
+              <button
+                onClick={() => onSelectModule('inventory')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-xl border border-purple-200/80 transition-colors"
+              >
+                <PackageCheck className="w-3.5 h-3.5" />
+                <span>Kho hàng & Đồng phục</span>
+              </button>
+            </div>
           )}
         </div>
 

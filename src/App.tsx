@@ -31,6 +31,8 @@ import {
 import { ImportSheetModal } from './components/modals/ImportSheetModal';
 import { OnlinePlacementTestForm } from './components/modules/OnlinePlacementTestForm';
 import { ClassVocabTestModule } from './components/modules/ClassVocabTestModule';
+import { ClassPronunciationModule } from './components/modules/ClassPronunciationModule';
+import { exportCenterDataToExcel } from './lib/excelExportService';
 
 // Helper to check if URL is requesting the Online Placement Test Portal
 const isPlacementTestUrl = () => {
@@ -48,6 +50,24 @@ const isPlacementTestUrl = () => {
     hash.includes('test-online') ||
     hash.includes('placement-test') ||
     hash.includes('test-dau-vao')
+  );
+};
+
+// Helper to check if URL is requesting the Student Pronunciation Portal
+const isPronunciationPortalUrl = () => {
+  if (typeof window === 'undefined') return false;
+  const href = window.location.href;
+  const params = new URLSearchParams(window.location.search);
+  const hash = window.location.hash;
+  return (
+    params.get('mode') === 'pronunciation' ||
+    params.get('practice') === 'pronunciation' ||
+    params.get('view') === 'pronunciation' ||
+    href.includes('mode=pronunciation') ||
+    href.includes('practice=pronunciation') ||
+    href.includes('phat-am') ||
+    hash.includes('phat-am') ||
+    hash.includes('pronunciation')
   );
 };
 
@@ -219,17 +239,20 @@ export default function App() {
   const [selectedBranch, setSelectedBranch] = useState('Cơ sở 1 - Tô Hiệu (Hải Phòng)');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Public Student Entrance Test & Vocab Test Portal Mode
+  // Public Student Entrance Test & Vocab Test & Pronunciation Portal Mode
   const [isStudentPortal, setIsStudentPortal] = useState<boolean>(() => isPlacementTestUrl());
+  const [isPronunciationPortal, setIsPronunciationPortal] = useState<boolean>(() => isPronunciationPortalUrl());
   const [vocabTestIdParam, setVocabTestIdParam] = useState<string | null>(() => getVocabTestIdParam());
   const [reviewTestIdParam, setReviewTestIdParam] = useState<string | null>(() => getReviewTestIdParam());
 
   useEffect(() => {
     const handleUrlChange = () => {
       const isPortal = isPlacementTestUrl();
+      const isPronPortal = isPronunciationPortalUrl();
       const vocabId = getVocabTestIdParam();
       const reviewId = getReviewTestIdParam();
       setIsStudentPortal(isPortal);
+      setIsPronunciationPortal(isPronPortal);
       setVocabTestIdParam(vocabId);
       setReviewTestIdParam(reviewId);
 
@@ -1707,6 +1730,75 @@ export default function App() {
     );
   }
 
+  // Render standalone Student Pronunciation Portal View when accessed via link (?mode=pronunciation)
+  if (isPronunciationPortal) {
+    const classCodeFromUrl = new URLSearchParams(window.location.search).get('classCode') || '';
+    const matchingClass =
+      classes.find(
+        (c) =>
+          c.code.toLowerCase() === classCodeFromUrl.toLowerCase() ||
+          c.name.toLowerCase().includes(classCodeFromUrl.toLowerCase())
+      ) ||
+      classes[0] || {
+        id: 'class-default',
+        name: classCodeFromUrl || 'Lớp IELTS',
+        code: classCodeFromUrl || 'IDV-CLASS',
+        branch: 'Kiến An',
+        teacherName: 'Giáo viên IDV',
+        courseName: 'IELTS Preparation',
+      };
+
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased">
+        {/* Student Pronunciation Portal Header */}
+        <header className="bg-slate-900 border-b border-white/10 sticky top-0 z-40 shadow-lg">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white font-black flex items-center justify-center text-lg shadow-md border-2 border-indigo-400">
+                🎙️
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-indigo-300 bg-indigo-950 px-2.5 py-0.5 rounded-full border border-indigo-500/40 uppercase tracking-wide">
+                    IELTS DƯƠNG VŨ
+                  </span>
+                  <span className="text-[11px] text-slate-400 hidden sm:inline">CỔNG LUYỆN PHÁT ÂM HỌC SINH</span>
+                </div>
+                <h1 className="text-sm sm:text-base font-extrabold text-white leading-tight mt-0.5">
+                  Cổng Luyện Tập & Thu Âm Lớp: {matchingClass.name}
+                </h1>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Tính thời gian & Thu âm trực tiếp
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* Pronunciation Portal Body */}
+        <main className="max-w-6xl mx-auto w-full p-4 sm:p-6 md:p-8 flex-1">
+          <ClassPronunciationModule
+            classGroup={matchingClass as any}
+            students={students.filter((s) => s.classId === matchingClass.id || s.className === matchingClass.name)}
+            standalonePortalMode={true}
+            showToast={showToast}
+          />
+        </main>
+
+        {/* Global Toast Banner */}
+        {toastMessage && (
+          <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 text-xs font-bold flex items-center gap-2 backdrop-blur-md max-w-md">
+            <span>{toastMessage}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Render standalone Student Portal View when accessed via link (?test=online)
   if (isStudentPortal) {
     return (
@@ -1822,6 +1914,7 @@ export default function App() {
         onOpenLogin={() => setIsLoginModalOpen(true)}
         onLogout={handleLogout}
         onOpenStaffManagement={() => setIsStaffManagementOpen(true)}
+        onExportExcel={() => exportCenterDataToExcel({ classes: effectiveClasses, students, teachers, transactions })}
         currentUser={currentUser}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -1978,6 +2071,7 @@ export default function App() {
             onSelectModule={setCurrentModule}
             onOpenCreateClass={() => setIsCreateClassModalOpen(true)}
             onOpenLogin={() => setIsLoginModalOpen(true)}
+            onExportExcel={() => exportCenterDataToExcel({ classes: effectiveClasses, students, teachers, transactions })}
             currentUser={currentUser}
             stats={stats}
           />
@@ -2126,7 +2220,8 @@ export default function App() {
               <ReportsModule
                 students={students}
                 transactions={transactions}
-                classes={classes}
+                classes={effectiveClasses}
+                teachers={teachers}
               />
             )}
 

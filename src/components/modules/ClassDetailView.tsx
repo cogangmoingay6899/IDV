@@ -47,12 +47,14 @@ import {
   Coins,
   CreditCard,
   Bell,
+  Mic,
   Sliders,
   Trash2,
 } from 'lucide-react';
 import { Student, ClassGroup, Teacher, AttendanceRecord, ExamScore, CurriculumCourse, AuthUser } from '../../types';
 import { ClassSpreadsheetGradebookModule } from './ClassSpreadsheetGradebookModule';
 import { ClassVocabTestModule } from './ClassVocabTestModule';
+import { ClassPronunciationModule } from './ClassPronunciationModule';
 import { CreateTeacherModal } from '../modals/CreateTeacherModal';
 import { EditClassModal } from '../modals/EditClassModal';
 import { ClassScoreExportModal } from '../modals/ClassScoreExportModal';
@@ -157,7 +159,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   const [isDeletingClass, setIsDeletingClass] = useState(false);
 
   // Default directly to grading log as requested by user
-  const [activeTab, setActiveTab] = useState<'daily_log' | 'students' | 'sheet_view' | 'vocab_tests'>('daily_log');
+  const [activeTab, setActiveTab] = useState<'daily_log' | 'students' | 'sheet_view' | 'vocab_tests' | 'pronunciation'>('daily_log');
 
   useEffect(() => {
     if (isNhungPhan && activeTab !== 'daily_log') {
@@ -1715,6 +1717,19 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                 <Sparkles className="w-4 h-4 text-amber-600" />
                 <span>📚 Test Từ Vựng Khóa 1, 2, 3, 4</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('pronunciation')}
+                className={`flex-1 py-2.5 px-3.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                  activeTab === 'pronunciation'
+                    ? 'bg-purple-700 text-white shadow-md shadow-purple-600/20'
+                    : 'text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80'
+                }`}
+              >
+                <Mic className="w-4 h-4 text-indigo-600" />
+                <span>🎙️ Luyện Phát Âm (Thời Gian & AI)</span>
+              </button>
             </>
           )}
         </div>
@@ -2824,6 +2839,18 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
             onSaveAttendance={onSaveAttendance}
             showToast={(msg) => setToastMessage(msg)}
             currentUser={currentUser}
+          />
+        </div>
+      )}
+
+      {/* VIEW: MỤC LUYỆN PHÁT ÂM (THỜI GIAN HỌC & AI ĐÁNH GIÁ) */}
+      {activeTab === 'pronunciation' && (
+        <div className="animate-in fade-in space-y-4">
+          <ClassPronunciationModule
+            classGroup={classGroup}
+            students={classStudents}
+            currentUser={currentUser}
+            showToast={(msg) => setToastMessage(msg)}
           />
         </div>
       )}

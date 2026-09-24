@@ -471,3 +471,49 @@ export interface VocabTest {
   isActive: boolean;
   submissions: VocabTestSubmission[];
 }
+
+export interface PronunciationSentence {
+  id: string;
+  text: string;
+  ipa?: string;
+  translation?: string;
+  audioUrl?: string;
+  category?: 'Vocabulary' | 'Sentence' | 'IELTS Speaking' | 'Shadowing';
+}
+
+export interface PronunciationAssignment {
+  id: string;
+  title: string;
+  classId?: string;
+  className?: string;
+  courseLevel?: string;
+  unitName?: string;
+  createdDate: string;
+  sentences: PronunciationSentence[];
+}
+
+export interface PronunciationAttempt {
+  id: string;
+  sentenceId: string;
+  sentenceText: string;
+  recognizedText: string;
+  accuracyScore: number; // 0 - 100%
+  feedbackNotes?: string;
+  mispronouncedWords?: string[];
+  createdAt: string;
+}
+
+export interface PronunciationSession {
+  id: string;
+  studentId?: string;
+  studentName: string;
+  classCode: string;
+  className?: string;
+  durationSeconds: number; // Duration of practice session in seconds
+  durationMinutes: number; // Rounded duration in minutes
+  sentencesPracticed: number;
+  averageScore: number;
+  attempts: PronunciationAttempt[];
+  lastPracticedAt: string;
+}
+
