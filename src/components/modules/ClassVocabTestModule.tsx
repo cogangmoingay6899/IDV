@@ -410,6 +410,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const [autoTypeInputCount, setAutoTypeInputCount] = useState<number>(1);
   const [createdTestShareModal, setCreatedTestShareModal] = useState<VocabTest | null>(null);
 
+  // Configurable Public Base URL state for sharing
+  const [publicBaseUrl, setLocalPublicBaseUrl] = useState<string>(() => getPublicBaseUrl());
+  const [showDomainConfig, setShowDomainConfig] = useState<boolean>(false);
+  const [customDomainInput, setCustomDomainInput] = useState<string>(() => getPublicBaseUrl());
+
   // Total elapsed time tracking & refs
   const [testStartTime, setTestStartTime] = useState<number>(0);
   const lastViolationTimeRef = useRef<number>(0);
@@ -747,11 +752,6 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const filteredTests = activeTestsList
     .filter((t) => t.courseLevel === selectedCourseLevel)
     .sort((a, b) => extractLessonNumber(a) - extractLessonNumber(b));
-
-  // Configurable Public Base URL state for sharing
-  const [publicBaseUrl, setLocalPublicBaseUrl] = useState<string>(() => getPublicBaseUrl());
-  const [showDomainConfig, setShowDomainConfig] = useState<boolean>(false);
-  const [customDomainInput, setCustomDomainInput] = useState<string>(() => getPublicBaseUrl());
 
   useEffect(() => {
     if (activeRunnerTest || initialVocabTestId || initialReviewTestId) {

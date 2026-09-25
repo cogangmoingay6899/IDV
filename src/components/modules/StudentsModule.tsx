@@ -18,11 +18,13 @@ import { CourseScheduleRemindersModal } from "../modals/CourseScheduleRemindersM
 import { calculateCourseSchedule, detectCourseLevel, calculateClassEndInfo, formatDateVN } from "../../utils/courseSchedule";
 
 import { ClassSpreadsheetGradebookModule } from "./ClassSpreadsheetGradebookModule";
+import { ErrorBoundary } from "../ErrorBoundary";
 
 const y = React;
 const e = { jsx: _jsx, jsxs: _jsxs, Fragment: _Fragment };
 const CP = ClassDetailView;
 const HB = ClassVocabTestModule;
+const EB = ErrorBoundary;
 const K5 = CourseTuitionTable;
 const X5 = EditClassModal;
 const lT = ClassFullScheduleModal;
@@ -1631,13 +1633,16 @@ const StudentsModule: React.FC<StudentsModuleProps> = ({
           : j === "vocab_tests"
             ? e.jsx("div", {
                 className: "space-y-4",
-                children: e.jsx(HB, {
-                  classes: t,
-                  students: n,
-                  onAddExamScore: m,
-                  onSaveAttendance: d,
-                  showToast: (B) => Qe(B),
-                  currentUser: Q,
+                children: e.jsx(EB, {
+                  fallbackTitle: "Không thể tải Bài test từ vựng",
+                  children: e.jsx(HB, {
+                    classes: t,
+                    students: n,
+                    onAddExamScore: m,
+                    onSaveAttendance: d,
+                    showToast: (B) => Qe(B),
+                    currentUser: Q,
+                  }),
                 }),
               })
             : Ot
