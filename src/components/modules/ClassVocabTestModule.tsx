@@ -360,7 +360,64 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const [reviewTests, setReviewTests] = useState<VocabTest[]>(() =>
     INITIAL_REVIEW_TESTS.map((test) => sanitizeVocabTest(test))
   );
-  
+
+  // Modals & Active Test States
+  const [activeLeaderboardTest, setActiveLeaderboardTest] = useState<VocabTest | null>(null);
+  const [leaderboardClassFilter, setLeaderboardClassFilter] = useState<string>('all');
+  const [exportZaloModalTest, setExportZaloModalTest] = useState<VocabTest | null>(null);
+  const [exportZaloInitialClass, setExportZaloInitialClass] = useState<string>('all');
+  const [activeRunnerTest, setActiveRunnerTest] = useState<VocabTest | null>(null);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+
+  // Guard refs to prevent multiple-user Firestore updates from resetting or kicking out active test runners
+  const autoLaunchedVocabIdRef = useRef<string | null>(null);
+  const autoLaunchedReviewIdRef = useRef<string | null>(null);
+
+  // Runner state (when taking test)
+  const [runnerStudentName, setRunnerStudentName] = useState('');
+  const [runnerClassName, setRunnerClassName] = useState(classGroup?.name || '');
+  const [runnerStudentPhone, setRunnerStudentPhone] = useState('');
+  const [runnerStarted, setRunnerStarted] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [questionTimeLeft, setQuestionTimeLeft] = useState<number>(20);
+  const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
+  const [showAntiCheatWarning, setShowAntiCheatWarning] = useState<boolean>(false);
+  const [isWindowBlurred, setIsWindowBlurred] = useState<boolean>(false);
+  const [testCompletedSubmission, setTestCompletedSubmission] = useState<VocabTestSubmission | null>(null);
+  const [resultActiveTab, setResultActiveTab] = useState<'answers' | 'leaderboard'>('answers');
+  const [wasTimeoutAutoSubmit, setWasTimeoutAutoSubmit] = useState<boolean>(false);
+  const [customizedQuestions, setCustomizedQuestions] = useState<VocabQuestion[]>([]);
+  const [typedAnswers, setTypedAnswers] = useState<Record<number, string>>({});
+  const typedAnswersRef = useRef<Record<number, string>>({});
+  const selectedAnswersRef = useRef<Record<number, number>>({});
+
+  // New Test Creator / Editor Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingTestId, setEditingTestId] = useState<string | null>(null);
+  const [newTestForm, setNewTestForm] = useState({
+    title: '',
+    unitName: '',
+    courseLevel: 'Khóa 1' as 'Khóa 1' | 'Khóa 2' | 'Khóa 3' | 'Khóa 4',
+    timePerQuestionSeconds: 20,
+  });
+
+  // Quick Auto Generator State by Pasting Vocab & Defining Question Type Counts
+  const [showAutoGenerator, setShowAutoGenerator] = useState<boolean>(true);
+  const [autoVocabText, setAutoVocabText] = useState<string>('');
+  const [autoMcCount, setAutoMcCount] = useState<number>(7);
+  const [autoMatchingCount, setAutoMatchingCount] = useState<number>(2);
+  const [autoTypeInputCount, setAutoTypeInputCount] = useState<number>(1);
+  const [createdTestShareModal, setCreatedTestShareModal] = useState<VocabTest | null>(null);
+
+  // Total elapsed time tracking & refs
+  const [testStartTime, setTestStartTime] = useState<number>(0);
+  const lastViolationTimeRef = useRef<number>(0);
+  const lastReturnTimeRef = useRef<number>(0);
+  const isUserAwayRef = useRef<boolean>(false);
+  const isSubmittingRef = useRef<boolean>(false);
+  const tabSwitchCountRef = useRef<number>(0);
+
   // Real-time synchronization for vocab tests from Firestore
   useEffect(() => {
     const unsub = subscribeCollection<VocabTest>('vocab_tests', INITIAL_VOCAB_TESTS, (data) => {
@@ -440,19 +497,26 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   }, []);
 
   // Modals & Active Test States
-  const [activeLeaderboardTest, setActiveLeaderboardTest] = useState<VocabTest | null>(null);
-  const [leaderboardClassFilter, setLeaderboardClassFilter] = useState<string>('all');
-  const [exportZaloModalTest, setExportZaloModalTest] = useState<VocabTest | null>(null);
-  const [exportZaloInitialClass, setExportZaloInitialClass] = useState<string>('all');
-  const [activeRunnerTest, setActiveRunnerTest] = useState<VocabTest | null>(null);
-  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
-
-  // Guard refs to prevent multiple-user Firestore updates from resetting or kicking out active test runners
-  const autoLaunchedVocabIdRef = useRef<string | null>(null);
-  const autoLaunchedReviewIdRef = useRef<string | null>(null);
-
   // Start runner with session recovery and multi-user isolation
   const handleStartRunner = (test: VocabTest, forceRestart: boolean = false) => {
+    if (!test) return;
+
+    // Ensure questions and submissions are safe arrays
+    const safeQuestions = Array.isArray(test.questions) ? test.questions : [];
+    const safeTest: VocabTest = {
+      ...test,
+      questions: safeQuestions,
+      submissions: Array.isArray(test.submissions) ? test.submissions : [],
+    };
+
+    // Prevent retaking test if in student portal mode or if already completed in session
+    const isAlreadyCompleted = sessionStorage.getItem(`idv_completed_test_${safeTest.id}`) === 'true';
+    if (isStudentPortalMode && isAlreadyCompleted) {
+      setIsExited(true);
+      showToast('🔒 Bạn đã hoàn thành bài test này rồi và không thể làm lại!');
+      return;
+    }
+
     // Close any other open modals to prevent overlay blocking
     setActiveLeaderboardTest(null);
     setExportZaloModalTest(null);
@@ -460,13 +524,13 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     setShowCreateModal(false);
 
     // If the student is already actively doing THIS test, DO NOT RESET THEM!
-    if (!forceRestart && activeRunnerTest?.id === test.id && runnerStarted && !testCompletedSubmission) {
+    if (!forceRestart && activeRunnerTest?.id === safeTest.id && runnerStarted && !testCompletedSubmission) {
       setIsExited(false);
       return;
     }
 
     // Check if there is an in-progress saved session in sessionStorage for this test
-    const sessionKey = `idv_active_test_${test.id}`;
+    const sessionKey = `idv_active_test_${safeTest.id}`;
     let savedSession: any = null;
     try {
       const raw = sessionStorage.getItem(sessionKey);
@@ -475,8 +539,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
     if (savedSession && savedSession.runnerStarted && !savedSession.completed && !forceRestart) {
       setIsExited(false);
-      setActiveRunnerTest(test);
-      setSelectedCourseLevel(test.courseLevel);
+      setActiveRunnerTest(safeTest);
+      setSelectedCourseLevel(safeTest.courseLevel);
       setRunnerStudentName(savedSession.studentName || '');
       setRunnerClassName(savedSession.className || (classGroup ? classGroup.name : ''));
       setRunnerStudentPhone(savedSession.studentPhone || '');
@@ -493,7 +557,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       setResultActiveTab('answers');
       setWasTimeoutAutoSubmit(false);
       const qIndex = savedSession.currentQuestionIndex || 0;
-      const qLimit = getQuestionTimeLimit(test.questions[qIndex]);
+      const qLimit = getQuestionTimeLimit(safeQuestions[qIndex]);
       setQuestionTimeLeft(
         typeof savedSession.questionTimeLeft === 'number' && savedSession.questionTimeLeft > 0
           ? savedSession.questionTimeLeft
@@ -504,8 +568,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     }
 
     setIsExited(false);
-    setActiveRunnerTest(test);
-    setSelectedCourseLevel(test.courseLevel);
+    setActiveRunnerTest(safeTest);
+    setSelectedCourseLevel(safeTest.courseLevel);
     setRunnerStudentName('');
     setRunnerClassName(classGroup ? classGroup.name : '');
     setRunnerStudentPhone('');
@@ -522,7 +586,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     setResultActiveTab('answers');
     setWasTimeoutAutoSubmit(false);
 
-    const firstQ = test.questions[0];
+    const firstQ = safeQuestions[0];
     const firstLimit = getQuestionTimeLimit(firstQ);
     setQuestionTimeLeft(firstLimit);
   };
@@ -550,11 +614,12 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     }
 
     if (found) {
-      // If runner hasn't been set yet or if student hasn't started taking questions and question count updated
+      const foundQLen = (found.questions || []).length;
+      const activeQLen = (activeRunnerTest?.questions || []).length;
       if (
         !activeRunnerTest ||
         activeRunnerTest.id.toLowerCase() !== found.id.toLowerCase() ||
-        (!runnerStarted && activeRunnerTest.questions.length !== found.questions.length)
+        (!runnerStarted && activeQLen !== foundQLen)
       ) {
         autoLaunchedVocabIdRef.current = initialVocabTestId;
         handleStartRunner(found);
@@ -585,53 +650,18 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     }
 
     if (found) {
+      const foundQLen = (found.questions || []).length;
+      const activeQLen = (activeRunnerTest?.questions || []).length;
       if (
         !activeRunnerTest ||
         activeRunnerTest.id.toLowerCase() !== found.id.toLowerCase() ||
-        (!runnerStarted && activeRunnerTest.questions.length !== found.questions.length)
+        (!runnerStarted && activeQLen !== foundQLen)
       ) {
         autoLaunchedReviewIdRef.current = initialReviewTestId;
         handleStartRunner(found);
       }
     }
   }, [initialReviewTestId, reviewTests, runnerStarted]);
-
-  // New Test Creator / Editor Modal State
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingTestId, setEditingTestId] = useState<string | null>(null);
-  const [newTestForm, setNewTestForm] = useState({
-    title: '',
-    unitName: '',
-    courseLevel: 'Khóa 1' as 'Khóa 1' | 'Khóa 2' | 'Khóa 3' | 'Khóa 4',
-    timePerQuestionSeconds: 20,
-  });
-
-  // Runner state (when taking test)
-  const [runnerStudentName, setRunnerStudentName] = useState('');
-  const [runnerClassName, setRunnerClassName] = useState(classGroup?.name || '');
-  const [runnerStudentPhone, setRunnerStudentPhone] = useState('');
-  const [runnerStarted, setRunnerStarted] = useState(false);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
-  const [questionTimeLeft, setQuestionTimeLeft] = useState<number>(20);
-  const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
-  const [showAntiCheatWarning, setShowAntiCheatWarning] = useState<boolean>(false);
-  const [isWindowBlurred, setIsWindowBlurred] = useState<boolean>(false);
-  const [testCompletedSubmission, setTestCompletedSubmission] = useState<VocabTestSubmission | null>(null);
-  const [resultActiveTab, setResultActiveTab] = useState<'answers' | 'leaderboard'>('answers');
-  const [wasTimeoutAutoSubmit, setWasTimeoutAutoSubmit] = useState<boolean>(false);
-  const [customizedQuestions, setCustomizedQuestions] = useState<VocabQuestion[]>([]);
-  const [typedAnswers, setTypedAnswers] = useState<Record<number, string>>({});
-  const typedAnswersRef = useRef<Record<number, string>>({});
-  const selectedAnswersRef = useRef<Record<number, number>>({});
-
-  // Quick Auto Generator State by Pasting Vocab & Defining Question Type Counts
-  const [showAutoGenerator, setShowAutoGenerator] = useState<boolean>(true);
-  const [autoVocabText, setAutoVocabText] = useState<string>('');
-  const [autoMcCount, setAutoMcCount] = useState<number>(7);
-  const [autoMatchingCount, setAutoMatchingCount] = useState<number>(2);
-  const [autoTypeInputCount, setAutoTypeInputCount] = useState<number>(1);
-  const [createdTestShareModal, setCreatedTestShareModal] = useState<VocabTest | null>(null);
 
   // Initialize default questions when opening create modal if empty
   useEffect(() => {
@@ -658,14 +688,6 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       ]);
     }
   }, [showCreateModal]);
-
-  // Total elapsed time tracking
-  const [testStartTime, setTestStartTime] = useState<number>(0);
-  const lastViolationTimeRef = useRef<number>(0);
-  const lastReturnTimeRef = useRef<number>(0);
-  const isUserAwayRef = useRef<boolean>(false);
-  const isSubmittingRef = useRef<boolean>(false);
-  const tabSwitchCountRef = useRef<number>(0);
 
   // Autosave running session to sessionStorage so accidental reloads or background tabs never lose progress
   useEffect(() => {
@@ -1114,7 +1136,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       showToast('⚠️ Vui lòng nhập Họ và Tên đầy đủ của học sinh!');
       return;
     }
-    const cleanClass = runnerClassName.trim() || (classGroup ? classGroup.name : 'Lớp Online');
+    if (!runnerClassName.trim()) {
+      showToast('⚠️ Vui lòng nhập Số lớp (VD: 88, 89) để làm bài!');
+      return;
+    }
+    const cleanClass = runnerClassName.trim();
     setRunnerClassName(cleanClass);
     isSubmittingRef.current = false;
     setRunnerStarted(true);
@@ -1244,6 +1270,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       // The subscription will automatically update the local state
       try {
         sessionStorage.removeItem(`idv_active_test_${activeRunnerTest.id}`);
+        sessionStorage.setItem(`idv_completed_test_${activeRunnerTest.id}`, 'true');
       } catch (e) {}
       setTestCompletedSubmission(newSub);
     } catch (error) {
@@ -1425,6 +1452,10 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
         tests.find((t) => t.courseLevel === selectedCourseLevel) ||
         tests[0];
 
+    const isAlreadyCompleted =
+      isExited ||
+      (targetTest && sessionStorage.getItem(`idv_completed_test_${targetTest.id}`) === 'true');
+
     return (
       <div className="max-w-md mx-auto my-3 sm:my-6 p-4 sm:p-6 bg-white rounded-2xl sm:rounded-3xl border border-slate-200 text-center space-y-4 sm:space-y-5 shadow-md animate-in fade-in zoom-in-95 w-full">
         <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-purple-100 text-purple-700 font-black flex items-center justify-center text-2xl sm:text-3xl mx-auto shadow-inner border-2 border-purple-200">
@@ -1435,11 +1466,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
             IELTS DƯƠNG VŨ
           </span>
           <h2 className="text-base sm:text-xl font-black text-slate-900">
-            {isExited ? 'Bạn đã hoàn tất bài kiểm tra' : 'Bài Kiểm Tra Trực Tuyến IELTS Dương Vũ'}
+            {isAlreadyCompleted ? 'Bạn đã hoàn tất bài kiểm tra' : 'Bài Kiểm Tra Trực Tuyến IELTS Dương Vũ'}
           </h2>
-          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-sm mx-auto">
-            {isExited
-              ? 'Cảm ơn bạn đã tham gia bài kiểm tra! Điểm số đã được hệ thống lưu lại. Bạn có thể nhấn nút bên dưới để làm lại bài test bất cứ lúc nào.'
+          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-sm mx-auto font-medium">
+            {isAlreadyCompleted
+              ? '🔒 Cảm ơn bạn đã tham gia! Mỗi bài test chỉ được làm 1 lần duy nhất. Kết quả đã được ghi nhận vào hệ thống.'
               : 'Vui lòng nhấn nút bên dưới để bắt đầu làm bài kiểm tra. Hệ thống sẽ tự động tính điểm và xếp hạng ngay sau khi hoàn thành.'}
           </p>
         </div>
@@ -1447,15 +1478,27 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
         {targetTest ? (
           <div
             onClick={() => {
+              if (isAlreadyCompleted) {
+                showToast('🔒 Mỗi bài test chỉ được làm 1 lần duy nhất! Bạn đã hoàn thành lượt làm bài.');
+                return;
+              }
               setIsExited(false);
               handleStartRunner(targetTest, true);
             }}
-            className="p-3 bg-purple-50 hover:bg-purple-100 cursor-pointer transition-all rounded-xl border border-purple-200 text-xs font-bold text-purple-950 flex items-center justify-between gap-2 shadow-2xs group active:scale-98"
-            title="Bấm vào đây để làm bài test này"
+            className={`p-3.5 transition-all rounded-xl border text-xs font-bold flex items-center justify-between gap-2 shadow-2xs ${
+              isAlreadyCompleted
+                ? 'bg-slate-100 border-slate-300 text-slate-600 cursor-not-allowed'
+                : 'bg-purple-50 hover:bg-purple-100 cursor-pointer text-purple-950 border-purple-200 group active:scale-98'
+            }`}
+            title={isAlreadyCompleted ? 'Bài test đã hoàn thành - Không thể làm lại' : 'Bấm vào đây để làm bài test'}
           >
             <div className="flex items-center gap-2 truncate">
-              <Play className="w-4 h-4 text-purple-700 shrink-0 group-hover:scale-110 transition-transform fill-current" />
-              <span className="truncate group-hover:text-purple-900 font-extrabold">{targetTest.title}</span>
+              {isAlreadyCompleted ? (
+                <Lock className="w-4 h-4 text-slate-400 shrink-0" />
+              ) : (
+                <Play className="w-4 h-4 text-purple-700 shrink-0 group-hover:scale-110 transition-transform fill-current" />
+              )}
+              <span className="truncate font-extrabold">{targetTest.title}</span>
             </div>
             <span className="px-2 py-0.5 bg-white rounded-md text-[10px] text-purple-900 border border-purple-200 font-extrabold shrink-0">
               {targetTest.courseLevel}
@@ -1469,7 +1512,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
         )}
 
         <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-2.5">
-          {targetTest && (
+          {targetTest && !isAlreadyCompleted ? (
             <button
               type="button"
               onClick={() => {
@@ -1479,8 +1522,13 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
               className="w-full sm:w-auto px-6 py-3 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
               <Play className="w-4 h-4 fill-current" />
-              <span>{isExited ? '🔄 Làm lại bài test' : '▶ Bắt đầu làm bài'}</span>
+              <span>▶ Bắt đầu làm bài</span>
             </button>
+          ) : (
+            <div className="w-full sm:w-auto px-5 py-3 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-2xs">
+              <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>Không thể làm lại (Đã hoàn thành)</span>
+            </div>
           )}
           <button
             type="button"
@@ -2612,11 +2660,12 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10.5px] sm:text-xs font-bold text-slate-700 block mb-0.5">Số lớp (Tùy chọn):</label>
+                    <label className="text-[10.5px] sm:text-xs font-bold text-slate-700 block mb-0.5">Số lớp (*):</label>
                     <input
                       type="text"
+                      required
                       list="class-suggestions-list"
-                      placeholder="Ví dụ: 88, 89 (để trống nếu không nhớ)"
+                      placeholder="Ví dụ: 88, 89"
                       value={runnerClassName}
                       onChange={(e) => setRunnerClassName(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 sm:p-2.5 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-purple-500/20"
@@ -2662,7 +2711,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                     <div className="flex items-center justify-between text-[10.5px] sm:text-xs font-extrabold text-slate-700">
                       <div className="flex items-center gap-1.5">
                         <span>
-                          Câu {currentQuestionIndex + 1} / {activeRunnerTest.questions.length}
+                          Câu {currentQuestionIndex + 1} / {(activeRunnerTest.questions || []).length}
                         </span>
                         {tabSwitchCount === 0 ? (
                           <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded-full flex items-center gap-0.5">
@@ -2687,7 +2736,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       <div
                         className="h-full bg-amber-500 transition-all duration-1000"
                         style={{
-                          width: `${(questionTimeLeft / getQuestionTimeLimit(activeRunnerTest.questions[currentQuestionIndex])) * 100}%`,
+                          width: `${(questionTimeLeft / getQuestionTimeLimit((activeRunnerTest.questions || [])[currentQuestionIndex])) * 100}%`,
                         }}
                       />
                     </div>
@@ -2695,7 +2744,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
                   {/* Conditional Question Styles based on questionType */}
                   {(() => {
-                    const currentQ = activeRunnerTest.questions[currentQuestionIndex];
+                    const questions = activeRunnerTest.questions || [];
+                    const currentQ = questions[currentQuestionIndex];
                     if (!currentQ) return null;
                     const qType = currentQ.questionType || 'multiple_choice';
 
@@ -2874,7 +2924,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                     className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-1 cursor-pointer shrink-0 active:scale-95 transition-all"
                   >
                     <span>
-                      {currentQuestionIndex < activeRunnerTest.questions.length - 1 ? 'Tiếp theo ➔' : 'Nộp bài 🏁'}
+                      {currentQuestionIndex < (activeRunnerTest.questions || []).length - 1 ? 'Tiếp theo ➔' : 'Nộp bài 🏁'}
                     </span>
                   </button>
                 </div>
@@ -2976,12 +3026,12 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                         Đối chiếu chi tiết đáp án:
                       </span>
                       <span className="text-[9px] font-bold text-slate-500">
-                        {activeRunnerTest.questions.length} câu
+                        {(activeRunnerTest.questions || []).length} câu
                       </span>
                     </div>
 
                     <div className="space-y-1.5 max-h-[36vh] sm:max-h-[44vh] overflow-y-auto pr-0.5">
-                      {activeRunnerTest.questions.map((q, idx) => {
+                      {(activeRunnerTest.questions || []).map((q, idx) => {
                         let isCorrect = false;
                         let isAnswered = false;
                         const currentSelected = { ...selectedAnswers, ...selectedAnswersRef.current };

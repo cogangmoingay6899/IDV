@@ -33,6 +33,7 @@ import { OnlinePlacementTestForm } from './components/modules/OnlinePlacementTes
 import { ClassVocabTestModule } from './components/modules/ClassVocabTestModule';
 import { ClassPronunciationModule } from './components/modules/ClassPronunciationModule';
 import { SpeakingPracticeModule } from './components/modules/SpeakingPracticeModule';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { exportCenterDataToExcel } from './lib/excelExportService';
 
 // Helper to check if URL is requesting the Online Placement Test Portal
@@ -1736,15 +1737,17 @@ export default function App() {
 
         {/* Student Vocab Test Body */}
         <main className="max-w-4xl mx-auto w-full px-2.5 sm:px-6 py-3 sm:py-6 flex-1 overflow-x-hidden">
-          <ClassVocabTestModule
-            classes={classes}
-            students={students}
-            onAddExamScore={handleAddExamScore}
-            onSaveAttendance={handleSaveAttendance}
-            initialVocabTestId={vocabTestIdParam || undefined}
-            initialReviewTestId={reviewTestIdParam || undefined}
-            showToast={showToast}
-          />
+          <ErrorBoundary fallbackTitle="Không thể tải bài test từ vựng">
+            <ClassVocabTestModule
+              classes={classes}
+              students={students}
+              onAddExamScore={handleAddExamScore}
+              onSaveAttendance={handleSaveAttendance}
+              initialVocabTestId={vocabTestIdParam || undefined}
+              initialReviewTestId={reviewTestIdParam || undefined}
+              showToast={showToast}
+            />
+          </ErrorBoundary>
         </main>
 
         {/* Global Toast Banner */}
