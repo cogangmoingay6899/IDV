@@ -453,8 +453,15 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
   // Start runner with session recovery and multi-user isolation
   const handleStartRunner = (test: VocabTest, forceRestart: boolean = false) => {
+    // Close any other open modals to prevent overlay blocking
+    setActiveLeaderboardTest(null);
+    setExportZaloModalTest(null);
+    setCreatedTestShareModal(null);
+    setShowCreateModal(false);
+
     // If the student is already actively doing THIS test, DO NOT RESET THEM!
     if (!forceRestart && activeRunnerTest?.id === test.id && runnerStarted && !testCompletedSubmission) {
+      setIsExited(false);
       return;
     }
 
@@ -1107,10 +1114,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       showToast('⚠️ Vui lòng nhập Họ và Tên đầy đủ của học sinh!');
       return;
     }
-    if (!runnerClassName.trim()) {
-      showToast('⚠️ Vui lòng nhập Số lớp (VD: 88, 89)!');
-      return;
-    }
+    const cleanClass = runnerClassName.trim() || (classGroup ? classGroup.name : 'Lớp Online');
+    setRunnerClassName(cleanClass);
     isSubmittingRef.current = false;
     setRunnerStarted(true);
     setTestStartTime(Date.now());
@@ -1434,32 +1439,47 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-sm mx-auto">
             {isExited
-              ? 'Cảm ơn bạn đã tham gia bài kiểm tra! Điểm số và thông tin làm bài đã được hệ thống lưu lại an toàn.'
+              ? 'Cảm ơn bạn đã tham gia bài kiểm tra! Điểm số đã được hệ thống lưu lại. Bạn có thể nhấn nút bên dưới để làm lại bài test bất cứ lúc nào.'
               : 'Vui lòng nhấn nút bên dưới để bắt đầu làm bài kiểm tra. Hệ thống sẽ tự động tính điểm và xếp hạng ngay sau khi hoàn thành.'}
           </p>
         </div>
 
-        {targetTest && (
-          <div className="p-3 bg-purple-50/80 rounded-xl border border-purple-200 text-xs font-bold text-purple-950 flex items-center justify-between gap-2">
-            <span className="truncate">{targetTest.title}</span>
+        {targetTest ? (
+          <div
+            onClick={() => {
+              setIsExited(false);
+              handleStartRunner(targetTest, true);
+            }}
+            className="p-3 bg-purple-50 hover:bg-purple-100 cursor-pointer transition-all rounded-xl border border-purple-200 text-xs font-bold text-purple-950 flex items-center justify-between gap-2 shadow-2xs group active:scale-98"
+            title="Bấm vào đây để làm bài test này"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <Play className="w-4 h-4 text-purple-700 shrink-0 group-hover:scale-110 transition-transform fill-current" />
+              <span className="truncate group-hover:text-purple-900 font-extrabold">{targetTest.title}</span>
+            </div>
             <span className="px-2 py-0.5 bg-white rounded-md text-[10px] text-purple-900 border border-purple-200 font-extrabold shrink-0">
               {targetTest.courseLevel}
             </span>
           </div>
+        ) : (
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs font-bold text-slate-500 flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+            <span>Đang tải thông tin bài test...</span>
+          </div>
         )}
 
         <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-2.5">
-          {targetTest && !isExited && (
+          {targetTest && (
             <button
               type="button"
               onClick={() => {
                 setIsExited(false);
-                handleStartRunner(targetTest);
+                handleStartRunner(targetTest, true);
               }}
               className="w-full sm:w-auto px-6 py-3 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
               <Play className="w-4 h-4 fill-current" />
-              <span>Bắt đầu làm bài</span>
+              <span>{isExited ? '🔄 Làm lại bài test' : '▶ Bắt đầu làm bài'}</span>
             </button>
           )}
           <button
@@ -1712,13 +1732,17 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   key={test.id}
                   className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 p-3.5 sm:p-5 shadow-xs hover:shadow-md transition-all space-y-3 sm:space-y-4 flex flex-col justify-between"
                 >
-                  <div className="space-y-2.5 sm:space-y-3">
+                  <div
+                    className="space-y-2.5 sm:space-y-3 cursor-pointer group"
+                    onClick={() => handleStartRunner(test, true)}
+                    title="Bấm để mở và làm thử bài test này"
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <span className="px-2.5 py-0.5 rounded-full text-[9.5px] sm:text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-200">
                           {test.courseLevel}
                         </span>
-                        <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm leading-snug mt-1">
+                        <h4 className="font-extrabold text-slate-900 group-hover:text-purple-700 text-xs sm:text-sm leading-snug mt-1 transition-colors">
                           {test.title}
                         </h4>
                         <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">{test.unitName}</p>
@@ -1729,7 +1753,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-3 text-[11px] sm:text-xs font-semibold text-slate-600 bg-slate-50 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl border border-slate-100">
+                    <div className="flex items-center gap-3 text-[11px] sm:text-xs font-semibold text-slate-600 bg-slate-50 group-hover:bg-purple-50/60 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl border border-slate-100 group-hover:border-purple-200 transition-colors">
                       <div>
                         Số câu hỏi: <strong className="text-slate-900 font-bold">{test.questions.length} câu</strong>
                       </div>
@@ -1806,8 +1830,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                     <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 pt-0.5">
                       <button
                         type="button"
-                        onClick={() => handleStartRunner(test)}
-                        className="py-1.5 sm:py-2 sm:flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl flex items-center justify-center gap-1 transition-all shadow-xs active:scale-95"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartRunner(test, true);
+                        }}
+                        className="py-1.5 sm:py-2 sm:flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl flex items-center justify-center gap-1 transition-all shadow-xs active:scale-95 cursor-pointer"
                       >
                         <Play className="w-3.5 h-3.5" />
                         <span>Làm bài</span>
@@ -2585,12 +2612,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   </div>
 
                   <div>
-                    <label className="text-[10.5px] sm:text-xs font-bold text-slate-700 block mb-0.5">Số lớp (*):</label>
+                    <label className="text-[10.5px] sm:text-xs font-bold text-slate-700 block mb-0.5">Số lớp (Tùy chọn):</label>
                     <input
                       type="text"
-                      required
                       list="class-suggestions-list"
-                      placeholder="Ví dụ: 88, 89"
+                      placeholder="Ví dụ: 88, 89 (để trống nếu không nhớ)"
                       value={runnerClassName}
                       onChange={(e) => setRunnerClassName(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 sm:p-2.5 text-xs sm:text-sm font-bold focus:ring-2 focus:ring-purple-500/20"
