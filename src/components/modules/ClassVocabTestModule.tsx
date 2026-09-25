@@ -370,6 +370,17 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       const mappedData = fullData.map((test) => sanitizeVocabTest(test));
       setTests(mappedData);
 
+      // Smoothly update submissions of the active test without touching any runner progress
+      setActiveRunnerTest((prev) => {
+        if (!prev) return null;
+        const matchingUpdatedTest = mappedData.find((t) => t.id === prev.id);
+        if (!matchingUpdatedTest) return prev;
+        return {
+          ...prev,
+          submissions: matchingUpdatedTest.submissions || prev.submissions || [],
+        };
+      });
+
       if (missingPresets.length > 0) {
         missingPresets.forEach((test) => {
           saveDocument('vocab_tests', test).catch(() => {});
@@ -388,6 +399,17 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       const mappedData = fullData.map((test) => sanitizeVocabTest(test));
       setReviewTests(mappedData);
 
+      // Smoothly update submissions of the active test without touching any runner progress
+      setActiveRunnerTest((prev) => {
+        if (!prev) return null;
+        const matchingUpdatedTest = mappedData.find((t) => t.id === prev.id);
+        if (!matchingUpdatedTest) return prev;
+        return {
+          ...prev,
+          submissions: matchingUpdatedTest.submissions || prev.submissions || [],
+        };
+      });
+
       if (missingPresets.length > 0) {
         missingPresets.forEach((test) => {
           saveDocument('vocab_reviews', test).catch(() => {});
@@ -405,8 +427,55 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const [activeRunnerTest, setActiveRunnerTest] = useState<VocabTest | null>(null);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
-  // Start runner
-  const handleStartRunner = (test: VocabTest) => {
+  // Guard refs to prevent multiple-user Firestore updates from resetting or kicking out active test runners
+  const autoLaunchedVocabIdRef = useRef<string | null>(null);
+  const autoLaunchedReviewIdRef = useRef<string | null>(null);
+
+  // Start runner with session recovery and multi-user isolation
+  const handleStartRunner = (test: VocabTest, forceRestart: boolean = false) => {
+    // If the student is already actively doing THIS test, DO NOT RESET THEM!
+    if (!forceRestart && activeRunnerTest?.id === test.id && runnerStarted && !testCompletedSubmission) {
+      return;
+    }
+
+    // Check if there is an in-progress saved session in sessionStorage for this test
+    const sessionKey = `idv_active_test_${test.id}`;
+    let savedSession: any = null;
+    try {
+      const raw = sessionStorage.getItem(sessionKey);
+      if (raw) savedSession = JSON.parse(raw);
+    } catch (e) {}
+
+    if (savedSession && savedSession.runnerStarted && !savedSession.completed && !forceRestart) {
+      setIsExited(false);
+      setActiveRunnerTest(test);
+      setSelectedCourseLevel(test.courseLevel);
+      setRunnerStudentName(savedSession.studentName || '');
+      setRunnerClassName(savedSession.className || (classGroup ? classGroup.name : ''));
+      setRunnerStudentPhone(savedSession.studentPhone || '');
+      setRunnerStarted(true);
+      setCurrentQuestionIndex(savedSession.currentQuestionIndex || 0);
+      setSelectedAnswers(savedSession.selectedAnswers || {});
+      setTypedAnswers(savedSession.typedAnswers || {});
+      typedAnswersRef.current = savedSession.typedAnswers || {};
+      selectedAnswersRef.current = savedSession.selectedAnswers || {};
+      setTabSwitchCount(savedSession.tabSwitchCount || 0);
+      tabSwitchCountRef.current = savedSession.tabSwitchCount || 0;
+      setShowAntiCheatWarning(false);
+      setTestCompletedSubmission(null);
+      setResultActiveTab('answers');
+      setWasTimeoutAutoSubmit(false);
+      const qIndex = savedSession.currentQuestionIndex || 0;
+      const qLimit = getQuestionTimeLimit(test.questions[qIndex]);
+      setQuestionTimeLeft(
+        typeof savedSession.questionTimeLeft === 'number' && savedSession.questionTimeLeft > 0
+          ? savedSession.questionTimeLeft
+          : qLimit
+      );
+      setTestStartTime(savedSession.testStartTime || Date.now());
+      return;
+    }
+
     setIsExited(false);
     setActiveRunnerTest(test);
     setSelectedCourseLevel(test.courseLevel);
@@ -417,13 +486,15 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     setCurrentQuestionIndex(0);
     setSelectedAnswers({});
     setTypedAnswers({});
+    typedAnswersRef.current = {};
+    selectedAnswersRef.current = {};
     setTabSwitchCount(0);
     tabSwitchCountRef.current = 0;
     setShowAntiCheatWarning(false);
     setTestCompletedSubmission(null);
     setResultActiveTab('answers');
     setWasTimeoutAutoSubmit(false);
-    
+
     const firstQ = test.questions[0];
     const firstLimit = getQuestionTimeLimit(firstQ);
     setQuestionTimeLeft(firstLimit);
@@ -431,58 +502,74 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
   // Auto-launch test if initialVocabTestId is passed from URL
   useEffect(() => {
-    if (initialVocabTestId && tests.length > 0) {
-      setActiveTestType('vocab');
-      let found = tests.find(
-        (t) => t.id === initialVocabTestId || t.id.toLowerCase() === initialVocabTestId.toLowerCase()
-      );
+    if (!initialVocabTestId || tests.length === 0) return;
 
-      if (!found) {
-        // Search by level keyword or fallback to first test in that level
-        const cleanId = initialVocabTestId.toLowerCase();
-        if (cleanId.includes('k2') || cleanId.includes('khoa-2') || cleanId.includes('khóa 2')) {
-          found = tests.find((t) => t.courseLevel === 'Khóa 2');
-        } else if (cleanId.includes('k3') || cleanId.includes('khoa-3') || cleanId.includes('khóa 3')) {
-          found = tests.find((t) => t.courseLevel === 'Khóa 3');
-        } else if (cleanId.includes('k4') || cleanId.includes('khoa-4') || cleanId.includes('khóa 4')) {
-          found = tests.find((t) => t.courseLevel === 'Khóa 4');
-        } else {
-          found = tests.find((t) => t.courseLevel === 'Khóa 1') || tests[0];
-        }
-      }
+    // CRITICAL: If already launched or runner is already active with this test, never restart it!
+    if (autoLaunchedVocabIdRef.current === initialVocabTestId) return;
+    if (activeRunnerTest && activeRunnerTest.id.toLowerCase() === initialVocabTestId.toLowerCase()) {
+      autoLaunchedVocabIdRef.current = initialVocabTestId;
+      return;
+    }
 
-      if (found) {
-        handleStartRunner(found);
+    setActiveTestType('vocab');
+    let found = tests.find(
+      (t) => t.id === initialVocabTestId || t.id.toLowerCase() === initialVocabTestId.toLowerCase()
+    );
+
+    if (!found) {
+      // Search by level keyword or fallback to first test in that level
+      const cleanId = initialVocabTestId.toLowerCase();
+      if (cleanId.includes('k2') || cleanId.includes('khoa-2') || cleanId.includes('khóa 2')) {
+        found = tests.find((t) => t.courseLevel === 'Khóa 2');
+      } else if (cleanId.includes('k3') || cleanId.includes('khoa-3') || cleanId.includes('khóa 3')) {
+        found = tests.find((t) => t.courseLevel === 'Khóa 3');
+      } else if (cleanId.includes('k4') || cleanId.includes('khoa-4') || cleanId.includes('khóa 4')) {
+        found = tests.find((t) => t.courseLevel === 'Khóa 4');
+      } else {
+        found = tests.find((t) => t.courseLevel === 'Khóa 1') || tests[0];
       }
     }
-  }, [initialVocabTestId, tests]);
+
+    if (found) {
+      autoLaunchedVocabIdRef.current = initialVocabTestId;
+      handleStartRunner(found);
+    }
+  }, [initialVocabTestId, tests, activeRunnerTest]);
 
   // Auto-launch test if initialReviewTestId is passed from URL
   useEffect(() => {
-    if (initialReviewTestId && reviewTests.length > 0) {
-      setActiveTestType('review');
-      let found = reviewTests.find(
-        (t) => t.id === initialReviewTestId || t.id.toLowerCase() === initialReviewTestId.toLowerCase()
-      );
+    if (!initialReviewTestId || reviewTests.length === 0) return;
 
-      if (!found) {
-        const cleanId = initialReviewTestId.toLowerCase();
-        if (cleanId.includes('k2') || cleanId.includes('khoa-2') || cleanId.includes('khóa 2')) {
-          found = reviewTests.find((t) => t.courseLevel === 'Khóa 2');
-        } else if (cleanId.includes('k3') || cleanId.includes('khoa-3') || cleanId.includes('khóa 3')) {
-          found = reviewTests.find((t) => t.courseLevel === 'Khóa 3');
-        } else if (cleanId.includes('k4') || cleanId.includes('khoa-4') || cleanId.includes('khóa 4')) {
-          found = reviewTests.find((t) => t.courseLevel === 'Khóa 4');
-        } else {
-          found = reviewTests.find((t) => t.courseLevel === 'Khóa 1') || reviewTests[0];
-        }
-      }
+    // CRITICAL: If already launched or runner is already active with this test, never restart it!
+    if (autoLaunchedReviewIdRef.current === initialReviewTestId) return;
+    if (activeRunnerTest && activeRunnerTest.id.toLowerCase() === initialReviewTestId.toLowerCase()) {
+      autoLaunchedReviewIdRef.current = initialReviewTestId;
+      return;
+    }
 
-      if (found) {
-        handleStartRunner(found);
+    setActiveTestType('review');
+    let found = reviewTests.find(
+      (t) => t.id === initialReviewTestId || t.id.toLowerCase() === initialReviewTestId.toLowerCase()
+    );
+
+    if (!found) {
+      const cleanId = initialReviewTestId.toLowerCase();
+      if (cleanId.includes('k2') || cleanId.includes('khoa-2') || cleanId.includes('khóa 2')) {
+        found = reviewTests.find((t) => t.courseLevel === 'Khóa 2');
+      } else if (cleanId.includes('k3') || cleanId.includes('khoa-3') || cleanId.includes('khóa 3')) {
+        found = reviewTests.find((t) => t.courseLevel === 'Khóa 3');
+      } else if (cleanId.includes('k4') || cleanId.includes('khoa-4') || cleanId.includes('khóa 4')) {
+        found = reviewTests.find((t) => t.courseLevel === 'Khóa 4');
+      } else {
+        found = reviewTests.find((t) => t.courseLevel === 'Khóa 1') || reviewTests[0];
       }
     }
-  }, [initialReviewTestId, reviewTests]);
+
+    if (found) {
+      autoLaunchedReviewIdRef.current = initialReviewTestId;
+      handleStartRunner(found);
+    }
+  }, [initialReviewTestId, reviewTests, activeRunnerTest]);
 
   // New Test Creator / Editor Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -546,6 +633,40 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const isUserAwayRef = useRef<boolean>(false);
   const isSubmittingRef = useRef<boolean>(false);
   const tabSwitchCountRef = useRef<number>(0);
+
+  // Autosave running session to sessionStorage so accidental reloads or background tabs never lose progress
+  useEffect(() => {
+    if (!activeRunnerTest || !runnerStarted || testCompletedSubmission) return;
+    try {
+      const sessionData = {
+        testId: activeRunnerTest.id,
+        studentName: runnerStudentName,
+        className: runnerClassName,
+        studentPhone: runnerStudentPhone,
+        runnerStarted: true,
+        currentQuestionIndex,
+        selectedAnswers,
+        typedAnswers,
+        tabSwitchCount,
+        questionTimeLeft,
+        testStartTime,
+      };
+      sessionStorage.setItem(`idv_active_test_${activeRunnerTest.id}`, JSON.stringify(sessionData));
+    } catch (e) {}
+  }, [
+    activeRunnerTest,
+    runnerStarted,
+    testCompletedSubmission,
+    runnerStudentName,
+    runnerClassName,
+    runnerStudentPhone,
+    currentQuestionIndex,
+    selectedAnswers,
+    typedAnswers,
+    tabSwitchCount,
+    questionTimeLeft,
+    testStartTime,
+  ]);
 
   // Helper to extract numeric lesson number for natural sorting (1, 2, ..., 10, 11, ..., 100, 101, ..., 120)
   const extractLessonNumber = (test: VocabTest): number => {
@@ -715,9 +836,10 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     if (!runnerStarted || !activeRunnerTest || testCompletedSubmission) return;
 
     const triggerExitViolation = (reason: string) => {
+      if (isSubmittingRef.current) return;
       const now = Date.now();
       if (isUserAwayRef.current) return; // Already counted this exit cycle
-      if (now - lastViolationTimeRef.current < 1200) return; // Debounce
+      if (now - lastViolationTimeRef.current < 1500) return; // Debounce
 
       isUserAwayRef.current = true;
       lastViolationTimeRef.current = now;
@@ -755,10 +877,13 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       const delta = now - lastHeartbeat;
       lastHeartbeat = now;
 
-      if (delta > 1000 && !isUserAwayRef.current && Date.now() - lastReturnTimeRef.current > 2000) {
-        triggerExitViolation('Rời màn hình làm bài');
+      // Only trigger if suspended for > 4500ms AND document is actually hidden or away
+      if (delta > 4500 && !isUserAwayRef.current && Date.now() - lastReturnTimeRef.current > 2500) {
+        if (typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden')) {
+          triggerExitViolation('Rời màn hình làm bài');
+        }
       }
-    }, 100);
+    }, 250);
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', handlePageHide);
@@ -928,13 +1053,17 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
     try {
       // Persist to Firestore
-      const collectionName = activeTestType === 'review' ? 'vocab_reviews' : 'vocab_tests';
+      const isReview = activeTestType === 'review' || activeRunnerTest.id.startsWith('rev-');
+      const collectionName = isReview ? 'vocab_reviews' : 'vocab_tests';
       
       // Use atomic array union to prevent race conditions
       await addSubmissionToTest(collectionName, activeRunnerTest.id, newSub);
       await saveDocument('vocab_test_submissions', newSub);
 
       // The subscription will automatically update the local state
+      try {
+        sessionStorage.removeItem(`idv_active_test_${activeRunnerTest.id}`);
+      } catch (e) {}
       setTestCompletedSubmission(newSub);
     } catch (error) {
       console.error('Error submitting test:', error);
@@ -942,6 +1071,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       isSubmittingRef.current = false;
       return;
     }
+
+    const isReview = activeTestType === 'review' || activeRunnerTest.id.startsWith('rev-');
+    const testCategoryLabel = isReview ? 'Bài Ôn Tập Kiến Thức' : 'Test Từ Vựng';
 
     // 1. Auto-save score to System Exam Score (Bảng Điểm Kiểm Tra)
     if (onAddExamScore) {
@@ -952,11 +1084,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
         studentCode: matchedStudent ? matchedStudent.code : 'HV-TV',
         classId: targetClassId,
         className: targetClassName,
-        examName: `Test Từ Vựng (${activeRunnerTest.courseLevel}) - ${activeRunnerTest.unitName}`,
+        examName: `${testCategoryLabel} (${activeRunnerTest.courseLevel}) - ${activeRunnerTest.unitName}`,
         examDate: new Date().toISOString().split('T')[0],
         totalScore: scoreOut10,
         rank: scoreOut10 >= 9 ? 'Xuất sắc' : scoreOut10 >= 7.5 ? 'Giỏi' : scoreOut10 >= 6 ? 'Khá' : 'Trung bình',
-        teacherComment: `Hoàn thành test từ vựng bài học (${activeRunnerTest.courseLevel} - ${activeRunnerTest.unitName}). Lớp: ${targetClassName}. Đúng ${correctCount}/${totalQ} câu (${scoreOut10}/10đ). Thời gian: ${timeSpentSeconds}s. Vi phạm chuyển tab: ${tabSwitchCount} lần.`,
+        teacherComment: `Hoàn thành ${testCategoryLabel.toLowerCase()} (${activeRunnerTest.courseLevel} - ${activeRunnerTest.unitName}). Lớp: ${targetClassName}. Đúng ${correctCount}/${totalQ} câu (${scoreOut10}/10đ). Thời gian: ${timeSpentSeconds}s. Vi phạm chuyển tab: ${tabSwitchCount} lần.`,
       };
       onAddExamScore(examRecord);
     }
@@ -972,12 +1104,12 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
         studentId: matchedStudent ? matchedStudent.id : `student-vocab-${Date.now()}`,
         studentName: cleanStudentName,
         status: 'Có mặt',
-        skillTaught: 'Từ vựng',
-        skillsTaught: ['Từ vựng'],
+        skillTaught: isReview ? 'Ôn tập' : 'Từ vựng',
+        skillsTaught: [isReview ? 'Ôn tập' : 'Từ vựng'],
         score: scoreOut10,
-        skillScores: { 'Từ vựng': scoreOut10 },
-        skillTotalQuestions: { 'Từ vựng': totalQ },
-        note: `Kết quả Test Từ Vựng ${activeRunnerTest.unitName} (${activeRunnerTest.courseLevel}): ${scoreOut10}/10đ (${correctCount}/${totalQ} câu, ${timeSpentSeconds}s)`,
+        skillScores: { [isReview ? 'Ôn tập' : 'Từ vựng']: scoreOut10 },
+        skillTotalQuestions: { [isReview ? 'Ôn tập' : 'Từ vựng']: totalQ },
+        note: `Kết quả ${testCategoryLabel} ${activeRunnerTest.unitName} (${activeRunnerTest.courseLevel}): ${scoreOut10}/10đ (${correctCount}/${totalQ} câu, ${timeSpentSeconds}s)`,
       };
       onSaveAttendance([attRecord]);
     }
@@ -2085,6 +2217,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
               onClick={() => {
                 if (runnerStarted && !testCompletedSubmission) {
                   if (window.confirm('Bạn có chắc chắn muốn thoát bài kiểm tra? Bài làm chưa nộp sẽ không được tính điểm.')) {
+                    if (activeRunnerTest) {
+                      try { sessionStorage.removeItem(`idv_active_test_${activeRunnerTest.id}`); } catch (e) {}
+                    }
                     setTestCompletedSubmission(null);
                     setRunnerStarted(false);
                     setCurrentQuestionIndex(0);
@@ -2100,6 +2235,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                     setActiveRunnerTest(null);
                   }
                 } else {
+                  if (activeRunnerTest) {
+                    try { sessionStorage.removeItem(`idv_active_test_${activeRunnerTest.id}`); } catch (e) {}
+                  }
                   setTestCompletedSubmission(null);
                   setRunnerStarted(false);
                   setCurrentQuestionIndex(0);
@@ -2126,7 +2264,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
               <form onSubmit={handleConfirmStudentInfo} className="space-y-3.5 sm:space-y-4">
                 <div className="text-center space-y-1 sm:space-y-1.5">
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wide">
-                    {activeRunnerTest.courseLevel} • BÀI KIỂM TRA TỪ VỰNG
+                    {activeRunnerTest.courseLevel} • {activeTestType === 'review' ? 'BÀI ÔN TẬP KIẾN THỨC' : 'BÀI KIỂM TRA TỪ VỰNG'}
                   </span>
                   <h3 className="text-base sm:text-lg font-black text-slate-900">{activeRunnerTest.title}</h3>
                   <p className="text-[11px] sm:text-xs text-slate-500">{activeRunnerTest.unitName}</p>
@@ -2821,6 +2959,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   <button
                     type="button"
                     onClick={() => {
+                      if (activeRunnerTest) {
+                        try { sessionStorage.removeItem(`idv_active_test_${activeRunnerTest.id}`); } catch (e) {}
+                      }
                       setTestCompletedSubmission(null);
                       setRunnerStarted(false);
                       setCurrentQuestionIndex(0);

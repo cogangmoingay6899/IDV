@@ -312,19 +312,46 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   // Top-level tab: Questions (Form) vs Responses (Result Management)
   const [topTab, setTopTab] = useState<'questions' | 'responses'>('questions');
 
+  // Helper to load live draft synchronously
+  const getInitialDraft = () => {
+    try {
+      const raw = localStorage.getItem('idv_placement_form_live_draft') || sessionStorage.getItem('idv_placement_form_live_draft');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Date.now() - (parsed.timestamp || 0) < 86400000) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return null;
+  };
+  const initialDraft = getInitialDraft();
+
   // Form Section Navigation (Section 1 to 7)
-  const [currentSection, setCurrentSection] = useState<number>(1);
+  const [currentSection, setCurrentSection] = useState<number>(() => {
+    return initialDraft && typeof initialDraft.currentSection === 'number' && initialDraft.currentSection >= 1
+      ? initialDraft.currentSection
+      : 1;
+  });
 
   // Anti-Cheat & Proctoring States
-  const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
-  const [antiCheatLogs, setAntiCheatLogs] = useState<string[]>([]);
+  const [tabSwitchCount, setTabSwitchCount] = useState<number>(() => {
+    return initialDraft && typeof initialDraft.tabSwitchCount === 'number'
+      ? initialDraft.tabSwitchCount
+      : 0;
+  });
+  const [antiCheatLogs, setAntiCheatLogs] = useState<string[]>(() => {
+    return initialDraft && Array.isArray(initialDraft.antiCheatLogs)
+      ? initialDraft.antiCheatLogs
+      : [];
+  });
   const [showWarningModal, setShowWarningModal] = useState<boolean>(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState<boolean>(false);
   const [lastViolationMsg, setLastViolationMsg] = useState<string>('');
   const lastViolationTimeRef = useRef<number>(0);
   const lastReturnTimeRef = useRef<number>(0);
   const isUserAwayRef = useRef<boolean>(false);
-  const tabSwitchCountRef = useRef<number>(0);
+  const tabSwitchCountRef = useRef<number>(initialDraft?.tabSwitchCount || 0);
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -334,8 +361,14 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   // Quy định mới: Bắt đầu tính giờ từ khi học sinh chuyển sang Mục 3: Vocabulary test
   const TEST_DURATION_MINUTES = 55;
   const TEST_DURATION_SECONDS = TEST_DURATION_MINUTES * 60; // 3300s
-  const [hasTimerStarted, setHasTimerStarted] = useState<boolean>(false);
-  const [testTimeElapsedSeconds, setTestTimeElapsedSeconds] = useState<number>(0);
+  const [hasTimerStarted, setHasTimerStarted] = useState<boolean>(() => {
+    return Boolean(initialDraft?.hasTimerStarted);
+  });
+  const [testTimeElapsedSeconds, setTestTimeElapsedSeconds] = useState<number>(() => {
+    return initialDraft && typeof initialDraft.testTimeElapsedSeconds === 'number'
+      ? initialDraft.testTimeElapsedSeconds
+      : 0;
+  });
   const [isTimerRunning, setIsTimerRunning] = useState<boolean>(true);
 
   // Derived timer states
@@ -619,7 +652,9 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
           antiCheatLogs,
           timestamp: Date.now(),
         };
-        localStorage.setItem('idv_placement_form_live_draft', JSON.stringify(draftPayload));
+        const str = JSON.stringify(draftPayload);
+        localStorage.setItem('idv_placement_form_live_draft', str);
+        sessionStorage.setItem('idv_placement_form_live_draft', str);
         setAutoSaveStatus('saved');
         setLastAutoSaveTime(
           new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -635,6 +670,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   const handleClearDraft = () => {
     if (window.confirm('Em có chắc chắn muốn xóa toàn bộ câu trả lời đã nhập để làm lại từ đầu không?')) {
       localStorage.removeItem('idv_placement_form_live_draft');
+      sessionStorage.removeItem('idv_placement_form_live_draft');
       setFormData(INITIAL_FORM_DATA);
       setCurrentSection(1);
       setHasTimerStarted(false);
@@ -654,9 +690,10 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
     if (topTab !== 'questions' || isSubmittedSuccessfully || !hasTimerStarted || currentSection < 3) return;
 
     const triggerExitViolation = (reason: string) => {
+      if (isSubmitting || isSubmittedSuccessfully) return;
       const now = Date.now();
       if (isUserAwayRef.current) return; // Already counted for this exit cycle
-      if (now - lastViolationTimeRef.current < 1200) return; // Debounce
+      if (now - lastViolationTimeRef.current < 1500) return; // Debounce
 
       isUserAwayRef.current = true;
       lastViolationTimeRef.current = now;
@@ -702,10 +739,13 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
       const delta = now - lastHeartbeat;
       lastHeartbeat = now;
 
-      if (delta > 1000 && !isUserAwayRef.current && Date.now() - lastReturnTimeRef.current > 2000) {
-        triggerExitViolation('Rời khỏi màn hình làm bài');
+      // Only trigger if suspended for > 4500ms AND document is actually hidden or away
+      if (delta > 4500 && !isUserAwayRef.current && Date.now() - lastReturnTimeRef.current > 2500) {
+        if (typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden')) {
+          triggerExitViolation('Rời khỏi màn hình làm bài');
+        }
       }
-    }, 100);
+    }, 250);
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('pagehide', handlePageHide);
@@ -721,7 +761,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
       window.removeEventListener('focus', handleReturn);
       document.removeEventListener('freeze', handleFreeze);
     };
-  }, [topTab, isSubmittedSuccessfully, hasTimerStarted, currentSection]);
+  }, [topTab, isSubmittedSuccessfully, hasTimerStarted, currentSection, isSubmitting]);
 
   // Auto scroll to top of section header when changing sections so candidate reads instructions first
   useEffect(() => {
@@ -1231,6 +1271,7 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
       // 4. Clear live auto-draft since test is successfully submitted
       try {
         localStorage.removeItem('idv_placement_form_live_draft');
+        sessionStorage.removeItem('idv_placement_form_live_draft');
       } catch (e) {}
 
       // 5. Propagate to parent state

@@ -18,6 +18,8 @@ import {
   deleteDoc,
   onSnapshot,
   writeBatch,
+  updateDoc,
+  arrayUnion,
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -779,7 +781,7 @@ export async function incrementClassStudentCount(classId: string, amount: number
 }
 
 /**
- * Adds a submission or score record to the test's submissions array.
+ * Adds a submission or score record to the test's submissions array using atomic arrayUnion.
  */
 export async function addSubmissionToTest(
   collectionName: string,
@@ -787,14 +789,25 @@ export async function addSubmissionToTest(
   submission: any
 ) {
   try {
-    const test = await fetchDocument<any>(collectionName, testId);
-    if (test) {
-      const updatedSubmissions = [...(test.submissions || []), sanitizeFirestoreData(submission)];
-      const updated = {
-        ...test,
-        submissions: updatedSubmissions,
-      };
-      await saveDocument(collectionName, updated);
+    const cleanSub = sanitizeFirestoreData(submission);
+    const docRef = doc(db, collectionName, testId);
+    try {
+      await updateDoc(docRef, {
+        submissions: arrayUnion(cleanSub),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (updateErr) {
+      // Fallback if doc doesn't exist yet or updateDoc fails
+      const test = await fetchDocument<any>(collectionName, testId);
+      if (test) {
+        const existingSubs = Array.isArray(test.submissions) ? test.submissions : [];
+        const filteredSubs = existingSubs.filter((s: any) => s.id !== cleanSub.id);
+        const updated = {
+          ...test,
+          submissions: [...filteredSubs, cleanSub],
+        };
+        await saveDocument(collectionName, updated);
+      }
     }
   } catch (err) {
     console.error(`[Firebase Firestore] Error adding submission to ${collectionName}:`, err);
