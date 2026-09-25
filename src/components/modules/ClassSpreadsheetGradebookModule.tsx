@@ -72,6 +72,7 @@ interface Props {
   transactions?: TuitionTransaction[];
   initialClassId?: string;
   onOpenQuickTuition?: () => void;
+  onBackToClasses?: () => void;
 }
 
 // Default Seed Data that matches user's exact uploaded image
@@ -138,6 +139,7 @@ export const ClassSpreadsheetGradebookModule: React.FC<Props> = ({
   transactions = [],
   initialClassId,
   onOpenQuickTuition,
+  onBackToClasses,
 }) => {
   // Default selected class: use initialClassId, or first available class, or sample class
   const [selectedClassId, setSelectedClassId] = useState<string>(() => {
@@ -230,11 +232,8 @@ export const ClassSpreadsheetGradebookModule: React.FC<Props> = ({
     // Determine Columns
     let columns: SpreadsheetLessonColumn[] = [];
 
-    if (savedOverrides && savedOverrides.columns && savedOverrides.columns.length > 0 && !forceFreshSync) {
-      // Use preserved columns from previous edits
-      columns = savedOverrides.columns;
-    } else if (sessionMap.size > 0) {
-      // Build columns from actual saved teaching sessions
+    // Build columns from actual saved teaching sessions
+    if (sessionMap.size > 0) {
       const sortedSessions = Array.from(sessionMap.entries()).sort(([, recsA], [, recsB]) => {
         const numA = recsA[0]?.sessionNumber || 0;
         const numB = recsB[0]?.sessionNumber || 0;
@@ -252,26 +251,32 @@ export const ClassSpreadsheetGradebookModule: React.FC<Props> = ({
 
         const skillText = firstRec.skillsTaught?.join(', ') || firstRec.skillTaught || 'Từ vựng & Viết';
 
+        // Check if user previously edited this column's title
+        const existingCol = savedOverrides?.columns?.find((c) => c.sessionNumber === sessNum || c.id.includes(`sess_${sessNum}_`));
+
         return {
-          id: `col_sess_${sessNum}_${key}`,
-          lessonLabel: `L${sessNum}`,
-          teacherAndDate: `${shortDate ? shortDate + ' ' : ''}${teacherInitial}`,
-          subSkill: skillText,
-          maxScore: 10,
+          id: existingCol?.id || `col_sess_${sessNum}_${key}`,
+          lessonLabel: existingCol?.lessonLabel || `L${sessNum}`,
+          teacherAndDate: existingCol?.teacherAndDate || `${shortDate ? shortDate + ' ' : ''}${teacherInitial}`,
+          subSkill: existingCol?.subSkill || skillText,
+          maxScore: existingCol?.maxScore || 10,
           sessionNumber: sessNum,
           date: firstRec.date,
         };
       });
+    } else if (savedOverrides && savedOverrides.columns && savedOverrides.columns.length > 0 && !forceFreshSync) {
+      // Use preserved columns from previous manual edits
+      columns = savedOverrides.columns;
     }
 
     // If still fewer than 4 columns, provide standard lesson templates so the sheet is complete
     if (columns.length === 0) {
       const teacherInit = foundClass.teacherName?.split(' ').pop() || 'DV';
       columns = [
-        { id: 'c1', lessonLabel: 'L1', teacherAndDate: `L1 ${teacherInit}`, subSkill: 'Từ vựng & Viết', maxScore: 10 },
-        { id: 'c2', lessonLabel: 'L2', teacherAndDate: `L2 ${teacherInit}`, subSkill: 'Viết & Nghe', maxScore: 10 },
-        { id: 'c3', lessonLabel: 'L3', teacherAndDate: `L3 ${teacherInit}`, subSkill: 'Nghe 10', maxScore: 10 },
-        { id: 'c4', lessonLabel: 'L4', teacherAndDate: `L4 ${teacherInit}`, subSkill: 'Đọc 13', maxScore: 13 },
+        { id: 'c1', lessonLabel: 'L1', teacherAndDate: `L1 ${teacherInit}`, subSkill: 'Từ vựng & Viết', maxScore: 10, sessionNumber: 1 },
+        { id: 'c2', lessonLabel: 'L2', teacherAndDate: `L2 ${teacherInit}`, subSkill: 'Viết & Nghe', maxScore: 10, sessionNumber: 2 },
+        { id: 'c3', lessonLabel: 'L3', teacherAndDate: `L3 ${teacherInit}`, subSkill: 'Nghe 10', maxScore: 10, sessionNumber: 3 },
+        { id: 'c4', lessonLabel: 'L4', teacherAndDate: `L4 ${teacherInit}`, subSkill: 'Đọc 13', maxScore: 13, sessionNumber: 4 },
       ];
     }
 
@@ -699,21 +704,35 @@ export const ClassSpreadsheetGradebookModule: React.FC<Props> = ({
       {/* Top Header & Actions */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-3">
+          {onBackToClasses && (
+            <button
+              type="button"
+              onClick={onBackToClasses}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer"
+              title="Quay lại danh sách lớp học"
+            >
+              <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+              <span>Quay lại</span>
+            </button>
+          )}
           <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
             <FileSpreadsheet className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                Sổ Bảng Điểm &amp; Học Phí Từng Buổi
+                Sổ Lớp Sheet &amp; Bảng Điểm Từng Buổi
               </h2>
               <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-emerald-600" />
                 <span>Chuẩn Google Sheets IELTS Dương Vũ</span>
               </span>
+              <span className="text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.5 rounded-full">
+                📊 Điểm số tất cả buổi học (Không kèm BTVN &amp; Nộp phạt)
+              </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Theo dõi danh sách lớp, Gmail, tình trạng học phí và điểm số chi tiết từng buổi học (L1, L2, L3...)
+              Xem lịch sử tất cả các buổi học kèm điểm số &amp; chuyên cần chi tiết từng học viên (L1, L2, L3...)
             </p>
             {/* Real-time Multi-user sync badge */}
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">

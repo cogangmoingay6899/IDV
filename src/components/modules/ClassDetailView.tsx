@@ -99,6 +99,7 @@ interface ClassDetailViewProps {
   onRestoreStudent?: (classId: string, studentId: string) => void;
   onUpdateStudent?: (updatedStudent: Student) => void;
   onDeleteClass?: (classId: string) => void;
+  onOpenSheetGradebook?: (classId: string) => void;
   currentUser?: AuthUser;
 }
 
@@ -158,6 +159,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   onRestoreStudent,
   onUpdateStudent,
   onDeleteClass,
+  onOpenSheetGradebook,
   currentUser,
 }) => {
   const isVuNgoc = currentUser?.email?.toLowerCase() === 'vungoc23122002@gmail.com';
@@ -1542,6 +1544,17 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
               >
                 <Trash2 className="w-4 h-4" />
                 <span>Xóa lớp</span>
+              </button>
+            )}
+            {onOpenSheetGradebook && (
+              <button
+                type="button"
+                onClick={() => onOpenSheetGradebook(classGroup.id)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-all shadow-xs cursor-pointer"
+                title="Mở Sổ lớp & Bảng điểm Google Sheet (xem lịch sử tất cả các buổi học kèm điểm số, không kèm BTVN & nộp phạt)"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                <span>Sổ lớp Sheet</span>
               </button>
             )}
             <button

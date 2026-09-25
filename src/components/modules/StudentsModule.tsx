@@ -17,6 +17,8 @@ import { ClassFullScheduleModal } from "../modals/ClassFullScheduleModal";
 import { CourseScheduleRemindersModal } from "../modals/CourseScheduleRemindersModal";
 import { calculateCourseSchedule, detectCourseLevel, calculateClassEndInfo, formatDateVN } from "../../utils/courseSchedule";
 
+import { ClassSpreadsheetGradebookModule } from "./ClassSpreadsheetGradebookModule";
+
 const y = React;
 const e = { jsx: _jsx, jsxs: _jsxs, Fragment: _Fragment };
 const CP = ClassDetailView;
@@ -25,6 +27,7 @@ const K5 = CourseTuitionTable;
 const X5 = EditClassModal;
 const lT = ClassFullScheduleModal;
 const yP = CourseScheduleRemindersModal;
+const SG = ClassSpreadsheetGradebookModule;
 
 const Es = Check;
 const Gc = CalendarDays;
@@ -306,6 +309,11 @@ const StudentsModule: React.FC<StudentsModuleProps> = ({
         ue && (ue(fe), P(null));
       },
       onBack: () => P(null),
+      onOpenSheetGradebook: (fe: string) => {
+        P(null);
+        F(fe);
+        k("sheet_gradebook");
+      },
       onEnrollStudent: (fe, xe) => _ && _(fe, xe),
       onRemoveStudent: (fe, xe) => O && O(fe, xe),
       onRestoreStudent: (fe, xe) => G && G(fe, xe),
@@ -402,6 +410,16 @@ const StudentsModule: React.FC<StudentsModuleProps> = ({
               }),
             ],
           }),
+
+          !isNhungPhan &&
+            e.jsxs("button", {
+              onClick: () => k("sheet_gradebook"),
+              className: `px-4 py-2 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 ${j === "sheet_gradebook" ? "bg-emerald-700 text-white shadow-xs" : "text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200"}`,
+              children: [
+                e.jsx(Kr, { className: "w-3.5 h-3.5 text-emerald-600" }),
+                e.jsx("span", { children: "Sổ lớp Sheet" }),
+              ],
+            }),
 
           !isNhungPhan &&
             e.jsxs("button", {
@@ -1598,7 +1616,18 @@ const StudentsModule: React.FC<StudentsModuleProps> = ({
             ],
           })
         : j === "sheet_gradebook"
-          ? null
+          ? e.jsx("div", {
+              className: "space-y-4",
+              children: e.jsx(SG, {
+                classes: t,
+                students: n,
+                attendanceRecords: l,
+                transactions: o,
+                initialClassId: R || (t.length > 0 ? t[0].id : undefined),
+                onOpenQuickTuition: le,
+                onBackToClasses: () => k("classes"),
+              }),
+            })
           : j === "vocab_tests"
             ? e.jsx("div", {
                 className: "space-y-4",
