@@ -370,13 +370,23 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       const mappedData = fullData.map((test) => sanitizeVocabTest(test));
       setTests(mappedData);
 
-      // Smoothly update submissions of the active test without touching any runner progress
+      // CRITICAL FIX: Smoothly update questions, title, unitName & submissions of active runner test
       setActiveRunnerTest((prev) => {
         if (!prev) return null;
-        const matchingUpdatedTest = mappedData.find((t) => t.id === prev.id);
+        const matchingUpdatedTest = mappedData.find(
+          (t) => t.id === prev.id || t.id.toLowerCase() === prev.id.toLowerCase()
+        );
         if (!matchingUpdatedTest) return prev;
         return {
           ...prev,
+          title: matchingUpdatedTest.title || prev.title,
+          unitName: matchingUpdatedTest.unitName || prev.unitName,
+          courseLevel: matchingUpdatedTest.courseLevel || prev.courseLevel,
+          timePerQuestionSeconds: matchingUpdatedTest.timePerQuestionSeconds || prev.timePerQuestionSeconds,
+          questions:
+            matchingUpdatedTest.questions && matchingUpdatedTest.questions.length > 0
+              ? matchingUpdatedTest.questions
+              : prev.questions,
           submissions: matchingUpdatedTest.submissions || prev.submissions || [],
         };
       });
@@ -399,13 +409,23 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       const mappedData = fullData.map((test) => sanitizeVocabTest(test));
       setReviewTests(mappedData);
 
-      // Smoothly update submissions of the active test without touching any runner progress
+      // CRITICAL FIX: Smoothly update questions, title, unitName & submissions of active runner test
       setActiveRunnerTest((prev) => {
         if (!prev) return null;
-        const matchingUpdatedTest = mappedData.find((t) => t.id === prev.id);
+        const matchingUpdatedTest = mappedData.find(
+          (t) => t.id === prev.id || t.id.toLowerCase() === prev.id.toLowerCase()
+        );
         if (!matchingUpdatedTest) return prev;
         return {
           ...prev,
+          title: matchingUpdatedTest.title || prev.title,
+          unitName: matchingUpdatedTest.unitName || prev.unitName,
+          courseLevel: matchingUpdatedTest.courseLevel || prev.courseLevel,
+          timePerQuestionSeconds: matchingUpdatedTest.timePerQuestionSeconds || prev.timePerQuestionSeconds,
+          questions:
+            matchingUpdatedTest.questions && matchingUpdatedTest.questions.length > 0
+              ? matchingUpdatedTest.questions
+              : prev.questions,
           submissions: matchingUpdatedTest.submissions || prev.submissions || [],
         };
       });
@@ -504,20 +524,12 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   useEffect(() => {
     if (!initialVocabTestId || tests.length === 0) return;
 
-    // CRITICAL: If already launched or runner is already active with this test, never restart it!
-    if (autoLaunchedVocabIdRef.current === initialVocabTestId) return;
-    if (activeRunnerTest && activeRunnerTest.id.toLowerCase() === initialVocabTestId.toLowerCase()) {
-      autoLaunchedVocabIdRef.current = initialVocabTestId;
-      return;
-    }
-
     setActiveTestType('vocab');
     let found = tests.find(
       (t) => t.id === initialVocabTestId || t.id.toLowerCase() === initialVocabTestId.toLowerCase()
     );
 
     if (!found) {
-      // Search by level keyword or fallback to first test in that level
       const cleanId = initialVocabTestId.toLowerCase();
       if (cleanId.includes('k2') || cleanId.includes('khoa-2') || cleanId.includes('khóa 2')) {
         found = tests.find((t) => t.courseLevel === 'Khóa 2');
@@ -531,21 +543,21 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     }
 
     if (found) {
-      autoLaunchedVocabIdRef.current = initialVocabTestId;
-      handleStartRunner(found);
+      // If runner hasn't been set yet or if student hasn't started taking questions and question count updated
+      if (
+        !activeRunnerTest ||
+        activeRunnerTest.id.toLowerCase() !== found.id.toLowerCase() ||
+        (!runnerStarted && activeRunnerTest.questions.length !== found.questions.length)
+      ) {
+        autoLaunchedVocabIdRef.current = initialVocabTestId;
+        handleStartRunner(found);
+      }
     }
-  }, [initialVocabTestId, tests, activeRunnerTest]);
+  }, [initialVocabTestId, tests, runnerStarted]);
 
   // Auto-launch test if initialReviewTestId is passed from URL
   useEffect(() => {
     if (!initialReviewTestId || reviewTests.length === 0) return;
-
-    // CRITICAL: If already launched or runner is already active with this test, never restart it!
-    if (autoLaunchedReviewIdRef.current === initialReviewTestId) return;
-    if (activeRunnerTest && activeRunnerTest.id.toLowerCase() === initialReviewTestId.toLowerCase()) {
-      autoLaunchedReviewIdRef.current = initialReviewTestId;
-      return;
-    }
 
     setActiveTestType('review');
     let found = reviewTests.find(
@@ -566,10 +578,16 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     }
 
     if (found) {
-      autoLaunchedReviewIdRef.current = initialReviewTestId;
-      handleStartRunner(found);
+      if (
+        !activeRunnerTest ||
+        activeRunnerTest.id.toLowerCase() !== found.id.toLowerCase() ||
+        (!runnerStarted && activeRunnerTest.questions.length !== found.questions.length)
+      ) {
+        autoLaunchedReviewIdRef.current = initialReviewTestId;
+        handleStartRunner(found);
+      }
     }
-  }, [initialReviewTestId, reviewTests, activeRunnerTest]);
+  }, [initialReviewTestId, reviewTests, runnerStarted]);
 
   // New Test Creator / Editor Modal State
   const [showCreateModal, setShowCreateModal] = useState(false);
