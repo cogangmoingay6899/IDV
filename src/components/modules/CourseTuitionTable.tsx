@@ -56,7 +56,7 @@ export interface CourseTuitionTableProps {
 
 export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
   courseName,
-  courseTuitionFee = 14500000,
+  courseTuitionFee = 5000000,
   students,
   onUpdateStudent,
   onUpdateStudentBatch,
@@ -596,11 +596,12 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
 
       msg += `\nDạ vì công việc hàng ngày của Quý Phụ huynh rất bận rộn nên có thể chưa kịp sắp xếp hoàn tất học phí. Trung tâm xin phép nhắn gửi nhẹ nhàng để ${isParent ? 'ba mẹ' : 'em'} nhớ và thuận tiện chuyển khoản trong 1 - 2 ngày tới, giúp em ${student.name} tiếp tục học tập xuyên suốt và đảm bảo đầy đủ giáo trình, quyền lợi tại trung tâm ạ.\n\n`;
 
-      msg += `💳 THÔNG TIN CHUYỂN KHOẢN TRUNG TÂM:\n`;
+      msg += `💳 THÔNG TIN CHUYỂN KHOẢN HỌC PHÍ (STK CÔNG TY):\n`;
       msg += `• Ngân hàng: MB Bank (Ngân hàng Quân Đội)\n`;
       msg += `• Số tài khoản: 0988889999\n`;
       msg += `• Chủ tài khoản: IELTS DUONG VU\n`;
       msg += `• Cú pháp: HP ${student.code} ${student.name.toUpperCase()}\n\n`;
+      msg += `⚠️ LƯU Ý: Học phí vui lòng gửi vào STK Công ty bên trên. Nếu có các khoản nộp phạt buổi học, Quý Phụ huynh vui lòng chuyển khoản riêng vào STK cá nhân của trợ lý Đặng Kim Anh (Techcombank: 174293666666) theo thông báo điểm buổi học ạ.\n\n`;
 
       msg += `Nếu Quý Phụ huynh đã chuyển khoản rồi, xin hoan hỉ bỏ qua tin nhắn này và chụp gửi lại biên lai qua Zalo để bên em cập nhật hệ thống ngay ạ.\n\n`;
       msg += `Em xin chân thành cảm ơn sự đồng hành và thấu hiểu của Quý Phụ huynh! Chúc Quý gia đình một ngày làm việc thật vui vẻ và an lành! 🌿`;
@@ -649,11 +650,12 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
       }
     }
 
-    msg += `\nTHÔNG TIN TÀI KHOẢN TRUNG TÂM:\n`;
+    msg += `\nTHÔNG TIN TÀI KHOẢN HỌC PHÍ (STK CÔNG TY):\n`;
     msg += `• Ngân hàng: MB Bank (Ngân hàng Quân Đội)\n`;
     msg += `• Số tài khoản: 0988889999\n`;
     msg += `• Chủ tài khoản: IELTS DUONG VU\n`;
-    msg += `• Cú pháp: HP ${student.code} ${student.name.toUpperCase()} ${student.className || ''}\n\n`;
+    msg += `• Cú pháp: HP ${student.code} ${student.name.toUpperCase()} ${student.className || ''}\n`;
+    msg += `• Ghi chú: Học phí chuyển khoản vào STK Công ty bên trên. Tiền nộp phạt buổi học (nếu có) chuyển khoản vào STK cá nhân trợ lý Đặng Kim Anh (Techcombank: 174293666666).\n\n`;
     msg += `Kính mong Quý Phụ huynh sắp xếp thanh toán sớm. Sau khi chuyển khoản, Quý Phụ huynh vui lòng gửi lại hình ảnh biên lai qua Zalo này để trung tâm đối soát và xuất biên nhận điện tử ạ.\n\n`;
     msg += `Trân trọng cảm ơn Quý Phụ huynh!`;
 

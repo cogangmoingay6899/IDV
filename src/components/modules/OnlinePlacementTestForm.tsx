@@ -592,7 +592,9 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   // Form Data Model matching the 7 Sections from PDF (Auto-restored from draft if available)
   const [formData, setFormData] = useState(() => {
     try {
-      const rawDraft = localStorage.getItem('idv_placement_form_live_draft');
+      const rawDraft =
+        sessionStorage.getItem('idv_placement_form_live_draft') ||
+        localStorage.getItem('idv_placement_form_live_draft');
       if (rawDraft) {
         const draft = JSON.parse(rawDraft);
         if (draft && draft.formData && Date.now() - (draft.timestamp || 0) < 86400000) {
@@ -606,7 +608,9 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
   // Restore draft state on initial mount
   useEffect(() => {
     try {
-      const rawDraft = localStorage.getItem('idv_placement_form_live_draft');
+      const rawDraft =
+        sessionStorage.getItem('idv_placement_form_live_draft') ||
+        localStorage.getItem('idv_placement_form_live_draft');
       if (rawDraft) {
         const draft = JSON.parse(rawDraft);
         if (draft && Date.now() - (draft.timestamp || 0) < 86400000) {
@@ -724,12 +728,16 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
 
     // 2. Page hide / App backgrounding
     const handlePageHide = () => {
-      triggerExitViolation('Rời trang làm bài / Ẩn ứng dụng');
+      if (typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden')) {
+        triggerExitViolation('Rời trang làm bài / Ẩn ứng dụng');
+      }
     };
 
     // 3. Mobile freeze lifecycle
     const handleFreeze = () => {
-      triggerExitViolation('Tạm dừng màn hình');
+      if (typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden')) {
+        triggerExitViolation('Tạm dừng màn hình');
+      }
     };
 
     // 4. Drift Detector (in case browser suspended JS before visibility event fired)

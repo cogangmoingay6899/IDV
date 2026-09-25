@@ -1245,34 +1245,34 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
         tests[0];
 
     return (
-      <div className="max-w-2xl mx-auto my-8 p-6 sm:p-10 bg-white rounded-3xl border border-slate-200 text-center space-y-6 shadow-md animate-in fade-in zoom-in-95">
-        <div className="w-20 h-20 rounded-3xl bg-purple-100 text-purple-700 font-black flex items-center justify-center text-4xl mx-auto shadow-inner border-2 border-purple-200">
+      <div className="max-w-md mx-auto my-3 sm:my-6 p-4 sm:p-6 bg-white rounded-2xl sm:rounded-3xl border border-slate-200 text-center space-y-4 sm:space-y-5 shadow-md animate-in fade-in zoom-in-95 w-full">
+        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-purple-100 text-purple-700 font-black flex items-center justify-center text-2xl sm:text-3xl mx-auto shadow-inner border-2 border-purple-200">
           🎓
         </div>
-        <div className="space-y-2">
-          <span className="px-3 py-1 rounded-full text-xs font-black bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wider">
+        <div className="space-y-1.5">
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wider">
             IELTS DƯƠNG VŨ
           </span>
-          <h2 className="text-2xl font-black text-slate-900">
-            {isExited ? 'Bạn đã kết thúc / thoát bài kiểm tra' : 'Bài Kiểm Tra Trực Tuyến IELTS Dương Vũ'}
+          <h2 className="text-base sm:text-xl font-black text-slate-900">
+            {isExited ? 'Bạn đã hoàn tất bài kiểm tra' : 'Bài Kiểm Tra Trực Tuyến IELTS Dương Vũ'}
           </h2>
-          <p className="text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
+          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-sm mx-auto">
             {isExited
-              ? 'Cảm ơn bạn đã tham gia bài kiểm tra! Điểm số và thông tin làm bài đã được hệ thống lưu lại an toàn. Chúc bạn học tập tốt và đạt mục tiêu IELTS!'
+              ? 'Cảm ơn bạn đã tham gia bài kiểm tra! Điểm số và thông tin làm bài đã được hệ thống lưu lại an toàn.'
               : 'Vui lòng nhấn nút bên dưới để bắt đầu làm bài kiểm tra. Hệ thống sẽ tự động tính điểm và xếp hạng ngay sau khi hoàn thành.'}
           </p>
         </div>
 
         {targetTest && (
-          <div className="p-4 bg-purple-50/80 rounded-2xl border border-purple-200 text-xs font-bold text-purple-950 flex items-center justify-between">
+          <div className="p-3 bg-purple-50/80 rounded-xl border border-purple-200 text-xs font-bold text-purple-950 flex items-center justify-between gap-2">
             <span className="truncate">{targetTest.title}</span>
-            <span className="px-2.5 py-1 bg-white rounded-lg text-[11px] text-purple-900 border border-purple-200 font-extrabold shrink-0">
+            <span className="px-2 py-0.5 bg-white rounded-md text-[10px] text-purple-900 border border-purple-200 font-extrabold shrink-0">
               {targetTest.courseLevel}
             </span>
           </div>
         )}
 
-        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-2.5">
           {targetTest && !isExited && (
             <button
               type="button"
@@ -1280,7 +1280,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                 setIsExited(false);
                 handleStartRunner(targetTest);
               }}
-              className="w-full sm:w-auto px-8 py-3.5 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full sm:w-auto px-6 py-3 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
               <Play className="w-4 h-4 fill-current" />
               <span>Bắt đầu làm bài</span>
@@ -1292,9 +1292,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
               window.close();
               showToast('👉 Bạn có thể đóng tab trình duyệt này để hoàn tất.');
             }}
-            className="w-full sm:w-auto px-8 py-3.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-2xl border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full sm:w-auto px-6 py-3 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
-            <span>✕ Đóng Tab Trình Duyệt</span>
+            <span>✕ Đóng Tab</span>
           </button>
         </div>
       </div>
@@ -1302,56 +1302,57 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full overflow-x-hidden">
       {/* TOP MODULE TYPE TABS: VOCABULARY TESTS VS KNOWLEDGE REVIEW TESTS */}
-      <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-xs">
+      <div className="grid grid-cols-2 gap-1.5 sm:gap-3 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-xs">
         <button
           type="button"
           onClick={() => setActiveTestType('vocab')}
-          className={`flex-1 py-3 px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all ${
+          className={`py-2 px-2 sm:py-3 sm:px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2.5 transition-all truncate ${
             activeTestType === 'vocab'
               ? 'bg-purple-700 text-white shadow-md'
               : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <BookOpen className="w-4 h-4" />
-          <span>📚 Bài Test Từ Vựng (31 Bài / Khóa)</span>
+          <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">📚 Test Từ Vựng (31 Bài)</span>
         </button>
         <button
           type="button"
           onClick={() => setActiveTestType('review')}
-          className={`flex-1 py-3 px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 transition-all ${
+          className={`py-2 px-2 sm:py-3 sm:px-5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2.5 transition-all truncate ${
             activeTestType === 'review'
               ? 'bg-amber-600 text-white shadow-md'
               : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Award className="w-4 h-4" />
-          <span>🧠 Bài Test Ôn Tập Kiến Thức (31 Bài / Khóa)</span>
+          <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+          <span className="truncate">🧠 Test Ôn Tập (31 Bài)</span>
         </button>
       </div>
 
       {/* SECTION HEADER & COURSE SWITCHER (KHÓA 1, KHÓA 2, KHÓA 3, KHÓA 4) */}
-      <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-2xl ${activeTestType === 'review' ? 'bg-amber-600 border-amber-500' : 'bg-amber-500 border-amber-400'} text-white flex items-center justify-center font-black text-xl shadow-md border-2 shrink-0`}>
-              {activeTestType === 'review' ? <Award className="w-6 h-6" /> : <BookOpen className="w-6 h-6" />}
+      <div className="bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-slate-200/80 shadow-xs space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl ${activeTestType === 'review' ? 'bg-amber-600 border-amber-500' : 'bg-amber-500 border-amber-400'} text-white flex items-center justify-center font-black text-lg sm:text-xl shadow-md border-2 shrink-0`}>
+              {activeTestType === 'review' ? <Award className="w-5 h-5 sm:w-6 sm:h-6" /> : <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />}
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">
-                  {activeTestType === 'review' ? 'Quản Lý Bài Test Ôn Tập Kiến Thức Trực Tuyến' : 'Quản Lý Bài Test Từ Vựng Trực Tuyến'}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <h2 className="text-sm sm:text-lg font-extrabold text-slate-900 tracking-tight">
+                  {activeTestType === 'review' ? 'Bài Test Ôn Tập Kiến Thức' : 'Bài Test Từ Vựng Trực Tuyến'}
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1">
-                  <ShieldAlert className="w-3 h-3 text-purple-600" />
-                  <span>Chống gian lận & Bấm giờ</span>
+                <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1 shrink-0">
+                  <ShieldAlert className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-purple-600" />
+                  <span className="hidden sm:inline">Chống gian lận &amp; Bấm giờ</span>
+                  <span className="sm:hidden">Chống gian lận</span>
                 </span>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
                 {activeTestType === 'review'
-                  ? '31 bài test ôn tập kiến thức cho mỗi khóa (Khóa 1, 2, 3, 4), chống gian lận & tự động lưu điểm'
-                  : 'Tạo bài test theo từng buổi học (Khóa 1, 2, 3, 4), lấy đường link gửi học sinh làm bài & tự động lưu bảng xếp hạng'}
+                  ? '31 bài test ôn tập kiến thức cho mỗi khóa, chống gian lận & tự động lưu điểm'
+                  : 'Tạo bài test theo từng buổi học, lấy link gửi học sinh & tự động xếp hạng'}
               </p>
             </div>
           </div>
@@ -1369,15 +1370,15 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
               setCustomizedQuestions([]);
               setShowCreateModal(true);
             }}
-            className={`px-4 py-2.5 ${activeTestType === 'review' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-700 hover:bg-purple-800'} text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all active:scale-95 shrink-0`}
+            className={`px-3.5 py-2 sm:px-4 sm:py-2.5 ${activeTestType === 'review' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-700 hover:bg-purple-800'} text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all active:scale-95 shrink-0`}
           >
-            <Plus className="w-4 h-4" />
-            <span>{activeTestType === 'review' ? '+ Tạo Bài Ôn Tập Mới' : '+ Tạo Bài Test Từ Vựng Mới'}</span>
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>{activeTestType === 'review' ? '+ Tạo Bài Ôn Tập Mới' : '+ Tạo Bài Test Mới'}</span>
           </button>
         </div>
 
         {/* Course Level Switcher Buttons */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 sm:pt-2">
           {(['Khóa 1', 'Khóa 2', 'Khóa 3', 'Khóa 4'] as const).map((level) => {
             const count = activeTestsList.filter((t) => t.courseLevel === level).length;
             const isSelected = selectedCourseLevel === level;
@@ -1386,20 +1387,20 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                 key={level}
                 type="button"
                 onClick={() => setSelectedCourseLevel(level)}
-                className={`p-3.5 rounded-2xl border text-left transition-all flex items-center justify-between ${
+                className={`p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border text-left transition-all flex items-center justify-between ${
                   isSelected
                     ? 'bg-purple-900 text-white border-purple-900 shadow-md ring-2 ring-purple-500/30'
                     : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                 }`}
               >
                 <div>
-                  <div className="text-xs font-black uppercase tracking-wider">{level}</div>
-                  <div className={`text-[11px] mt-0.5 font-bold ${isSelected ? 'text-amber-300' : 'text-slate-500'}`}>
-                    {count} bài test hiện có
+                  <div className="text-[11px] sm:text-xs font-black uppercase tracking-wider">{level}</div>
+                  <div className={`text-[10px] sm:text-[11px] mt-0.5 font-bold ${isSelected ? 'text-amber-300' : 'text-slate-500'}`}>
+                    {count} bài test
                   </div>
                 </div>
                 <div
-                  className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs ${
+                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-[10px] sm:text-xs ${
                     isSelected ? 'bg-amber-400 text-purple-950' : 'bg-slate-200 text-slate-600'
                   }`}
                 >
@@ -2205,11 +2206,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
       {/* MODAL 3: RUNNER BÀI TEST TỪ VỰNG CHỐNG GIAN LẬN & BẤM GIỜ CHO HỌC SINH */}
       {activeRunnerTest && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto w-full">
           <div
             className={`bg-white rounded-2xl sm:rounded-3xl ${
-              testCompletedSubmission ? 'max-w-2xl max-h-[94vh] overflow-y-auto' : 'max-w-lg max-h-[94vh] overflow-y-auto'
-            } w-full p-4 sm:p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 space-y-4 sm:space-y-5 relative my-auto`}
+              testCompletedSubmission ? 'max-w-lg max-h-[92vh] overflow-y-auto' : 'max-w-md max-h-[92vh] overflow-y-auto'
+            } w-full p-3.5 sm:p-5 shadow-2xl border border-slate-200 animate-in zoom-in-95 space-y-3 sm:space-y-4 relative my-auto`}
           >
             {/* Close button */}
             <button
@@ -2253,7 +2254,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   setActiveRunnerTest(null);
                 }
               }}
-              className="absolute top-3 right-3 sm:top-4 sm:right-4 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold hover:bg-slate-200 cursor-pointer z-10 text-xs sm:text-sm"
+              className="absolute top-2.5 right-2.5 sm:top-3.5 sm:right-3.5 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center font-bold hover:bg-slate-200 cursor-pointer z-10 text-xs"
               title="Thoát bài kiểm tra"
             >
               ✕
@@ -2261,41 +2262,41 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
             {/* STEP A: STUDENT ENTER INFO */}
             {!runnerStarted && !testCompletedSubmission && (
-              <form onSubmit={handleConfirmStudentInfo} className="space-y-3.5 sm:space-y-4">
-                <div className="text-center space-y-1 sm:space-y-1.5">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wide">
+              <form onSubmit={handleConfirmStudentInfo} className="space-y-3 sm:space-y-3.5">
+                <div className="text-center space-y-1">
+                  <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-200 uppercase tracking-wide">
                     {activeRunnerTest.courseLevel} • {activeTestType === 'review' ? 'BÀI ÔN TẬP KIẾN THỨC' : 'BÀI KIỂM TRA TỪ VỰNG'}
                   </span>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900">{activeRunnerTest.title}</h3>
-                  <p className="text-[11px] sm:text-xs text-slate-500">{activeRunnerTest.unitName}</p>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900">{activeRunnerTest.title}</h3>
+                  <p className="text-[10px] sm:text-xs text-slate-500">{activeRunnerTest.unitName}</p>
                 </div>
 
-                <div className="bg-amber-50 border border-amber-200 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl text-[11px] sm:text-xs text-amber-950 space-y-1.5 font-medium">
+                <div className="bg-amber-50 border border-amber-200 p-2.5 sm:p-3 rounded-xl text-[10.5px] sm:text-xs text-amber-950 space-y-1 font-medium">
                   <div className="font-extrabold text-amber-900 flex items-center gap-1.5">
                     <ShieldAlert className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                    <span>Quy định làm bài & Chống gian lận:</span>
+                    <span>Quy định làm bài &amp; Chống gian lận:</span>
                   </div>
-                  <ul className="list-disc list-inside space-y-0.5 text-slate-700 pl-0.5 text-[11px]">
-                    <li>Mỗi câu hỏi có <strong>{activeRunnerTest.timePerQuestionSeconds || 20} giây</strong>. Hết giờ hệ thống tự chuyển câu!</li>
-                    <li><strong>CHỐNG GIAN LẬN:</strong> Không chuyển app hoặc mở tab khác khi đang làm bài.</li>
+                  <ul className="list-disc list-inside space-y-0.5 text-slate-700 pl-0.5 text-[10.5px]">
+                    <li>Mỗi câu có <strong>{activeRunnerTest.timePerQuestionSeconds || 20} giây</strong>. Hết giờ hệ thống tự chuyển câu!</li>
+                    <li><strong>CHỐNG GIAN LẬN:</strong> Không chuyển tab/app khi đang làm bài.</li>
                   </ul>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <div>
-                    <label className="text-[11px] sm:text-xs font-bold text-slate-700 block mb-1">Họ và Tên Học Sinh (*):</label>
+                    <label className="text-[10.5px] sm:text-xs font-bold text-slate-700 block mb-0.5">Họ và Tên Học Sinh (*):</label>
                     <input
                       type="text"
                       required
                       placeholder="Ví dụ: Nguyễn Hoàng Nam"
                       value={runnerStudentName}
                       onChange={(e) => setRunnerStudentName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 sm:p-3 text-xs font-bold focus:ring-2 focus:ring-purple-500/20"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 sm:p-2.5 text-xs font-bold focus:ring-2 focus:ring-purple-500/20"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] sm:text-xs font-bold text-slate-700 block mb-1">Số lớp (*):</label>
+                    <label className="text-[10.5px] sm:text-xs font-bold text-slate-700 block mb-0.5">Số lớp (*):</label>
                     <input
                       type="text"
                       required
@@ -2303,7 +2304,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       placeholder="Ví dụ: 88, 89"
                       value={runnerClassName}
                       onChange={(e) => setRunnerClassName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 sm:p-3 text-xs font-bold focus:ring-2 focus:ring-purple-500/20"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 sm:p-2.5 text-xs font-bold focus:ring-2 focus:ring-purple-500/20"
                     />
                     <datalist id="class-suggestions-list">
                       {classes.map((c) => (
@@ -2311,7 +2312,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       ))}
                       {classGroup && <option value={classGroup.name} />}
                     </datalist>
-                    <p className="text-[10px] text-slate-400 mt-1">
+                    <p className="text-[9.5px] text-slate-400 mt-0.5">
                       Nhập số lớp (VD: 88, 89) để tự động cập nhật kết quả vào buổi học.
                     </p>
                   </div>
@@ -2319,54 +2320,54 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
                 <button
                   type="submit"
-                  className="w-full py-3 sm:py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-2.5 sm:py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Play className="w-4 h-4" />
-                  <span>BẮT ĐẦU LÀM BÀI KIỂM TRA</span>
+                  <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span>BẮT ĐẦU LÀM BÀI</span>
                 </button>
               </form>
             )}
 
             {/* STEP B: ACTIVE QUESTION RUNNER */}
             {runnerStarted && !testCompletedSubmission && (
-              <div className="space-y-3.5 sm:space-y-4 relative">
+              <div className="space-y-3 relative">
                 {/* Anti-cheat Alert Banner */}
                 {tabSwitchCount > 0 && (
-                  <div className="bg-rose-50 border-2 border-rose-500 p-2.5 rounded-xl text-rose-900 text-[11px] sm:text-xs font-bold flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span>⚠️ ĐÃ GHI NHẬN: Thoát màn hình ({tabSwitchCount} lần)!</span>
+                  <div className="bg-rose-50 border-2 border-rose-500 p-2 rounded-xl text-rose-900 text-[10.5px] sm:text-xs font-bold flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 truncate">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span className="truncate">⚠️ ĐÃ GHI NHẬN: Rời màn hình ({tabSwitchCount} lần)!</span>
                     </span>
                   </div>
                 )}
 
                 {/* Progress & Question Timer Bar */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] sm:text-xs font-extrabold text-slate-700">
-                    <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[10.5px] sm:text-xs font-extrabold text-slate-700">
+                    <div className="flex items-center gap-1.5">
                       <span>
                         Câu {currentQuestionIndex + 1} / {activeRunnerTest.questions.length}
                       </span>
                       {tabSwitchCount === 0 ? (
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] sm:text-[10px] font-bold rounded-full flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded-full flex items-center gap-0.5">
+                          <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" />
                           <span>Trung thực</span>
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 bg-rose-100 text-rose-900 border border-rose-300 text-[9px] sm:text-[10px] font-black rounded-full flex items-center gap-1 animate-pulse">
-                          <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          <span>Thoát: {tabSwitchCount} lần</span>
+                        <span className="px-1.5 py-0.2 bg-rose-100 text-rose-900 border border-rose-300 text-[9px] font-black rounded-full flex items-center gap-0.5 animate-pulse">
+                          <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                          <span>Thoát: {tabSwitchCount}l</span>
                         </span>
                       )}
                     </div>
-                    <span className="text-amber-700 font-mono flex items-center gap-1 text-xs sm:text-sm font-black">
-                      <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+                    <span className="text-amber-700 font-mono flex items-center gap-1 text-xs font-black">
+                      <Clock className="w-3 h-3 text-amber-600 animate-spin" />
                       <span>{questionTimeLeft}s</span>
                     </span>
                   </div>
 
                   {/* Countdown Progress Bar */}
-                  <div className="w-full h-1.5 sm:h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-amber-500 transition-all duration-1000"
                       style={{
@@ -2385,27 +2386,27 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   if (qType === 'matching') {
                     const isSelected = selectedAnswers[currentQuestionIndex] !== undefined;
                     return (
-                      <div className="space-y-3 sm:space-y-3.5">
+                      <div className="space-y-2.5">
                         <div className="text-center">
-                          <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 text-[9px] sm:text-[10px] font-black rounded-full uppercase tracking-widest border border-amber-300">
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[9px] font-black rounded-full uppercase tracking-widest border border-amber-300">
                             🧩 NỐI TỪ (MATCHING) - 20 Giây
                           </span>
                         </div>
                         
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {/* Left Column: English Word Card */}
-                          <div className="flex flex-col items-center justify-center p-3.5 sm:p-5 bg-purple-50 border border-purple-200 rounded-2xl text-center shadow-xs">
-                            <span className="text-[9px] font-black text-purple-500 uppercase tracking-widest">Từ vựng</span>
-                            <h3 className="text-lg sm:text-xl font-black text-purple-950 mt-0.5">{currentQ.word}</h3>
+                          <div className="flex flex-col items-center justify-center p-2.5 sm:p-3 bg-purple-50 border border-purple-200 rounded-xl text-center shadow-2xs">
+                            <span className="text-[8.5px] font-black text-purple-500 uppercase tracking-widest">Từ vựng</span>
+                            <h3 className="text-base sm:text-lg font-black text-purple-950 mt-0.5 break-words">{currentQ.word}</h3>
                             {currentQ.phonetic && (
-                              <p className="text-[11px] font-mono text-purple-600 mt-0.5 bg-purple-100/60 px-2 py-0.5 rounded-full">{currentQ.phonetic}</p>
+                              <p className="text-[10px] font-mono text-purple-600 mt-0.5 bg-purple-100/60 px-1.5 py-0.2 rounded-full">{currentQ.phonetic}</p>
                             )}
                           </div>
 
                           {/* Right Column: Vietnamese Cards */}
-                          <div className="space-y-1.5">
-                            <span className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">Chọn nghĩa đúng:</span>
-                            <div className="grid grid-cols-1 gap-1.5 sm:gap-2">
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-bold text-slate-500 block uppercase tracking-wider">Chọn nghĩa đúng:</span>
+                            <div className="grid grid-cols-1 gap-1.5">
                               {currentQ.options.map((optionText, optIdx) => {
                                 const isMatched = selectedAnswers[currentQuestionIndex] === optIdx;
                                 return (
@@ -2413,19 +2414,19 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                                     key={optIdx}
                                     type="button"
                                     onClick={() => handleSelectAnswer(currentQuestionIndex, optIdx)}
-                                    className={`p-2.5 sm:p-3 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                                    className={`p-2 rounded-xl border text-left text-[11px] sm:text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
                                       isMatched
-                                        ? 'bg-amber-400 text-purple-950 border-amber-300 shadow-sm ring-2 ring-amber-300 scale-[1.01]'
+                                        ? 'bg-amber-400 text-purple-950 border-amber-300 shadow-2xs ring-2 ring-amber-300 scale-[1.01]'
                                         : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
                                     }`}
                                   >
-                                    <span className="flex items-center gap-2">
-                                      <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center font-mono text-[10px] text-slate-500 shrink-0">
+                                    <span className="flex items-center gap-1.5 truncate">
+                                      <span className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center font-mono text-[9px] text-slate-500 shrink-0">
                                         {String.fromCharCode(65 + optIdx)}
                                       </span>
-                                      <span>{optionText}</span>
+                                      <span className="truncate">{optionText}</span>
                                     </span>
-                                    {isMatched && <CheckCircle2 className="w-4 h-4 text-purple-950 shrink-0" />}
+                                    {isMatched && <CheckCircle2 className="w-3.5 h-3.5 text-purple-950 shrink-0" />}
                                   </button>
                                 );
                               })}
@@ -2434,9 +2435,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                         </div>
 
                         {isSelected && (
-                          <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 font-extrabold text-[10px] sm:text-[11px] p-2 rounded-xl text-center flex items-center justify-center gap-1.5 animate-in fade-in">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Đã chọn: <strong className="text-purple-950">{currentQ.word}</strong> ⟷ <strong className="text-purple-950">{currentQ.options[selectedAnswers[currentQuestionIndex]]}</strong></span>
+                          <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 font-extrabold text-[10px] p-1.5 rounded-xl text-center flex items-center justify-center gap-1.5 animate-in fade-in truncate">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span className="truncate">Đã chọn: <strong className="text-purple-950">{currentQ.word}</strong> ⟷ <strong className="text-purple-950">{currentQ.options[selectedAnswers[currentQuestionIndex]]}</strong></span>
                           </div>
                         )}
                       </div>
@@ -2445,27 +2446,27 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
                   if (qType === 'type_input') {
                     return (
-                      <div className="space-y-3 sm:space-y-3.5">
+                      <div className="space-y-2.5">
                         <div className="text-center">
-                          <span className="px-2.5 py-0.5 bg-purple-100 text-purple-900 text-[9px] sm:text-[10px] font-black rounded-full uppercase tracking-widest border border-purple-300">
+                          <span className="px-2 py-0.5 bg-purple-100 text-purple-900 text-[9px] font-black rounded-full uppercase tracking-widest border border-purple-300">
                             ⌨️ NHẬP ĐÁP ÁN / ĐIỀN TỪ / SỬA LỖI
                           </span>
                         </div>
 
-                        <div className="bg-purple-900 text-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-1 text-center shadow-md">
-                          <span className="text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">Câu hỏi / Đề bài:</span>
-                          <h2 className="text-base sm:text-xl font-black tracking-wide text-white leading-snug">
+                        <div className="bg-purple-900 text-white p-3 sm:p-4 rounded-xl sm:rounded-2xl space-y-0.5 text-center shadow-xs">
+                          <span className="text-[8.5px] sm:text-[9px] font-black uppercase text-amber-300 tracking-wider">Đề bài:</span>
+                          <h2 className="text-sm sm:text-base font-black tracking-wide text-white leading-snug break-words">
                             {currentQ.word}
                           </h2>
                           {currentQ.phonetic && (
-                            <p className="text-[11px] sm:text-xs text-purple-200 font-mono">
+                            <p className="text-[10px] sm:text-[11px] text-purple-200 font-mono">
                               {currentQ.phonetic}
                             </p>
                           )}
                         </div>
 
-                        <div className="bg-slate-50 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 border border-slate-200 space-y-2">
-                          <label className="text-[11px] sm:text-xs font-black text-slate-700 block text-center">
+                        <div className="bg-slate-50 rounded-xl p-2.5 sm:p-3 border border-slate-200 space-y-1.5">
+                          <label className="text-[10.5px] sm:text-xs font-black text-slate-700 block text-center">
                             ✍️ Nhập đáp án của bạn:
                           </label>
                           <input
@@ -2475,7 +2476,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                             autoCorrect="off"
                             spellCheck="false"
                             placeholder="Nhập câu trả lời tại đây..."
-                            className="w-full p-2.5 sm:p-3 rounded-xl border-2 border-slate-200 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 font-extrabold text-center text-xs sm:text-sm outline-none transition-all bg-white"
+                            className="w-full p-2 sm:p-2.5 rounded-xl border-2 border-slate-200 focus:border-purple-600 focus:ring-2 focus:ring-purple-200 font-extrabold text-center text-xs sm:text-sm outline-none transition-all bg-white"
                             value={typedAnswers[currentQuestionIndex] !== undefined ? typedAnswers[currentQuestionIndex] : (typedAnswersRef.current[currentQuestionIndex] || '')}
                             onChange={(e) => {
                               handleTypeAnswerChange(currentQuestionIndex, e.target.value);
@@ -2487,8 +2488,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                               }
                             }}
                           />
-                          <p className="text-[9px] sm:text-[10px] text-slate-400 text-center font-medium">
-                            Nhấn <kbd className="bg-slate-200 px-1 py-0.5 rounded-sm border border-slate-300 text-[9px] font-mono">Enter</kbd> hoặc nút "Tiếp theo" để nộp câu này.
+                          <p className="text-[9px] text-slate-400 text-center font-medium">
+                            Nhấn <kbd className="bg-slate-200 px-1 py-0.2 rounded border border-slate-300 text-[8.5px] font-mono">Enter</kbd> hoặc nút "Tiếp theo" để nộp câu này.
                           </p>
                         </div>
                       </div>
@@ -2497,26 +2498,26 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
                   // Default / Multiple Choice
                   return (
-                    <div className="space-y-3 sm:space-y-3.5">
+                    <div className="space-y-2.5">
                       <div className="text-center">
-                        <span className="px-2.5 py-0.5 bg-sky-100 text-sky-900 text-[9px] sm:text-[10px] font-black rounded-full uppercase tracking-widest border border-sky-300">
+                        <span className="px-2 py-0.5 bg-sky-100 text-sky-900 text-[9px] font-black rounded-full uppercase tracking-widest border border-sky-300">
                           🎯 TRẮC NGHIỆM - 10 Giây
                         </span>
                       </div>
 
-                      <div className="bg-purple-900 text-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-1 text-center shadow-md">
-                        <span className="text-[9px] sm:text-[10px] font-black uppercase text-amber-300 tracking-wider">Câu hỏi / Đề bài:</span>
-                        <h2 className="text-base sm:text-xl font-black tracking-wide text-white leading-snug">
+                      <div className="bg-purple-900 text-white p-3 sm:p-4 rounded-xl sm:rounded-2xl space-y-0.5 text-center shadow-xs">
+                        <span className="text-[8.5px] sm:text-[9px] font-black uppercase text-amber-300 tracking-wider">Câu hỏi / Đề bài:</span>
+                        <h2 className="text-sm sm:text-base font-black tracking-wide text-white leading-snug break-words">
                           {currentQ.word}
                         </h2>
                         {currentQ.phonetic && (
-                          <p className="text-[11px] sm:text-xs text-purple-200 font-mono">
+                          <p className="text-[10px] sm:text-[11px] text-purple-200 font-mono">
                             {currentQ.phonetic}
                           </p>
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                      <div className="grid grid-cols-1 gap-1.5 sm:gap-2">
                         {currentQ.options.map((optionText, optIdx) => {
                           const isSelected = selectedAnswers[currentQuestionIndex] === optIdx;
                           return (
@@ -2524,14 +2525,14 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                               key={optIdx}
                               type="button"
                               onClick={() => handleSelectAnswer(currentQuestionIndex, optIdx)}
-                              className={`p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                              className={`p-2.5 sm:p-3 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer leading-tight ${
                                 isSelected
-                                  ? 'bg-purple-700 text-white border-purple-700 shadow-sm ring-2 ring-purple-400'
+                                  ? 'bg-purple-700 text-white border-purple-700 shadow-2xs ring-2 ring-purple-400'
                                   : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
                               }`}
                             >
-                              <span>{optionText}</span>
-                              {isSelected && <CheckCircle2 className="w-4 h-4 text-amber-300 shrink-0" />}
+                              <span className="break-words pr-1">{optionText}</span>
+                              {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-amber-300 shrink-0" />}
                             </button>
                           );
                         })}
@@ -2541,17 +2542,17 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                 })()}
 
                 {/* Footer Controls */}
-                <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                  <span className="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate max-w-[140px] sm:max-w-none">
-                    Học sinh: <strong className="text-slate-700">{runnerStudentName}</strong>
+                <div className="flex items-center justify-between border-t border-slate-100 pt-2.5">
+                  <span className="text-[10px] text-slate-400 font-medium truncate max-w-[120px] sm:max-w-none">
+                    HS: <strong className="text-slate-700">{runnerStudentName}</strong>
                   </span>
                   <button
                     type="button"
                     onClick={() => handleNextQuestion(false)}
-                    className="px-4 py-2 sm:px-6 sm:py-2.5 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
+                    className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-1 cursor-pointer shrink-0"
                   >
                     <span>
-                      {currentQuestionIndex < activeRunnerTest.questions.length - 1 ? 'Câu tiếp theo ➔' : 'Nộp bài 🏁'}
+                      {currentQuestionIndex < activeRunnerTest.questions.length - 1 ? 'Tiếp theo ➔' : 'Nộp bài 🏁'}
                     </span>
                   </button>
                 </div>
@@ -2560,21 +2561,21 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
             {/* STEP C: RESULT, REVIEW ANSWERS & LEADERBOARD VIEW UPON COMPLETION */}
             {testCompletedSubmission && (
-              <div className="space-y-3.5 sm:space-y-4">
+              <div className="space-y-3 sm:space-y-3.5">
                 {/* Header Announcement */}
-                <div className="text-center space-y-1.5 sm:space-y-2">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl sm:rounded-3xl bg-amber-400 text-purple-950 flex items-center justify-center font-black text-2xl sm:text-3xl mx-auto shadow-md border-2 border-amber-300">
+                <div className="text-center space-y-1">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-400 text-purple-950 flex items-center justify-center font-black text-xl sm:text-2xl mx-auto shadow-md border-2 border-amber-300">
                     {wasTimeoutAutoSubmit ? '⏰' : '🎉'}
                   </div>
                   <div>
-                    <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase">
+                    <h3 className="text-sm sm:text-base font-black text-slate-900 uppercase leading-snug">
                       {wasTimeoutAutoSubmit
                         ? 'Hết giờ làm bài - Đã tự động nộp bài!'
                         : activeTestType === 'review'
                         ? 'Hoàn thành bài ôn tập kiến thức!'
                         : 'Hoàn thành bài test từ vựng!'}
                     </h3>
-                    <p className="text-[11px] sm:text-xs text-slate-500">
+                    <p className="text-[10.5px] sm:text-xs text-slate-500">
                       Học viên: <strong className="text-purple-900">{testCompletedSubmission.studentName}</strong> • Lớp:{' '}
                       <strong className="text-purple-900">{testCompletedSubmission.className || 'IELTS Dương Vũ'}</strong>
                     </p>
@@ -2582,25 +2583,25 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                 </div>
 
                 {/* Score and Stats Cards */}
-                <div className="bg-slate-50 rounded-2xl p-2.5 sm:p-3.5 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                  <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-purple-100 shadow-xs">
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Điểm:</span>
-                    <span className="text-lg sm:text-2xl font-black text-purple-900">{testCompletedSubmission.score}/10</span>
+                <div className="bg-slate-50 rounded-xl p-2 sm:p-2.5 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-center">
+                  <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-purple-100 shadow-2xs">
+                    <span className="text-[8.5px] sm:text-[9.5px] text-slate-400 font-bold block uppercase tracking-wider">Điểm:</span>
+                    <span className="text-base sm:text-xl font-black text-purple-900">{testCompletedSubmission.score}/10</span>
                   </div>
-                  <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-emerald-100 shadow-xs">
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Câu đúng:</span>
-                    <span className="text-lg sm:text-2xl font-black text-emerald-600">
+                  <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-emerald-100 shadow-2xs">
+                    <span className="text-[8.5px] sm:text-[9.5px] text-slate-400 font-bold block uppercase tracking-wider">Câu đúng:</span>
+                    <span className="text-base sm:text-xl font-black text-emerald-600">
                       {testCompletedSubmission.correctCount}/{testCompletedSubmission.totalQuestions}
                     </span>
                   </div>
-                  <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-amber-100 shadow-xs">
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Thời gian:</span>
-                    <span className="text-lg sm:text-2xl font-black text-amber-700">{testCompletedSubmission.timeSpentSeconds}s</span>
+                  <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-amber-100 shadow-2xs">
+                    <span className="text-[8.5px] sm:text-[9.5px] text-slate-400 font-bold block uppercase tracking-wider">Thời gian:</span>
+                    <span className="text-base sm:text-xl font-black text-amber-700">{testCompletedSubmission.timeSpentSeconds}s</span>
                   </div>
-                  <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-slate-100 shadow-xs">
-                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Rời tab:</span>
+                  <div className="bg-white p-1.5 sm:p-2 rounded-lg border border-slate-100 shadow-2xs">
+                    <span className="text-[8.5px] sm:text-[9.5px] text-slate-400 font-bold block uppercase tracking-wider">Rời tab:</span>
                     <span
-                      className={`text-lg sm:text-2xl font-black ${
+                      className={`text-base sm:text-xl font-black ${
                         testCompletedSubmission.tabSwitchViolations > 0 ? 'text-rose-600' : 'text-emerald-600'
                       }`}
                     >
@@ -2610,54 +2611,54 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                 </div>
 
                 {testCompletedSubmission.tabSwitchViolations > 0 && (
-                  <div className="text-[11px] font-bold text-rose-900 bg-rose-50 p-2 sm:p-2.5 rounded-xl border border-rose-200 text-center">
+                  <div className="text-[10px] sm:text-[11px] font-bold text-rose-900 bg-rose-50 p-2 rounded-xl border border-rose-200 text-center">
                     ⚠️ Hệ thống đã ghi nhận <strong>{testCompletedSubmission.tabSwitchViolations} lần</strong> rời màn hình làm bài.
                   </div>
                 )}
 
                 {/* Tab Switcher: Xem Đáp Án Đúng & Xem Bảng Xếp Hạng */}
-                <div className="flex bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200">
+                <div className="flex bg-slate-100 p-0.5 rounded-xl gap-1 border border-slate-200">
                   <button
                     type="button"
                     onClick={() => setResultActiveTab('answers')}
-                    className={`flex-1 py-2 px-2 rounded-lg font-black text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    className={`flex-1 py-1.5 px-2 rounded-lg font-black text-[10.5px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer truncate ${
                       resultActiveTab === 'answers'
                         ? 'bg-purple-700 text-white shadow-xs'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                     }`}
                   >
                     <Eye className="w-3.5 h-3.5 shrink-0" />
-                    <span>Đáp Án ({testCompletedSubmission.correctCount}/{testCompletedSubmission.totalQuestions})</span>
+                    <span className="truncate">Đáp Án ({testCompletedSubmission.correctCount}/{testCompletedSubmission.totalQuestions})</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setResultActiveTab('leaderboard')}
-                    className={`flex-1 py-2 px-2 rounded-lg font-black text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    className={`flex-1 py-1.5 px-2 rounded-lg font-black text-[10.5px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer truncate ${
                       resultActiveTab === 'leaderboard'
                         ? 'bg-amber-500 text-purple-950 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                     }`}
                   >
                     <Trophy className="w-3.5 h-3.5 text-purple-950 shrink-0" />
-                    <span>Bảng Xếp Hạng</span>
+                    <span className="truncate">Bảng Xếp Hạng</span>
                   </button>
                 </div>
 
                 {/* TAB 1: REVIEW OF CORRECT ANSWERS */}
                 {resultActiveTab === 'answers' && (
-                  <div className="space-y-3 pt-1 text-left">
+                  <div className="space-y-2 pt-0.5 text-left">
                     <div className="flex items-center justify-between px-1">
-                      <span className="text-[11px] sm:text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <span className="text-[10.5px] sm:text-xs font-black text-slate-800 flex items-center gap-1.5">
                         <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                         Đối chiếu chi tiết đáp án:
                       </span>
-                      <span className="text-[10px] font-bold text-slate-500">
+                      <span className="text-[9.5px] font-bold text-slate-500">
                         {activeRunnerTest.questions.length} câu
                       </span>
                     </div>
 
-                    <div className="space-y-2.5 max-h-[44vh] sm:max-h-[46vh] overflow-y-auto pr-0.5">
+                    <div className="space-y-2 max-h-[38vh] sm:max-h-[44vh] overflow-y-auto pr-0.5">
                       {activeRunnerTest.questions.map((q, idx) => {
                         let isCorrect = false;
                         let isAnswered = false;
@@ -2677,28 +2678,28 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                         return (
                           <div
                             key={q.id || idx}
-                            className={`p-3 rounded-xl sm:rounded-2xl border transition-all ${
+                            className={`p-2.5 rounded-xl border transition-all ${
                               isCorrect
                                 ? 'bg-emerald-50/40 border-emerald-300'
                                 : 'bg-rose-50/40 border-rose-300'
                             }`}
                           >
                             {/* Question Header Status */}
-                            <div className="flex items-center justify-between gap-2 border-b border-slate-200/60 pb-1.5 mb-2">
+                            <div className="flex items-center justify-between gap-1.5 border-b border-slate-200/60 pb-1 mb-1.5">
                               <div className="flex items-center gap-1.5">
                                 <span
-                                  className={`w-5 h-5 rounded-full font-black text-[10px] flex items-center justify-center text-white ${
+                                  className={`w-4 h-4 rounded-full font-black text-[9px] flex items-center justify-center text-white ${
                                     isCorrect ? 'bg-emerald-600' : 'bg-rose-600'
                                   }`}
                                 >
                                   {idx + 1}
                                 </span>
-                                <span className="text-[11px] font-black text-slate-800">
+                                <span className="text-[10.5px] font-black text-slate-800">
                                   Câu {idx + 1}
                                 </span>
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-800">
+                                <span className="text-[8.5px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800">
                                   {q.questionType === 'type_input'
-                                    ? '⌨️ Điền từ / Sửa lỗi'
+                                    ? '⌨️ Điền từ'
                                     : q.questionType === 'matching'
                                     ? '🧩 Nối từ'
                                     : '🎯 Trắc nghiệm'}
@@ -2707,28 +2708,28 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
                               <div>
                                 {isCorrect ? (
-                                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-black text-[10px] flex items-center gap-1 border border-emerald-300">
-                                    <Check className="w-3 h-3 text-emerald-600" /> Đúng (+1đ)
+                                  <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-black text-[9px] flex items-center gap-0.5 border border-emerald-300">
+                                    <Check className="w-2.5 h-2.5 text-emerald-600" /> Đúng (+1đ)
                                   </span>
                                 ) : isAnswered ? (
-                                  <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 font-black text-[10px] flex items-center gap-1 border border-rose-300">
-                                    <XCircle className="w-3 h-3 text-rose-600" /> Chưa đúng (0đ)
+                                  <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 font-black text-[9px] flex items-center gap-0.5 border border-rose-300">
+                                    <XCircle className="w-2.5 h-2.5 text-rose-600" /> Chưa đúng (0đ)
                                   </span>
                                 ) : (
-                                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-black text-[10px] flex items-center gap-1 border border-amber-300">
-                                    <Clock className="w-3 h-3 text-amber-600" /> Chưa trả lời
+                                  <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-black text-[9px] flex items-center gap-0.5 border border-amber-300">
+                                    <Clock className="w-2.5 h-2.5 text-amber-600" /> Chưa làm
                                   </span>
                                 )}
                               </div>
                             </div>
 
                             {/* Question Target Word & Meaning */}
-                            <div className="mb-2 space-y-0.5">
-                              <div className="text-xs sm:text-sm font-black text-purple-950">{q.word}</div>
+                            <div className="mb-1.5 space-y-0.5">
+                              <div className="text-xs sm:text-sm font-black text-purple-950 break-words">{q.word}</div>
                               {q.phonetic && (
-                                <div className="text-[10px] font-bold text-slate-500 font-mono">{q.phonetic}</div>
+                                <div className="text-[9.5px] font-bold text-slate-500 font-mono">{q.phonetic}</div>
                               )}
-                              <div className="text-[11px] text-slate-600">
+                              <div className="text-[10.5px] text-slate-600">
                                 <span className="font-semibold text-slate-500">Đáp án:</span>{' '}
                                 <strong className="text-emerald-800 font-bold">{q.meaning}</strong>
                               </div>
@@ -2736,9 +2737,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
 
                             {/* Options Breakdown for Multiple Choice & Matching */}
                             {q.questionType !== 'type_input' ? (
-                              <div className="space-y-1 pt-1">
-                                <div className="text-[10px] font-bold text-slate-500 mb-1">Phương án lựa chọn:</div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              <div className="space-y-1 pt-0.5">
+                                <div className="grid grid-cols-1 gap-1">
                                   {q.options.map((opt, optIdx) => {
                                     const isCorrectOpt = optIdx === q.correctOptionIndex;
                                     const isUserPicked = studentChoice === optIdx;
@@ -2747,24 +2747,24 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                                     let badgeText = null;
 
                                     if (isUserPicked && isCorrectOpt) {
-                                      cardStyle = 'bg-emerald-100 border-emerald-400 text-emerald-950 font-black shadow-2xs ring-2 ring-emerald-400';
+                                      cardStyle = 'bg-emerald-100 border-emerald-400 text-emerald-950 font-black shadow-2xs ring-1 ring-emerald-400';
                                       badgeText = (
-                                        <span className="text-[9px] text-emerald-800 font-black flex items-center gap-1">
-                                          <Check className="w-3 h-3 text-emerald-600" /> Bạn đã chọn (Đúng +1đ)
+                                        <span className="text-[8.5px] text-emerald-800 font-black flex items-center gap-0.5 shrink-0">
+                                          <Check className="w-2.5 h-2.5 text-emerald-600" /> Đã chọn
                                         </span>
                                       );
                                     } else if (isUserPicked && !isCorrectOpt) {
                                       cardStyle = 'bg-rose-100/80 border-rose-400 text-rose-950 font-bold ring-1 ring-rose-400';
                                       badgeText = (
-                                        <span className="text-[9px] text-rose-700 font-bold flex items-center gap-1">
-                                          <XCircle className="w-3 h-3 text-rose-600" /> Bạn đã chọn
+                                        <span className="text-[8.5px] text-rose-700 font-bold flex items-center gap-0.5 shrink-0">
+                                          <XCircle className="w-2.5 h-2.5 text-rose-600" /> Đã chọn
                                         </span>
                                       );
                                     } else if (isCorrectOpt) {
                                       cardStyle = 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold';
                                       badgeText = (
-                                        <span className="text-[9px] text-emerald-800 font-bold flex items-center gap-1">
-                                          <Check className="w-3 h-3 text-emerald-600" /> Đáp án đúng
+                                        <span className="text-[8.5px] text-emerald-800 font-bold flex items-center gap-0.5 shrink-0">
+                                          <Check className="w-2.5 h-2.5 text-emerald-600" /> Đúng
                                         </span>
                                       );
                                     }
@@ -2772,10 +2772,10 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                                     return (
                                       <div
                                         key={optIdx}
-                                        className={`p-2 rounded-lg border text-[11px] flex items-center justify-between gap-2 ${cardStyle}`}
+                                        className={`p-1.5 rounded-lg border text-[10.5px] flex items-center justify-between gap-1.5 ${cardStyle}`}
                                       >
                                         <div className="flex items-center gap-1.5 truncate">
-                                          <span className="w-4 h-4 rounded-md bg-black/5 flex items-center justify-center text-[9px] font-bold shrink-0">
+                                          <span className="w-3.5 h-3.5 rounded bg-black/5 flex items-center justify-center text-[8.5px] font-bold shrink-0">
                                             {String.fromCharCode(65 + optIdx)}
                                           </span>
                                           <span className="truncate">{opt}</span>
@@ -2788,9 +2788,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                               </div>
                             ) : (
                               /* Type Input Breakdown */
-                              <div className="space-y-1.5 pt-1">
-                                <div className="p-2 rounded-xl border border-slate-200 bg-white text-xs space-y-0.5">
-                                  <div className="text-[10px] text-slate-500 font-bold">Câu trả lời bạn đã nhập:</div>
+                              <div className="space-y-1 pt-0.5">
+                                <div className="p-1.5 rounded-lg border border-slate-200 bg-white text-[11px] space-y-0.5">
+                                  <div className="text-[9.5px] text-slate-500 font-bold">Câu trả lời bạn đã nhập:</div>
                                   <div
                                     className={`font-black break-words ${
                                       isCorrect ? 'text-emerald-700' : studentTyped ? 'text-rose-700' : 'text-slate-400 italic'
@@ -2798,21 +2798,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                                   >
                                     {studentTyped ? `"${studentTyped}"` : '(Chưa nhập đáp án)'}
                                   </div>
-                                  {!isCorrect && studentTyped && (
-                                    <div className="text-[10px] text-rose-600 font-semibold pt-0.5">
-                                      ⚠️ Bạn đã nhập: "{studentTyped}" (khác với đáp án đúng)
-                                    </div>
-                                  )}
                                 </div>
 
-                                <div className="p-2 rounded-xl border border-emerald-300 bg-emerald-50 text-xs space-y-0.5">
-                                  <div className="text-[10px] text-emerald-700 font-bold">Đáp án đúng:</div>
+                                <div className="p-1.5 rounded-lg border border-emerald-300 bg-emerald-50 text-[11px] space-y-0.5">
+                                  <div className="text-[9.5px] text-emerald-700 font-bold">Đáp án đúng:</div>
                                   <div className="font-black text-emerald-950">"{q.meaning}"</div>
-                                  {(q.meaning?.includes('/') || q.meaning?.includes(',')) && (
-                                    <div className="text-[9px] text-emerald-700 font-medium">
-                                      💡 (Hệ thống chấp nhận bất kỳ đáp án nào trong các phương án trên)
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                             )}

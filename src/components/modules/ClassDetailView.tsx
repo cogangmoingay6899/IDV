@@ -52,10 +52,17 @@ import {
   Mic,
   Sliders,
   Trash2,
+  ListChecks,
+  Settings,
 } from 'lucide-react';
 import { Student, ClassGroup, Teacher, AttendanceRecord, ExamScore, CurriculumCourse, AuthUser, SpeakingLog } from '../../types';
 import { ClassVocabTestModule } from './ClassVocabTestModule';
 import { ClassPronunciationModule } from './ClassPronunciationModule';
+import {
+  DEFAULT_PENALTY_BANK_STR,
+  getPenaltyVietQrUrl,
+  getPaymentSeparationNoticeText,
+} from '../../utils/paymentConfig';
 import { SpeakingPracticeModule } from './SpeakingPracticeModule';
 import { StudentLoginModal } from '../modals/StudentLoginModal';
 import { CreateTeacherModal } from '../modals/CreateTeacherModal';
@@ -69,6 +76,7 @@ import {
   detectCourseLevel,
   formatDateVN,
   COURSE_LEVEL_CONFIGS,
+  getStandardCourseTuitionFee,
 } from '../../utils/courseSchedule';
 
 interface ClassDetailViewProps {
@@ -216,28 +224,29 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   const [activeTermModalTab, setActiveTermModalTab] = useState<'tuition_students' | 'term_settings' | 'term_history'>('tuition_students');
   const [currentTermInput, setCurrentTermInput] = useState(1);
   const [currentTermNameInput, setCurrentTermNameInput] = useState('');
-  const [tuitionFeeInput, setTuitionFeeInput] = useState(14500000);
+  const [tuitionFeeInput, setTuitionFeeInput] = useState(5000000);
   const [newTermName, setNewTermName] = useState('');
-  const [newTermTuition, setNewTermTuition] = useState(14500000);
-  const [newTermTotalSessions, setNewTermTotalSessions] = useState(36);
+  const [newTermTuition, setNewTermTuition] = useState(5200000);
+  const [newTermTotalSessions, setNewTermTotalSessions] = useState(33);
   const [newTermStartDate, setNewTermStartDate] = useState('');
   const [newTermEndDate, setNewTermEndDate] = useState('');
   const [isUpgradingFormOpen, setIsUpgradingFormOpen] = useState(false);
 
   // States for dynamic student tuition (joining later / custom tuition)
   const [selectedStudentForEnroll, setSelectedStudentForEnroll] = useState<Student | null>(null);
-  const [enrollCustomTuition, setEnrollCustomTuition] = useState(14500000);
+  const [enrollCustomTuition, setEnrollCustomTuition] = useState(5000000);
   const [enrollPaidAmount, setEnrollPaidAmount] = useState(0);
 
   // Populate term states when classGroup changes or modal opens
   useEffect(() => {
     if (classGroup) {
+      const standardFee = getStandardCourseTuitionFee(classGroup.name || classGroup.courseName);
       setCurrentTermInput(classGroup.currentTerm || 1);
       setCurrentTermNameInput(classGroup.currentTermName || `Khóa ${classGroup.currentTerm || 1}`);
-      setTuitionFeeInput(classGroup.tuitionFee || 14500000);
+      setTuitionFeeInput(classGroup.tuitionFee || standardFee);
       setNewTermName(`Khóa ${(classGroup.currentTerm || 1) + 1}`);
-      setNewTermTuition(classGroup.tuitionFee || 14500000);
-      setNewTermTotalSessions(classGroup.totalSessions || 36);
+      setNewTermTuition(standardFee === 5000000 ? 5200000 : standardFee === 5200000 ? 5600000 : standardFee === 5600000 ? 3200000 : 5000000);
+      setNewTermTotalSessions(classGroup.totalSessions || 32);
       
       const todayStr = new Date().toISOString().split('T')[0];
       setNewTermStartDate(todayStr);
@@ -588,7 +597,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
   const [skillTotalQuestions, setSkillTotalQuestions] = useState<Record<string, string>>({});
   const [totalPenaltyAmount, setTotalPenaltyAmount] = useState<string>('0 đ');
   const [penaltyBankAccount, setPenaltyBankAccount] = useState<string>(() => {
-    return localStorage.getItem('idv_penalty_bank_account') || '0798934698 - MB Bank (IELTS DƯƠNG VŨ)';
+    return localStorage.getItem('idv_penalty_bank_account') || DEFAULT_PENALTY_BANK_STR;
   });
 
   const handlePenaltyBankChange = (newVal: string) => {
@@ -784,7 +793,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
         }
       }
 
-      // Auto-detect previous debt: Check existing record, or prior attendance sessions, or student.balanceOwed
+      // Auto-detect previous penalty debt: Default to 0 / empty (''), only load if existing record or prior session penalty debt exists
       let initialPreviousDebt = '';
       if (existing?.previousDebt !== undefined) {
         const pDebtStr = String(existing.previousDebt);
@@ -809,8 +818,6 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
           if (sumDebt > 0) {
             initialPreviousDebt = `${sumDebt / 1000}k`;
           }
-        } else if (st.balanceOwed && st.balanceOwed > 0) {
-          initialPreviousDebt = `${st.balanceOwed / 1000}k`;
         }
       }
 
@@ -1301,7 +1308,7 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
     const studentTotalReceivable = studentPenaltyAmt + studentDebtAmt;
 
     if (studentTotalReceivable > 0) {
-      penaltyInfo += `💰 THÔNG BÁO THU TIỀN:\n`;
+      penaltyInfo += `💰 THÔNG BÁO THU TIỀN PHẠT & NỢ:\n`;
       if (studentPenaltyAmt > 0) {
         penaltyInfo += `   • Tiền phạt buổi này: ${penaltyFeeVal}\n`;
       }
@@ -1309,9 +1316,18 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
         penaltyInfo += `   • Nợ chưa nộp các buổi trước: ${previousDebtVal}\n`;
       }
       if (studentPenaltyAmt > 0 && studentDebtAmt > 0) {
-        penaltyInfo += `   ➔ TỔNG CỘNG PHẢI NỘP: ${studentTotalReceivable / 1000}k\n`;
+        penaltyInfo += `   ➔ TỔNG CỘNG PHẢI NỘP: ${studentTotalReceivable.toLocaleString('vi-VN')} đ\n`;
       }
-      penaltyInfo += `⚠️ LƯU Ý QUAN TRỌNG: PH/HS chuyển khoản nộp phạt vào STK cá nhân của trợ lý, không chuyển khoản tiền nộp phạt vào STK công ty.\n`;
+      const pBank = row?.penaltyBankAccount || penaltyBankAccount || DEFAULT_PENALTY_BANK_STR;
+      penaltyInfo += `💳 STK Nộp phạt (Trợ lý): ${pBank}\n`;
+      penaltyInfo += `   • Ngân hàng: Techcombank\n`;
+      penaltyInfo += `   • Số tài khoản: 174293666666\n`;
+      penaltyInfo += `   • Chủ tài khoản: Đặng Kim Anh (Trợ lý lớp)\n`;
+      penaltyInfo += `✍️ Cú pháp chuyển khoản: ${student.name} - Phat Buoi ${sessionNumber} - ${classGroup.name}\n`;
+      penaltyInfo += `📱 Quét QR nộp phạt: ${getPenaltyVietQrUrl(studentTotalReceivable, `${student.name} Phat B${sessionNumber}`)}\n`;
+      penaltyInfo += `⚠️ LƯU Ý PHÂN BIỆT TÀI KHOẢN:\n`;
+      penaltyInfo += `   1. Học phí: Chuyển khoản vào STK CÔNG TY (MB Bank - 0988889999 - IELTS DUONG VU).\n`;
+      penaltyInfo += `   2. Nộp phạt & nợ: Chuyển khoản vào STK CÁ NHÂN TRỢ LÝ (Techcombank - 174293666666 - Đặng Kim Anh).\n`;
     }
 
     return `🌟 IELTS DƯƠNG VŨ - BẢNG ĐIỂM BUỔI HỌC SỐ ${sessionNumber}
@@ -1371,14 +1387,10 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
 
     summary += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     if (grandTotalReceivable > 0) {
-      summary += `💰 TỔNG TIỀN PHẢI THU CỦA LỚP: ${formattedGrandTotalReceivable}\n`;
-      if (totalCalculatedPenaltyFee > 0) {
-        summary += `   • Phạt buổi này: ${formattedTotalPenaltyFee}\n`;
-      }
-      if (totalCalculatedPreviousDebt > 0) {
-        summary += `   • Nợ các buổi trước: ${formattedTotalPreviousDebt}\n`;
-      }
-      summary += `⚠️ LƯU Ý QUAN TRỌNG: PH/HS chuyển khoản nộp phạt vào STK cá nhân của trợ lý, không chuyển khoản tiền nộp phạt vào STK công ty.\n`;
+      summary += `💳 STK Nộp phạt (Trợ lý): ${penaltyBankAccount || DEFAULT_PENALTY_BANK_STR}\n`;
+      summary += `   • Ngân hàng: Techcombank | Số TK: 174293666666 | Chủ TK: Đặng Kim Anh\n`;
+      summary += `✍️ Cú pháp: [Tên Học Viên] - Phat Buoi ${sessionNumber} - ${classGroup.name}\n`;
+      summary += `⚠️ LƯU Ý: Học phí gửi vào STK công ty (MB Bank), tiền nộp phạt & nợ cũ vui lòng chuyển khoản vào STK cá nhân trợ lý (Đặng Kim Anh - Techcombank).\n`;
       summary += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     }
     summary += `📞 Hotline trung tâm: 0798934698\n`;
@@ -2212,6 +2224,92 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                   >
                     Làm tròn Overall Band IELTS (4 kỹ năng)
                   </button>
+                </div>
+              </div>
+
+              {/* Section 6: Multi-Homework Selection Bar */}
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <ListChecks className="w-3.5 h-3.5 text-amber-600" />
+                    <span>6. Chọn bài tập (BTVN) cần kiểm tra buổi này ({homeworkItems.length} mục đã chọn):</span>
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <span className="text-slate-400 font-medium">Gợi ý nhanh:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const items = ['Nghe', 'Viết'];
+                        setHomeworkItems(items);
+                        localStorage.setItem('idv_homework_items', JSON.stringify(items));
+                      }}
+                      className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg font-bold"
+                    >
+                      Nghe + Viết
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const items = ['Nghe', 'Nói', 'Đọc', 'Viết'];
+                        setHomeworkItems(items);
+                        localStorage.setItem('idv_homework_items', JSON.stringify(items));
+                      }}
+                      className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg font-bold"
+                    >
+                      4 Kỹ năng
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const items = ['Nghe', 'Nói', 'Đọc', 'Viết', 'Chép phạt', 'Chữa bài'];
+                        setHomeworkItems(items);
+                        localStorage.setItem('idv_homework_items', JSON.stringify(items));
+                      }}
+                      className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold"
+                    >
+                      Đầy đủ (6 mục)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsHwConfigModalOpen(true)}
+                      className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg font-bold flex items-center gap-1"
+                    >
+                      <Settings className="w-3 h-3 text-slate-600" />
+                      <span>Tùy chỉnh thêm</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {['Nghe', 'Nói', 'Đọc', 'Viết', 'Từ vựng', 'Ngữ pháp', 'Chép phạt', 'Chữa bài', 'Luyện đề'].map((item) => {
+                    const isSelected = homeworkItems.includes(item);
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => {
+                          let next: string[];
+                          if (isSelected) {
+                            if (homeworkItems.length <= 1) return;
+                            next = homeworkItems.filter((h) => h !== item);
+                          } else {
+                            next = [...homeworkItems, item];
+                          }
+                          setHomeworkItems(next);
+                          localStorage.setItem('idv_homework_items', JSON.stringify(next));
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-amber-500 text-amber-950 shadow-xs ring-2 ring-amber-300 font-extrabold'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        <span className="text-xs">{isSelected ? '☑' : '☐'}</span>
+                        <span>{item}</span>
+                        {isSelected && <Check className="w-3 h-3 ml-0.5 text-amber-950 stroke-[3]" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -3517,6 +3615,7 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
         skillTotalQuestions={skillTotalQuestions}
         totalPenaltyAmount={totalPenaltyAmount}
         penaltyBankAccount={penaltyBankAccount}
+        selectedHomeworkItems={homeworkItems}
       />
 
       {/* Modal: Thêm học sinh vào lớp (Chọn từ danh sách có sẵn HOẶC Tạo mới) */}

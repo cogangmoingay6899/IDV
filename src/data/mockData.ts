@@ -5289,9 +5289,9 @@ export const INITIAL_COURSES: CurriculumCourse[] = [
     "level": "Khóa 1 (Foundation 3.5 - 4.5)",
     "durationMonths": 4,
     "totalSessions": 32,
-    "tuitionFee": 14500000,
+    "tuitionFee": 5000000,
     "targetAudience": "Học sinh xây dựng nền tảng từ vựng, ngữ pháp, phát âm và làm quen bài thi IELTS",
-    "description": "32 buổi • Buổi 32 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 2 (INSPIRE)."
+    "description": "32 buổi • Buổi 32 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 2 (INSPIRE) • Học phí: 5.000.000 đ."
   },
   {
     "id": "crs-inspire",
@@ -5300,9 +5300,9 @@ export const INITIAL_COURSES: CurriculumCourse[] = [
     "level": "Khóa 2 (Pre-Intermediate 4.5 - 5.5)",
     "durationMonths": 4,
     "totalSessions": 33,
-    "tuitionFee": 14500000,
+    "tuitionFee": 5200000,
     "targetAudience": "Học sinh rèn luyện phương pháp 4 kỹ năng Nghe - Nói - Đọc - Viết",
-    "description": "33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 3 (DESIRE)."
+    "description": "33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 3 (DESIRE) • Học phí: 5.200.000 đ."
   },
   {
     "id": "crs-desire",
@@ -5311,9 +5311,9 @@ export const INITIAL_COURSES: CurriculumCourse[] = [
     "level": "Khóa 3 (Intermediate 5.5 - 6.5)",
     "durationMonths": 4,
     "totalSessions": 33,
-    "tuitionFee": 15500000,
+    "tuitionFee": 5600000,
     "targetAudience": "Học sinh nâng band chuyên sâu Writing Task 1 & 2, phản xạ Speaking lưu loát",
-    "description": "33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 4 (LUYỆN ĐỀ DRILL)."
+    "description": "33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 4 (LUYỆN ĐỀ DRILL) • Học phí: 5.600.000 đ."
   },
   {
     "id": "crs-drill",
@@ -5322,9 +5322,9 @@ export const INITIAL_COURSES: CurriculumCourse[] = [
     "level": "Khóa 4 (Intensive Drill 6.5 - 7.5+)",
     "durationMonths": 4,
     "totalSessions": 32,
-    "tuitionFee": 16500000,
+    "tuitionFee": 3200000,
     "targetAudience": "Luyện đề thi thật Forecast mới nhất, bứt phá band điểm thi quốc tế",
-    "description": "32 buổi • Buổi 31 & 32 kiểm tra cuối khóa • Sẵn sàng đi thi IELTS quốc tế."
+    "description": "32 buổi • Buổi 31 & 32 kiểm tra cuối khóa • Sẵn sàng đi thi IELTS quốc tế • Học phí: 3.200.000 đ."
   }
 ];
 

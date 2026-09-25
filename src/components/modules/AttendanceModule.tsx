@@ -40,6 +40,8 @@ import { ClassScoreExportModal } from '../modals/ClassScoreExportModal';
 import { HomeworkConfigModal } from '../modals/HomeworkConfigModal';
 import { formatDateVN } from '../../utils/courseSchedule';
 
+import { DEFAULT_PENALTY_BANK_STR } from '../../utils/paymentConfig';
+
 interface AttendanceModuleProps {
   classes: ClassGroup[];
   students: Student[];
@@ -117,7 +119,7 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
   const [lessonTopic, setLessonTopic] = useState<string>('');
   const [totalPenaltyAmount, setTotalPenaltyAmount] = useState<string>('0');
   const [penaltyBankAccount, setPenaltyBankAccount] = useState<string>(() => {
-    return localStorage.getItem('ielts_penalty_bank_account') || '0798934698 - MB Bank (IELTS DƯƠNG VŨ)';
+    return localStorage.getItem('ielts_penalty_bank_account') || DEFAULT_PENALTY_BANK_STR;
   });
 
   const [skillTotalQuestions, setSkillTotalQuestions] = useState<Record<string, string>>({

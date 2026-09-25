@@ -99,7 +99,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
     totalSessions: 32,
     completedSessions: 0,
     maxStudents: 25,
-    tuitionFee: 14500000,
+    tuitionFee: 5000000,
     status: 'Đang diễn ra' as ClassGroup['status'],
   });
 
@@ -179,12 +179,12 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
 
     // Pro-rated tuition calculation: (Total Fee / 32) * Actual Sessions
     // If sessionsThisCycle < 32, calculate tuition for the remaining sessions
-    const sessionRate = (st.customTuitionFee || formData.tuitionFee || 14500000) / 32;
+    const sessionRate = (st.customTuitionFee || formData.tuitionFee || 5000000) / 32;
     const proRatedTuition = Math.round(sessionsThisCycle * sessionRate);
     
     // Debt Carry-over: If previous cycle unpaid, carry over debt
     // Assuming debt = full cycle fee if not paid
-    const cycleFee = (st.customTuitionFee || formData.tuitionFee || 14500000);
+    const cycleFee = (st.customTuitionFee || formData.tuitionFee || 5000000);
     const carriedOverDebt = isUnpaidForCurrentCycle ? cycleFee : 0;
     const totalBalanceOwed = (isUnpaidForCurrentCycle ? cycleFee : 0) + (sessionsThisCycle < 32 ? proRatedTuition : 0);
 
@@ -279,7 +279,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
         setSelectedSchedulePreset(matchPreset.id);
       }
 
-      const defaultTuition = classGroup.tuitionFee || 14500000;
+      const defaultTuition = classGroup.tuitionFee || COURSE_LEVEL_CONFIGS[detected]?.standardTuitionFee || 5000000;
 
       setFormData({
         code: classGroup.code || '',
@@ -374,6 +374,7 @@ export const EditClassModal: React.FC<EditClassModalProps> = ({
       courseLevel: levelKey,
       courseName: config.name,
       totalSessions: config.totalSessions,
+      tuitionFee: config.standardTuitionFee || 5000000,
     }));
   };
 

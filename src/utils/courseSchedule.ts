@@ -27,6 +27,7 @@ export interface CourseLevelConfig {
   label: string;
   name: string;
   totalSessions: number;
+  standardTuitionFee: number; // Học phí chuẩn của khóa
   examSessions: number[];
   breakAfterCourseSessions: number; // Số buổi nghỉ sau khi kết thúc khóa
   nextCourseKey?: CourseLevelKey;
@@ -45,11 +46,12 @@ export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
     label: 'Khóa 1: PRE',
     name: 'PRE',
     totalSessions: 32,
+    standardTuitionFee: 5000000,
     examSessions: [32],
     breakAfterCourseSessions: 1,
     nextCourseKey: 'Khóa 2',
     nextCourseName: 'INSPIRE',
-    description: '32 buổi • Buổi 32 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 2 (INSPIRE)',
+    description: '32 buổi • Buổi 32 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 2 (INSPIRE) • Học phí chuẩn: 5.000.000 đ',
     examRule: 'Kiểm tra cuối khóa vào Buổi thứ 32 (1 buổi thi tập trung)',
     breakRule: 'Nghỉ 1 buổi trong lịch học trước khi khai giảng Khóa 2 (INSPIRE)',
     taAlertSession: 29,
@@ -61,11 +63,12 @@ export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
     label: 'Khóa 2: INSPIRE',
     name: 'INSPIRE',
     totalSessions: 33,
+    standardTuitionFee: 5200000,
     examSessions: [32, 33],
     breakAfterCourseSessions: 1,
     nextCourseKey: 'Khóa 3',
     nextCourseName: 'DESIRE',
-    description: '33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 3 (DESIRE)',
+    description: '33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 3 (DESIRE) • Học phí chuẩn: 5.200.000 đ',
     examRule: 'Kiểm tra cuối khóa vào Buổi thứ 32 & 33 (2 buổi: Đợt 1 Speaking/Writing & Đợt 2 Listening/Reading)',
     breakRule: 'Nghỉ 1 buổi trong lịch học trước khi khai giảng Khóa 3 (DESIRE)',
     taAlertSession: 29,
@@ -77,11 +80,12 @@ export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
     label: 'Khóa 3: DESIRE',
     name: 'DESIRE',
     totalSessions: 33,
+    standardTuitionFee: 5600000,
     examSessions: [32, 33],
     breakAfterCourseSessions: 1,
     nextCourseKey: 'Khóa 4',
     nextCourseName: 'LUYỆN ĐỀ DRILL',
-    description: '33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 4 (LUYỆN ĐỀ DRILL)',
+    description: '33 buổi • Buổi 32 & 33 kiểm tra cuối khóa • Nghỉ 1 buổi trước khi lên Khóa 4 (LUYỆN ĐỀ DRILL) • Học phí chuẩn: 5.600.000 đ',
     examRule: 'Kiểm tra cuối khóa vào Buổi thứ 32 & 33 (2 buổi: Đợt 1 Speaking/Writing & Đợt 2 Listening/Reading)',
     breakRule: 'Nghỉ 1 buổi trong lịch học trước khi khai giảng Khóa 4 (LUYỆN ĐỀ DRILL)',
     taAlertSession: 29,
@@ -93,10 +97,11 @@ export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
     label: 'Khóa 4: LUYỆN ĐỀ DRILL',
     name: 'LUYỆN ĐỀ DRILL',
     totalSessions: 32,
+    standardTuitionFee: 3200000,
     examSessions: [31, 32],
     breakAfterCourseSessions: 0,
     nextCourseName: 'Tốt nghiệp / Thi chứng chỉ IELTS quốc tế',
-    description: '32 buổi • Buổi 31 & 32 kiểm tra cuối khóa • Không nghỉ',
+    description: '32 buổi • Buổi 31 & 32 kiểm tra cuối khóa • Không nghỉ • Học phí chuẩn: 3.200.000 đ',
     examRule: 'Kiểm tra Mock Test cuối khóa vào Buổi thứ 31 & 32 (2 buổi thi thử đề thật Forecast)',
     breakRule: 'Không nghỉ • Hoàn thành toàn diện lộ trình IELTS',
     taAlertSession: 29,
@@ -104,6 +109,31 @@ export const COURSE_LEVEL_CONFIGS: Record<CourseLevelKey, CourseLevelConfig> = {
     endRule: 'Bế giảng tốt nghiệp lộ trình sau Buổi 32',
   },
 };
+
+/**
+ * Lấy chuẩn học phí theo khóa:
+ * - Khóa 1 (Pre): 5.000.000 đ
+ * - Khóa 2 (Inspire): 5.200.000 đ
+ * - Khóa 3 (Desire): 5.600.000 đ
+ * - Khóa 4 (Luyện đề): 3.200.000 đ
+ */
+export function getStandardCourseTuitionFee(courseNameOrLevel?: string): number {
+  if (!courseNameOrLevel) return 5000000;
+  const str = courseNameOrLevel.toLowerCase();
+  if (str.includes('khóa 4') || str.includes('drill') || str.includes('luyện đề') || str.includes('luyen de')) {
+    return 3200000;
+  }
+  if (str.includes('khóa 3') || str.includes('desire') || str.includes('intermediate')) {
+    return 5600000;
+  }
+  if (str.includes('khóa 2') || str.includes('inspire') || str.includes('pre-intermediate')) {
+    return 5200000;
+  }
+  if (str.includes('khóa 1') || str.includes('pre') || str.includes('foundation') || str.includes('junior')) {
+    return 5000000;
+  }
+  return 5000000;
+}
 
 export interface SchedulePreset {
   id: string;
@@ -1062,7 +1092,7 @@ export function toISODateString(dateInput?: string | Date | number | null): stri
  * Interface kết quả tính toán học phí theo số buổi (kết thúc sớm < 32 buổi) & cộng nợ khóa trước
  */
 export interface TuitionCalculationResult {
-  baseTuition: number; // Học phí trọn gói chuẩn cả khóa (mặc định 14.500.000 VNĐ hoặc học phí chuẩn của lớp)
+  baseTuition: number; // Học phí trọn gói chuẩn cả khóa (mặc định 5.000.000 VNĐ hoặc học phí chuẩn của lớp)
   standardSessions: number; // 32 buổi chuẩn 1 khóa
   perSessionRate: number; // Trung bình học phí 1 buổi = baseTuition / 32
   actualSessions: number; // Số buổi thực tế học (nếu kết thúc sớm < 32 buổi)
@@ -1078,13 +1108,13 @@ export interface TuitionCalculationResult {
  * 2. Nếu khóa trước chưa đóng mà sang chu kỳ mới: tự động cộng nợ học phí khóa trước vào khóa sau
  */
 export function calculateProRatedTuition(
-  baseTuition: number = 14500000,
+  baseTuition: number = 5000000,
   actualSessions: number = 32,
   previousDebt: number = 0,
   standardSessions: number = 32
 ): TuitionCalculationResult {
   const standard = standardSessions > 0 ? standardSessions : 32;
-  const safeBaseTuition = baseTuition > 0 ? baseTuition : 14500000;
+  const safeBaseTuition = baseTuition > 0 ? baseTuition : 5000000;
   const perSessionRate = Math.round(safeBaseTuition / standard);
   const safeActualSessions = typeof actualSessions === 'number' && actualSessions > 0 ? actualSessions : standard;
   const isEarlyEnd = safeActualSessions < standard;

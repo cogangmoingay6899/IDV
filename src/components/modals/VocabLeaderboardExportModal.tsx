@@ -174,6 +174,8 @@ export const VocabLeaderboardExportModal: React.FC<VocabLeaderboardExportModalPr
         quality: 0.98,
         pixelRatio: 2.5,
         backgroundColor: theme === 'purple' ? '#1e1b4b' : theme === 'blue' ? '#0f172a' : '#064e3b',
+        cacheBust: true,
+        skipFonts: true,
       });
 
       const fileName = `BangXepHang_${(test.title || 'VocabTest').replace(/[^a-zA-Z0-9]/g, '_')}_${
@@ -207,6 +209,8 @@ export const VocabLeaderboardExportModal: React.FC<VocabLeaderboardExportModalPr
         quality: 0.98,
         pixelRatio: 2.5,
         backgroundColor: theme === 'purple' ? '#1e1b4b' : theme === 'blue' ? '#0f172a' : '#064e3b',
+        cacheBust: true,
+        skipFonts: true,
       });
 
       if (!blob) throw new Error('Blob generation failed');

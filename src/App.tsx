@@ -431,7 +431,9 @@ export default function App() {
               if (prev.some((t) => t.id === incomingTest.id)) return prev;
               return [incomingTest, ...prev];
             });
-            showToast(`Hệ thống vừa nhận bài kiểm tra đầu vào mới từ: ${incomingTest.candidateName}!`);
+            if (!isPlacementTestUrl()) {
+              showToast(`Hệ thống vừa nhận bài kiểm tra đầu vào mới từ: ${incomingTest.candidateName}!`);
+            }
           } else if (event.data?.type === 'DELETE_PLACEMENT_TEST' && event.data.testId) {
             const targetId = event.data.testId as string;
             setPlacementTests((prev) => prev.filter((t) => t.id !== targetId));
@@ -452,7 +454,9 @@ export default function App() {
               if (prev.some((t) => t.id === incomingTest.id)) return prev;
               return [incomingTest, ...prev];
             });
-            showToast(`Hệ thống vừa nhận bài kiểm tra đầu vào mới từ: ${incomingTest.candidateName}!`);
+            if (!isPlacementTestUrl()) {
+              showToast(`Hệ thống vừa nhận bài kiểm tra đầu vào mới từ: ${incomingTest.candidateName}!`);
+            }
           }
         } catch (e) {
           console.warn('Error parsing storage sync:', e);
@@ -1697,40 +1701,41 @@ export default function App() {
   if (vocabTestIdParam || reviewTestIdParam) {
     const isReview = Boolean(reviewTestIdParam);
     return (
-      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans antialiased">
+      <div className="min-h-screen bg-[#f8fafc] text-slate-800 flex flex-col font-sans antialiased overflow-x-hidden w-full">
         {/* Student Vocab Portal Header */}
         <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-purple-700 text-white font-black flex items-center justify-center text-lg shadow-md border-2 border-purple-500">
+          <div className="max-w-5xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 sm:gap-3 truncate">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-purple-700 text-white font-black flex items-center justify-center text-base sm:text-lg shadow-md border-2 border-purple-500 shrink-0">
                 DV
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-black text-purple-900 bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-200 uppercase tracking-wide">
+              <div className="truncate">
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="text-[10px] sm:text-xs font-black text-purple-900 bg-purple-100 px-2 py-0.2 rounded-full border border-purple-200 uppercase tracking-wide shrink-0">
                     IELTS DƯƠNG VŨ
                   </span>
-                  <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.2 rounded-full border border-emerald-200 hidden sm:inline">
                     ✅ Trang kiểm tra chính thức
                   </span>
                 </div>
-                <h1 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight mt-0.5">
+                <h1 className="text-xs sm:text-base font-extrabold text-slate-900 leading-tight mt-0.5 truncate">
                   {isReview ? 'Bài ôn tập kiến thức - IELTS Dương Vũ' : 'Bài kiểm tra từ vựng - IELTS Dương Vũ'}
                 </h1>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-200 text-xs font-semibold">
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                Hệ thống tự động chấm điểm &amp; xếp hạng
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-200 text-[10px] sm:text-xs font-bold">
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span className="hidden sm:inline">Tự động chấm điểm &amp; xếp hạng</span>
+                <span className="sm:hidden">Bấm giờ &amp; Chấm điểm</span>
               </span>
             </div>
           </div>
         </header>
 
         {/* Student Vocab Test Body */}
-        <main className="max-w-5xl mx-auto w-full p-4 sm:p-6 md:p-8 flex-1">
+        <main className="max-w-4xl mx-auto w-full px-2.5 sm:px-6 py-3 sm:py-6 flex-1 overflow-x-hidden">
           <ClassVocabTestModule
             classes={classes}
             students={students}

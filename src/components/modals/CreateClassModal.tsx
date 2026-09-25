@@ -92,7 +92,7 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
     endDate: '',
     totalSessions: 32,
     maxStudents: 15,
-    tuitionFee: 14500000,
+    tuitionFee: 5000000,
     status: 'Đang diễn ra' as ClassGroup['status'],
   });
 
@@ -131,6 +131,7 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
       courseLevel: levelKey,
       courseName: config.name,
       totalSessions: config.totalSessions,
+      tuitionFee: config.standardTuitionFee || 5000000,
     }));
   };
 
