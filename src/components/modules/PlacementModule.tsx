@@ -880,12 +880,30 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
   const [isTestingWebhook, setIsTestingWebhook] = useState<boolean>(false);
   const [webhookTestResult, setWebhookTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  const sanitizeWebhookUrl = (url: string): string => {
+    let u = (url || '').trim();
+    if (!u) return '';
+    if (u.includes('script.google.com')) {
+      if (u.includes('/edit')) {
+        u = u.split('/edit')[0];
+      }
+      if (!u.endsWith('/exec')) {
+        u = u.replace(/\/+$/, '');
+        if (!u.endsWith('/exec')) {
+          u += '/exec';
+        }
+      }
+    }
+    return u;
+  };
+
   const handleTestWebhook = async () => {
-    const target = webhookUrl.trim();
+    const target = sanitizeWebhookUrl(webhookUrl);
     if (!target) {
       showToast('⚠️ Vui lòng dán Webhook URL trước khi kiểm tra!');
       return;
     }
+    setWebhookUrl(target);
     setIsTestingWebhook(true);
     setWebhookTestResult(null);
     try {
@@ -923,8 +941,9 @@ export const PlacementModule: React.FC<PlacementModuleProps> = ({
   };
 
   const handleSaveWebhookUrl = () => {
-    setWebhookUrl(webhookUrl.trim());
-    localStorage.setItem('ielts_placement_webhook_url', webhookUrl.trim());
+    const target = sanitizeWebhookUrl(webhookUrl);
+    setWebhookUrl(target);
+    localStorage.setItem('ielts_placement_webhook_url', target);
     setShowAppsScriptModal(false);
     showToast('Đã lưu cấu hình Webhook Google Apps Script thành công!');
   };

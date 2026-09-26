@@ -395,7 +395,18 @@ async function startServer() {
       );
 
       // Auto-push to Google Apps Script Webhook in the background
-      const webhookUrl = req.body?.webhookUrl || 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+      let webhookUrl = req.body?.webhookUrl || 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+      if (webhookUrl.includes('script.google.com')) {
+        if (webhookUrl.includes('/edit')) {
+          webhookUrl = webhookUrl.split('/edit')[0];
+        }
+        if (!webhookUrl.endsWith('/exec')) {
+          webhookUrl = webhookUrl.replace(/\/+$/, '');
+          if (!webhookUrl.endsWith('/exec')) {
+            webhookUrl += '/exec';
+          }
+        }
+      }
       if (webhookUrl && webhookUrl.startsWith('http')) {
         fetch(webhookUrl, {
           method: 'POST',
@@ -418,7 +429,18 @@ async function startServer() {
   // --- TEST GOOGLE APPS SCRIPT WEBHOOK ---
   app.post('/api/test-webhook', async (req, res) => {
     try {
-      const webhookUrl = req.body?.webhookUrl;
+      let webhookUrl = req.body?.webhookUrl || '';
+      if (webhookUrl.includes('script.google.com')) {
+        if (webhookUrl.includes('/edit')) {
+          webhookUrl = webhookUrl.split('/edit')[0];
+        }
+        if (!webhookUrl.endsWith('/exec')) {
+          webhookUrl = webhookUrl.replace(/\/+$/, '');
+          if (!webhookUrl.endsWith('/exec')) {
+            webhookUrl += '/exec';
+          }
+        }
+      }
       if (!webhookUrl || !webhookUrl.startsWith('http')) {
         return res.json({ success: false, message: 'URL Webhook không hợp lệ.' });
       }
@@ -471,7 +493,18 @@ async function startServer() {
   // --- MANUAL / BATCH SYNC TO GOOGLE APPS SCRIPT WEBHOOK (STRICTLY 1-WAY: APP -> GOOGLE SHEET) ---
   app.post('/api/sync-placement-webhook', async (req, res) => {
     try {
-      const webhookUrl = req.body?.webhookUrl || 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+      let webhookUrl = req.body?.webhookUrl || 'https://script.google.com/macros/s/AKfycbyR_WM6kpyQZmdODOT8Z0okH0YSFDdqi_yJZ8riYOcVOx7bXeAayesEdIMWzoLsVj-J/exec';
+      if (webhookUrl.includes('script.google.com')) {
+        if (webhookUrl.includes('/edit')) {
+          webhookUrl = webhookUrl.split('/edit')[0];
+        }
+        if (!webhookUrl.endsWith('/exec')) {
+          webhookUrl = webhookUrl.replace(/\/+$/, '');
+          if (!webhookUrl.endsWith('/exec')) {
+            webhookUrl += '/exec';
+          }
+        }
+      }
       const providedTests = req.body?.tests;
       const testsToSync = (Array.isArray(providedTests) && providedTests.length > 0)
         ? providedTests
