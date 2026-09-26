@@ -1659,6 +1659,12 @@ export default function App() {
     saveDocument('teachers', teacher);
   };
 
+  // Handler: Update Teacher
+  const handleUpdateTeacher = (teacher: Teacher) => {
+    setTeachers((prev) => prev.map((t) => (t.id === teacher.id ? teacher : t)));
+    saveDocument('teachers', teacher);
+  };
+
   // Handler: Add Exam Score
   const handleAddExamScore = (exam: ExamScore) => {
     setExams((prev) => [exam, ...prev]);
@@ -2337,6 +2343,7 @@ export default function App() {
                 classes={classes}
                 students={students}
                 onAddTeacher={handleAddTeacher}
+                onUpdateTeacher={handleUpdateTeacher}
                 onUpdateClass={handleUpdateClass}
               />
             )}

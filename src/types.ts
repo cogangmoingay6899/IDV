@@ -141,6 +141,15 @@ export interface Teacher {
   rateNewStudent?: number;     // Đơn giá HS thêm mới / HS / buổi
   rating: number; // e.g. 4.9
   status: 'Đang giảng dạy' | 'Nghỉ phép' | 'Tạm ngưng';
+  salaryCalcType?: 'percent_of_amount' | 'fixed_per_session' | 'fixed_with_size_condition' | 'rate_per_student';
+  baseAmount?: number;
+  percentageK1?: number;
+  percentageK2?: number;
+  percentageK3?: number;
+  percentageK4?: number;
+  fixedRate?: number;
+  fixedRateUnder23?: number;
+  fixedRateOver23?: number;
 }
 
 export interface TeacherSubstituteRecord {

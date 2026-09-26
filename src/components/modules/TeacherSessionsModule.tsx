@@ -17,6 +17,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { ClassGroup, Student, AttendanceRecord, Teacher, AuthUser } from '../../types';
+import { calculateTeacherSessionSalary } from '../../utils/salaryCalculator';
 
 interface TeacherSessionsModuleProps {
   classes: ClassGroup[];
@@ -367,12 +368,16 @@ export const TeacherSessionsModule: React.FC<TeacherSessionsModuleProps> = ({
     return totalStudents > 0 ? Math.round((totalPresent / totalStudents) * 100) : 0;
   }, [filteredSessions]);
 
-  // Estimated remuneration if rate is available (for visual interest)
+  // Estimated remuneration based on dynamic custom teacher rates
   const estimatedPayroll = useMemo(() => {
-    if (!activeTeacher || !activeTeacher.hourlyRate) return 0;
-    // Assuming 1 session = 1.75 hours or simple flat rate per session
-    return totalSessionsCount * activeTeacher.hourlyRate;
-  }, [activeTeacher, totalSessionsCount]);
+    if (!activeTeacher) return 0;
+    return filteredSessions.reduce((sum, session) => {
+      const cls = classes.find((c) => c.id === session.classId);
+      const level = cls?.courseLevel || 'Khóa 1';
+      const rate = calculateTeacherSessionSalary(activeTeacher, level, session.studentTotalCount || 20);
+      return sum + rate;
+    }, 0);
+  }, [activeTeacher, filteredSessions, classes]);
 
   // Format date display (e.g., 21/09/2026 -> 21/09)
   const formatShortDate = (dateStr: string) => {
@@ -530,7 +535,15 @@ export const TeacherSessionsModule: React.FC<TeacherSessionsModuleProps> = ({
                     ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(estimatedPayroll)
                     : 'Chưa tính'}
                 </div>
-                <span className="text-[10px] text-slate-500 block">Đơn giá: {activeTeacher.hourlyRate ? `${new Intl.NumberFormat('vi-VN').format(activeTeacher.hourlyRate)}đ/buổi` : 'Chưa cập nhật'}</span>
+                <span className="text-[10px] text-slate-500 block">
+                  {activeTeacher.salaryCalcType === 'percent_of_amount'
+                    ? `Khoán % (${activeTeacher.percentageK1 || 30}% - ${activeTeacher.percentageK3 || 30}%)`
+                    : activeTeacher.salaryCalcType === 'fixed_per_session'
+                    ? `Cố định: ${new Intl.NumberFormat('vi-VN').format(activeTeacher.fixedRate || 500000)}đ/buổi`
+                    : activeTeacher.salaryCalcType === 'fixed_with_size_condition'
+                    ? `Sỹ số sỹ tử: ${new Intl.NumberFormat('vi-VN').format(activeTeacher.fixedRateUnder23 || 700000)}đ - ${new Intl.NumberFormat('vi-VN').format(activeTeacher.fixedRateOver23 || 800000)}đ`
+                    : `Sỹ số HS: ${new Intl.NumberFormat('vi-VN').format(activeTeacher.rateRegularStudent || 36000)}đ/hv`}
+                </span>
               </>
             ) : (
               <>
@@ -782,11 +795,19 @@ export const TeacherSessionsModule: React.FC<TeacherSessionsModuleProps> = ({
                       <th className="py-3 px-4 text-center">Buổi số</th>
                       <th className="py-3 px-4">Nội dung / Kỹ năng giảng dạy</th>
                       <th className="py-3 px-4 text-center">Sĩ số lớp</th>
+                      <th className="py-3 px-4 text-right">Lương buổi dạy</th>
                       <th className="py-3 px-4">Giảng viên ghi nhận</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
                     {filteredSessions.map((sess, idx) => {
+                      const sessionCls = classes.find((c) => c.id === sess.classId);
+                      const level = sessionCls?.courseLevel || 'Khóa 1';
+                      const sessTeacher = teachers.find(t => t.name === sess.teacherName) || activeTeacher;
+                      const sessionSalary = sessTeacher 
+                        ? calculateTeacherSessionSalary(sessTeacher, level, sess.studentTotalCount || 20)
+                        : 0;
+
                       return (
                         <tr key={sess.key} className="hover:bg-slate-50/50 transition-colors">
                           <td className="py-3.5 px-5 text-center font-bold text-slate-400">
@@ -829,6 +850,11 @@ export const TeacherSessionsModule: React.FC<TeacherSessionsModuleProps> = ({
                               <span className="text-slate-400 font-normal">{sess.studentTotalCount}</span>
                             </span>
                           </td>
+                          <td className="py-3.5 px-4 text-right font-black text-emerald-700 font-mono">
+                            {sessionSalary > 0 
+                              ? new Intl.NumberFormat('vi-VN').format(sessionSalary) + 'đ'
+                              : 'Chưa tính'}
+                          </td>
                           <td className="py-3.5 px-4 text-slate-700 font-semibold italic">
                             {sess.teacherName}
                           </td>
@@ -838,7 +864,7 @@ export const TeacherSessionsModule: React.FC<TeacherSessionsModuleProps> = ({
 
                     {filteredSessions.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-slate-400">
+                        <td colSpan={8} className="py-12 text-center text-slate-400">
                           <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                           <p className="font-semibold text-slate-600 text-xs">Không có nhật ký buổi dạy nào</p>
                           <p className="text-[11px] text-slate-400 mt-0.5">Dữ liệu ghi chép đang trống trong thời gian đã chọn.</p>
