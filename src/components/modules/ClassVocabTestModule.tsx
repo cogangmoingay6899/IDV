@@ -30,7 +30,10 @@ import {
   FileText,
   HelpCircle,
   Image as ImageIcon,
+  QrCode,
+  Download,
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { VocabTest, VocabTestSubmission, VocabQuestion, ClassGroup, Student, ExamScore, AttendanceRecord, AuthUser } from '../../types';
 import { saveDocument, subscribeCollection, fetchDocument, addSubmissionToTest, fetchCollection } from '../../lib/firestoreService';
 import { VocabLeaderboardExportModal } from '../modals/VocabLeaderboardExportModal';
@@ -410,6 +413,10 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const [autoTypeInputCount, setAutoTypeInputCount] = useState<number>(1);
   const [createdTestShareModal, setCreatedTestShareModal] = useState<VocabTest | null>(null);
 
+  // Dedicated QR Code Modal State for Individual Tests
+  const [qrModalTest, setQrModalTest] = useState<VocabTest | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+
   // Configurable Public Base URL state for sharing
   const [publicBaseUrl, setLocalPublicBaseUrl] = useState<string>(() => getPublicBaseUrl());
   const [showDomainConfig, setShowDomainConfig] = useState<boolean>(false);
@@ -422,6 +429,31 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
   const isUserAwayRef = useRef<boolean>(false);
   const isSubmittingRef = useRef<boolean>(false);
   const tabSwitchCountRef = useRef<number>(0);
+
+  // Generate QR Code Data URL dynamically whenever qrModalTest is opened or domain changed
+  useEffect(() => {
+    if (qrModalTest) {
+      const shareUrl = getTestShareUrl(qrModalTest.id);
+      QRCode.toDataURL(
+        shareUrl,
+        {
+          width: 380,
+          margin: 2,
+          color: {
+            dark: '#2e1065',
+            light: '#ffffff',
+          },
+        },
+        (err, url) => {
+          if (!err && url) {
+            setQrDataUrl(url);
+          }
+        }
+      );
+    } else {
+      setQrDataUrl('');
+    }
+  }, [qrModalTest, publicBaseUrl, activeTestType]);
 
   // Real-time synchronization for vocab tests from Firestore
   useEffect(() => {
@@ -1842,52 +1874,40 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                         />
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <div className="flex items-center gap-2 pt-0.5">
                         <button
                           type="button"
                           onClick={() => handleCopyTestLink(test, 'url')}
-                          className="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl flex items-center justify-center gap-1 transition-all shadow-2xs active:scale-95 whitespace-nowrap"
+                          className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 whitespace-nowrap cursor-pointer"
                           title="Sao chép đường link URL trực tiếp để gửi Zalo/Facebook"
                         >
-                          {isCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                           <span>{isCopied ? 'Đã chép link!' : 'Copy Link'}</span>
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => handleCopyTestLink(test, 'zalo')}
-                          className="flex-1 py-1.5 px-2 bg-purple-700 hover:bg-purple-800 text-white font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl flex items-center justify-center gap-1 transition-all shadow-2xs active:scale-95 whitespace-nowrap"
-                          title="Sao chép tin nhắn Zalo đầy đủ kèm tiêu đề bài test"
+                          onClick={() => setQrModalTest(test)}
+                          className="flex-1 py-2 px-3.5 bg-amber-500 hover:bg-amber-600 text-purple-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 whitespace-nowrap cursor-pointer"
+                          title="Xem & Tải mã QR để gửi học sinh quét camera làm bài ngay"
                         >
-                          <Share2 className="w-3 h-3" />
-                          <span>Mẫu Zalo</span>
+                          <QrCode className="w-4 h-4 text-purple-950 shrink-0" />
+                          <span>Mã QR</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => window.open(shareUrl, '_blank')}
-                          className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg sm:rounded-xl transition-all shrink-0"
+                          className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-all shrink-0"
                           title="Mở thử link bài test trong tab mới"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" />
+                          <ExternalLink className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
 
-                    {/* Actions Grid on Mobile, Flex on Desktop */}
-                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 pt-0.5">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartRunner(test, true);
-                        }}
-                        className="py-1.5 sm:py-2 sm:flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl flex items-center justify-center gap-1 transition-all shadow-xs active:scale-95 cursor-pointer"
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        <span>Làm bài</span>
-                      </button>
-
+                    {/* Actions Grid */}
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
                       <button
                         type="button"
                         onClick={() => {
@@ -1901,18 +1921,18 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                           setCustomizedQuestions(test.questions || []);
                           setShowCreateModal(true);
                         }}
-                        className="py-1.5 sm:py-2 px-2.5 bg-purple-100 hover:bg-purple-200 text-purple-950 font-bold text-[11px] sm:text-xs rounded-lg sm:rounded-xl flex items-center justify-center gap-1 transition-all shadow-xs active:scale-95"
+                        className="flex-1 py-2 px-3.5 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
                         title="Chỉnh sửa câu hỏi và thông tin bài test"
                       >
-                        ✏️ Sửa
+                        ✏️ <span>Sửa</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setActiveLeaderboardTest(test)}
-                        className="py-1.5 sm:py-2 px-2 bg-amber-500 hover:bg-amber-600 text-purple-950 font-black text-[11px] sm:text-xs rounded-lg sm:rounded-xl flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer active:scale-95"
+                        className="py-2 px-3 bg-amber-500 hover:bg-amber-600 text-purple-950 font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
                       >
-                        <Trophy className="w-3.5 h-3.5 text-purple-950" />
+                        <Trophy className="w-3.5 h-3.5 text-purple-950 shrink-0" />
                         <span>BXH ({submissionCount})</span>
                       </button>
 
@@ -1922,11 +1942,23 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                           setExportZaloInitialClass(classGroup ? classGroup.name : 'all');
                           setExportZaloModalTest(test);
                         }}
-                        className="py-1.5 sm:py-2 px-2 bg-purple-900 hover:bg-purple-950 text-amber-300 font-black text-[11px] sm:text-xs rounded-lg sm:rounded-xl flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer active:scale-95"
-                        title="Tạo ảnh Bảng Xếp Hạng chất lượng cao gửi Zalo cho phụ huynh"
+                        className="py-2 px-3 bg-purple-900 hover:bg-purple-950 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
                       >
-                        <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                        <ImageIcon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                         <span>Ảnh Zalo</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartRunner(test, true);
+                        }}
+                        className="py-2 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer border border-slate-200"
+                        title="Làm thử bài test này"
+                      >
+                        <Play className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Làm bài</span>
                       </button>
                     </div>
                   </div>
@@ -1982,7 +2014,9 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   </div>
                   <div>
                     <h3 className="font-extrabold text-slate-900 text-base">
-                      Bảng Xếp Hạng Bài Test Từ Vựng
+                      {activeLeaderboardTest.id.startsWith('rev-') || activeLeaderboardTest.id.toLowerCase().includes('rev')
+                        ? 'Bảng xếp hạng ôn tập kiến thức'
+                        : 'Bảng xếp hạng kiểm tra từ vựng'}
                     </h3>
                     <p className="text-xs text-slate-500">{activeLeaderboardTest.title}</p>
                   </div>
@@ -3437,23 +3471,32 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   title="Nhấn để bôi đen và sao chép"
                 />
 
-                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                <div className="grid grid-cols-3 gap-2 pt-0.5">
                   <button
                     type="button"
                     onClick={() => handleCopyTestLink(createdTestShareModal, 'url')}
-                    className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+                    className="py-2 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 shadow-2xs"
                   >
                     <Copy className="w-3.5 h-3.5" />
-                    <span>Copy Link URL</span>
+                    <span>Copy Link</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleCopyTestLink(createdTestShareModal, 'zalo')}
-                    className="py-2 px-3 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+                    className="py-2 px-2 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 shadow-2xs"
                   >
                     <Share2 className="w-3.5 h-3.5" />
-                    <span>Mẫu Tin Zalo</span>
+                    <span>Mẫu Zalo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setQrModalTest(createdTestShareModal)}
+                    className="py-2 px-2 bg-amber-500 hover:bg-amber-600 text-purple-950 font-black text-xs rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 shadow-2xs cursor-pointer"
+                  >
+                    <QrCode className="w-3.5 h-3.5 text-purple-950" />
+                    <span>Mã QR</span>
                   </button>
                 </div>
               </div>
@@ -3484,6 +3527,85 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
           </div>
         );
       })()}
+      {/* MODAL 6: MÃ QR QUÉT BÀI TEST TỪ VỰNG / ÔN TẬP RIÊNG CHO TỪNG BÀI */}
+      {qrModalTest && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-3.5 sm:p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-slate-200 text-center space-y-4 animate-in zoom-in-95 my-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-left">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-800 font-black flex items-center justify-center shadow-inner">
+                  <QrCode className="w-5 h-5 text-purple-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 leading-snug">Mã QR Làm Bài Test</h3>
+                  <p className="text-[10px] text-purple-900 font-bold uppercase tracking-wide">IELTS DƯƠNG VŨ</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQrModalTest(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center transition-colors text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-200">
+                {qrModalTest.courseLevel} • {activeTestType === 'review' ? 'ÔN TẬP KIẾN THỨC' : 'TEST TỪ VỰNG'}
+              </span>
+              <h4 className="text-base font-black text-slate-900 leading-snug pt-0.5">{qrModalTest.title}</h4>
+              <p className="text-xs text-slate-500 font-bold">{qrModalTest.unitName} ({qrModalTest.questions.length} câu)</p>
+            </div>
+
+            {/* QR Code Graphic Container */}
+            <div className="bg-gradient-to-b from-purple-50 to-slate-50 p-4 rounded-2xl border-2 border-purple-200 space-y-2 shadow-inner">
+              {qrDataUrl ? (
+                <img
+                  src={qrDataUrl}
+                  alt={`Mã QR ${qrModalTest.title}`}
+                  className="w-52 h-52 sm:w-60 sm:h-60 mx-auto rounded-xl border-4 border-white shadow-md p-1.5 bg-white"
+                />
+              ) : (
+                <div className="w-52 h-52 mx-auto flex items-center justify-center bg-white rounded-xl border border-slate-200 text-slate-400 text-xs font-bold">
+                  Đang tạo mã QR...
+                </div>
+              )}
+              <p className="text-[11px] text-purple-950 font-bold leading-relaxed px-1">
+                📱 Học sinh dùng Camera điện thoại hoặc ứng dụng Zalo quét mã để mở làm bài trực tiếp!
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <a
+                href={qrDataUrl}
+                download={`MaQR_Test_${qrModalTest.title.replace(/\s+/g, '_')}.png`}
+                className="py-2.5 px-3 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>Tải Ảnh QR</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={() => handleCopyTestLink(qrModalTest, 'url')}
+                className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
+              >
+                <Copy className="w-4 h-4" />
+                <span>Copy Link</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setQrModalTest(null)}
+              className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+            >
+              Đóng Màn Hình QR
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

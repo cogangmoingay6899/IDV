@@ -189,6 +189,47 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
 
   const [studentRows, setStudentRows] = useState<Record<string, StudentRowState>>({});
 
+  // Auto-load draft for selected class if available
+  useEffect(() => {
+    if (!selectedClassId) return;
+    try {
+      const raw = localStorage.getItem(`idv_daily_log_draft_${selectedClassId}`);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft) {
+          if (draft.studentRows && Object.keys(draft.studentRows).length > 0) {
+            setStudentRows((prev) => ({ ...prev, ...draft.studentRows }));
+          }
+          if (draft.lessonTopic) setLessonTopic(draft.lessonTopic);
+          if (draft.selectedSkills && Array.isArray(draft.selectedSkills) && draft.selectedSkills.length > 0) {
+            setSelectedSkills(draft.selectedSkills);
+          }
+          if (draft.sessionNumber) setSessionNumber(draft.sessionNumber);
+          if (draft.currentDate) setCurrentDate(draft.currentDate);
+          if (draft.teacherName) setTeacherName(draft.teacherName);
+        }
+      }
+    } catch (e) {}
+  }, [selectedClassId]);
+
+  // Real-time autosave draft as user enters data
+  useEffect(() => {
+    if (!selectedClassId) return;
+    if (Object.keys(studentRows).length === 0 && !lessonTopic) return;
+    const draft = {
+      studentRows,
+      lessonTopic,
+      selectedSkills,
+      sessionNumber,
+      currentDate,
+      teacherName,
+      updatedAt: Date.now(),
+    };
+    try {
+      localStorage.setItem(`idv_daily_log_draft_${selectedClassId}`, JSON.stringify(draft));
+    } catch (e) {}
+  }, [selectedClassId, studentRows, lessonTopic, selectedSkills, sessionNumber, currentDate, teacherName]);
+
   // Parse penalty amount helper
   const parsePenaltyAmount = (val?: string | number): number => {
     if (!val) return 0;
@@ -635,6 +676,13 @@ export const AttendanceModule: React.FC<AttendanceModuleProps> = ({
     });
 
     onSaveAttendance(newRecords);
+
+    // Clear saved draft on successful save
+    try {
+      if (selectedClassId) {
+        localStorage.removeItem(`idv_daily_log_draft_${selectedClassId}`);
+      }
+    } catch (e) {}
 
     // If onAddExamScore is available and scores were entered, record exam scores too!
     if (onAddExamScore) {

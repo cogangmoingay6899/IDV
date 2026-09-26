@@ -35,6 +35,7 @@ import { ClassPronunciationModule } from './components/modules/ClassPronunciatio
 import { SpeakingPracticeModule } from './components/modules/SpeakingPracticeModule';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { exportCenterDataToExcel } from './lib/excelExportService';
+import { syncAttendanceToClassSpreadsheet } from './lib/spreadsheetSyncService';
 
 // Helper to check if URL is requesting the Online Placement Test Portal
 const isPlacementTestUrl = () => {
@@ -1605,7 +1606,7 @@ export default function App() {
     saveDocument('trialStudents', trial);
   };
 
-  // Handler: Bulk Save Attendance
+  // Handler: Bulk Save Attendance & Sync to Class Spreadsheet + Teacher Sessions
   const handleSaveAttendance = (newRecords: AttendanceRecord[]) => {
     setAttendance((prev) => {
       const filtered = prev.filter(
@@ -1613,8 +1614,32 @@ export default function App() {
       );
       return [...newRecords, ...filtered];
     });
+
     if (newRecords.length > 0) {
+      // 1. Save attendance records to Firestore (registers teacher teaching session)
       saveBatchDocuments('attendance', newRecords);
+
+      // 2. Auto-update class completedSessions count if sessionNumber is recorded
+      const sample = newRecords[0];
+      if (sample && sample.classId && sample.sessionNumber) {
+        setClasses((prevClasses) => {
+          const targetClass = prevClasses.find((c) => c.id === sample.classId);
+          if (targetClass) {
+            const maxSess = Math.max(targetClass.completedSessions || 0, sample.sessionNumber);
+            if (maxSess !== targetClass.completedSessions) {
+              const updatedClass = { ...targetClass, completedSessions: maxSess };
+              saveDocument('classes', updatedClass);
+              return prevClasses.map((c) => (c.id === sample.classId ? updatedClass : c));
+            }
+          }
+          return prevClasses;
+        });
+      }
+
+      // 3. Auto-sync scores & attendance directly into the Class Spreadsheet (Sổ sheet của lớp)
+      syncAttendanceToClassSpreadsheet(newRecords).catch((err) => {
+        console.warn('Auto sync to class spreadsheet failed:', err);
+      });
     }
   };
 

@@ -659,6 +659,47 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
 
   const [studentRows, setStudentRows] = useState<Record<string, StudentRowState>>({});
 
+  // Auto-load un-saved draft data for this class if available
+  useEffect(() => {
+    if (!classGroup?.id) return;
+    try {
+      const raw = localStorage.getItem(`idv_daily_log_draft_${classGroup.id}`);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft) {
+          if (draft.studentRows && Object.keys(draft.studentRows).length > 0) {
+            setStudentRows((prev) => ({ ...prev, ...draft.studentRows }));
+          }
+          if (draft.lessonTopic) setLessonTopic(draft.lessonTopic);
+          if (draft.selectedSkills && Array.isArray(draft.selectedSkills) && draft.selectedSkills.length > 0) {
+            setSelectedSkills(draft.selectedSkills);
+          }
+          if (draft.sessionNumber) setSessionNumber(draft.sessionNumber);
+          if (draft.currentDate) setCurrentDate(draft.currentDate);
+          if (draft.teacherName) setTeacherName(draft.teacherName);
+        }
+      }
+    } catch (e) {}
+  }, [classGroup?.id]);
+
+  // Real-time autosave draft to localStorage as user types
+  useEffect(() => {
+    if (!classGroup?.id) return;
+    if (Object.keys(studentRows).length === 0 && !lessonTopic) return;
+    const draft = {
+      studentRows,
+      lessonTopic,
+      selectedSkills,
+      sessionNumber,
+      currentDate,
+      teacherName,
+      updatedAt: Date.now(),
+    };
+    try {
+      localStorage.setItem(`idv_daily_log_draft_${classGroup.id}`, JSON.stringify(draft));
+    } catch (e) {}
+  }, [classGroup?.id, studentRows, lessonTopic, selectedSkills, sessionNumber, currentDate, teacherName]);
+
   // Homework item tracking (e.g. Nghe, Nói, Đọc, Viết, Chép phạt, Chữa bài)
   const [homeworkItems, setHomeworkItems] = useState<string[]>(() => {
     try {
@@ -1266,6 +1307,13 @@ export const ClassDetailView: React.FC<ClassDetailViewProps> = ({
         }
       });
     }
+
+    // Clear saved draft on successful save
+    try {
+      if (classGroup?.id) {
+        localStorage.removeItem(`idv_daily_log_draft_${classGroup.id}`);
+      }
+    } catch (e) {}
 
     setToastMessage(`Đã lưu bảng điểm đa kỹ năng (${selectedSkills.join(', ')}) cho lớp "${classGroup.name}" ngày ${currentDate}!`);
     setTimeout(() => setToastMessage(null), 4000);

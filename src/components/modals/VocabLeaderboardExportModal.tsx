@@ -118,9 +118,10 @@ export const VocabLeaderboardExportModal: React.FC<VocabLeaderboardExportModalPr
 
   // Format Zalo message text
   const generateZaloText = (): string => {
+    const isReview = test.id.startsWith('rev-') || test.id.toLowerCase().includes('rev');
     const classTitle = selectedClass === 'all' ? 'TẤT CẢ CÁC LỚP' : `LỚP ${selectedClass}`;
     let text = `📢 IELTS DƯƠNG VŨ\n`;
-    text += `🏆 BẢNG XẾP HẠNG BÀI KIỂM TRA TỪ VỰNG - ${classTitle}\n`;
+    text += `🏆 ${isReview ? 'BẢNG XẾP HẠNG ÔN TẬP KIẾN THỨC' : 'BẢNG XẾP HẠNG KIỂM TRA TỪ VỰNG'} - ${classTitle}\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `📖 Bài kiểm tra: ${test.title}\n`;
     text += `📚 Khóa học: ${test.courseLevel} • ${test.unitName}\n`;
@@ -454,7 +455,9 @@ export const VocabLeaderboardExportModal: React.FC<VocabLeaderboardExportModalPr
                       </span>
                     </div>
                     <h2 className="text-base sm:text-lg font-black text-white tracking-wide">
-                      BẢNG XẾP HẠNG TỪ VỰNG & ÔN TẬP
+                      {test.id.startsWith('rev-') || test.id.toLowerCase().includes('rev')
+                        ? 'BẢNG XẾP HẠNG ÔN TẬP KIẾN THỨC'
+                        : 'BẢNG XẾP HẠNG KIỂM TRA TỪ VỰNG'}
                     </h2>
                     <p className="text-[11px] text-slate-300">
                       {test.title} • {test.unitName}
