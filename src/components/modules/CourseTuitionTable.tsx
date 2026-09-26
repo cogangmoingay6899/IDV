@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   DollarSign,
   Calendar,
@@ -50,6 +50,7 @@ export interface CourseTuitionTableProps {
   className?: string; // Tên lớp lọc (nếu xem trong chi tiết lớp)
   classId?: string;
   classes?: ClassGroup[];
+  onUpdateClass?: (updatedClass: ClassGroup) => void;
   currentUser?: AuthUser;
   attendanceRecords?: AttendanceRecord[];
 }
@@ -63,6 +64,7 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
   className,
   classId,
   classes = [],
+  onUpdateClass,
   currentUser,
   attendanceRecords = [],
 }) => {
@@ -94,6 +96,30 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
     return d.toISOString().split('T')[0];
   });
   const [batchDeadlineScope, setBatchDeadlineScope] = useState<'unpaid' | 'all'>('unpaid');
+
+  // Class tuition reminder states
+  const [isClassSettingsModalOpen, setIsClassSettingsModalOpen] = useState(false);
+  const [selectedClassIdForSettings, setSelectedClassIdForSettings] = useState('');
+  const [classReminderEnabled, setClassReminderEnabled] = useState(true);
+  const [classReminderTone, setClassReminderTone] = useState<'gentle' | 'formal' | 'direct'>('gentle');
+  const [classDeadlineDate, setClassDeadlineDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [classCustomNote, setClassCustomNote] = useState('');
+
+  // Sync class reminder form state when selected class changes
+  useEffect(() => {
+    if (!selectedClassIdForSettings) return;
+    const targetClass = classes.find((c) => c.id === selectedClassIdForSettings);
+    if (targetClass) {
+      setClassReminderEnabled(targetClass.tuitionReminderEnabled ?? true);
+      setClassReminderTone((targetClass.tuitionReminderTone as any) || 'gentle');
+      setClassDeadlineDate(targetClass.tuitionReminderDeadline || new Date().toISOString().split('T')[0]);
+      setClassCustomNote(targetClass.tuitionReminderNote || '');
+    }
+  }, [selectedClassIdForSettings, classes]);
 
   // Automated Gentle Overdue Reminder Modal
   const [isAutoOverdueModalOpen, setIsAutoOverdueModalOpen] = useState(false);
@@ -832,6 +858,51 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
     setTimeout(() => setSaveToast(null), 4000);
   };
 
+  const handleSaveClassReminderSettings = () => {
+    if (!selectedClassIdForSettings || !onUpdateClass) {
+      setSaveToast('Lỗi: Tính năng cập nhật lớp chưa được liên kết.');
+      setTimeout(() => setSaveToast(null), 3000);
+      return;
+    }
+
+    const targetClass = classes.find((c) => c.id === selectedClassIdForSettings);
+    if (!targetClass) return;
+
+    // 1. Update the Class Group document
+    const updatedClass: ClassGroup = {
+      ...targetClass,
+      tuitionReminderEnabled: classReminderEnabled,
+      tuitionReminderTone: classReminderTone,
+      tuitionReminderDeadline: classDeadlineDate,
+      tuitionReminderNote: classCustomNote,
+    };
+    onUpdateClass(updatedClass);
+
+    // 2. Automatically apply the deadline date to all students of this class!
+    const classStudents = relevantStudents.filter(
+      (st) =>
+        st.classId === targetClass.id ||
+        (st.className && st.className.trim().toLowerCase() === targetClass.name.trim().toLowerCase())
+    );
+
+    if (classStudents.length > 0) {
+      const updatedStudents = classStudents.map((st) => ({
+        ...st,
+        tuitionDeadlineDate: classDeadlineDate,
+      }));
+
+      if (onUpdateStudentBatch) {
+        onUpdateStudentBatch(updatedStudents);
+      } else {
+        updatedStudents.forEach((st) => onUpdateStudent(st));
+      }
+    }
+
+    setIsClassSettingsModalOpen(false);
+    setSaveToast(`🎉 Đã lưu cài đặt nhắc học phí và áp dụng hạn nộp cho ${classStudents.length} học viên lớp ${targetClass.name}!`);
+    setTimeout(() => setSaveToast(null), 4000);
+  };
+
   // Automated Overdue Gentle Reminder single step in modal
   const handleSendAutoOverdueGentleZalo = (student: Student) => {
     const rawPhone = autoOverdueTarget === 'parent'
@@ -1049,6 +1120,25 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
             <CalendarDays className="w-3.5 h-3.5 text-purple-600" />
             <span>Thiết Lập Hạn Nộp Cả Lớp</span>
           </button>
+
+          {/* Nút cài đặt nhắc học phí theo lớp */}
+          {onUpdateClass && (
+            <button
+              type="button"
+              onClick={() => {
+                const filteredClassList = classes.filter(c => c.courseName === courseName || c.courseId === classId);
+                if (filteredClassList.length > 0) {
+                  setSelectedClassIdForSettings(filteredClassList[0].id);
+                }
+                setIsClassSettingsModalOpen(true);
+              }}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 cursor-pointer shadow-xs"
+              title="Cài đặt hạn nộp, mẫu tin nhắn và chế độ nhắc học phí riêng cho từng lớp"
+            >
+              <Settings2 className="w-3.5 h-3.5 text-amber-600" />
+              <span>Cài Đặt Nhắc Lớp</span>
+            </button>
+          )}
 
           {/* Nút tự động gửi nhắc nhở nhẹ nhàng nếu có học viên quá hạn */}
           {overdueStudents.length > 0 && (
@@ -2108,6 +2198,154 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
               >
                 <Check className="w-4 h-4" />
                 <span>Áp Dụng Hạn Nộp ({formatDateDisplay(batchDeadlineDate)})</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CÀI ĐẶT NHẮC HỌC PHÍ THEO LỚP (CLASS-LEVEL REMINDER SETTINGS) */}
+      {isClassSettingsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shadow-xs">
+                  <Settings2 className="w-5 h-5 text-amber-200" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-tight">
+                    Cài Đặt Nhắc Học Phí Theo Lớp
+                  </h3>
+                  <p className="text-[11px] text-amber-100 mt-0.5">
+                    Thiết lập hạn nộp, kiểu tin nhắn và chế độ nhắc học phí cho từng lớp học
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsClassSettingsModalOpen(false)}
+                className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* 1. Select Class */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Chọn lớp học cấu hình:
+                </label>
+                <select
+                  value={selectedClassIdForSettings}
+                  onChange={(e) => setSelectedClassIdForSettings(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 font-bold text-slate-800"
+                >
+                  <option value="" disabled>-- Chọn lớp học --</option>
+                  {classes
+                    .filter((c) => c.courseName === courseName || c.courseLevel === courseName)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        🏫 {c.name} ({c.code}) - {c.currentStudents} học sinh
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {selectedClassIdForSettings ? (
+                <>
+                  {/* 2. Enable/Disable reminders */}
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 block">Kích hoạt cảnh báo nhắc học phí lớp này:</span>
+                      <span className="text-[10px] text-slate-500">Tự động báo đỏ và kích hoạt nhắc nhở khi đến hạn</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={classReminderEnabled}
+                        onChange={(e) => setClassReminderEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
+
+                  {/* 3. Choose reminder tone */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Kiểu tin nhắn nhắc nhở:
+                    </label>
+                    <select
+                      value={classReminderTone}
+                      onChange={(e) => setClassReminderTone(e.target.value as any)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 font-semibold text-slate-800"
+                    >
+                      <option value="gentle">🌸 Thư nhắc nhẹ nhàng, ân cần (Khuyên dùng)</option>
+                      <option value="formal">✉️ Thông báo đóng học phí chính quy</option>
+                      <option value="direct">⚠️ Tin nhắn yêu cầu chuyển khoản khẩn trương</option>
+                    </select>
+                  </div>
+
+                  {/* 4. Default deadline date */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Hạn nộp học phí mặc định cho lớp này:
+                    </label>
+                    <input
+                      type="date"
+                      value={classDeadlineDate}
+                      onChange={(e) => setClassDeadlineDate(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 font-bold text-amber-900"
+                    />
+                  </div>
+
+                  {/* 5. Custom message note */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Ghi chú / Yêu cầu đặc thù của lớp (nếu có):
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={classCustomNote}
+                      onChange={(e) => setClassCustomNote(e.target.value)}
+                      placeholder="Ví dụ: Lớp này ưu tiên liên hệ phụ huynh sau 18:00..."
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-800"
+                    />
+                  </div>
+
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed flex gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <span>
+                      Khi lưu, hạn nộp học phí sẽ được **áp dụng hàng loạt** cho toàn bộ học sinh trong lớp này, giúp tiết kiệm thời gian nhập tay từng em!
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="py-8 text-center text-slate-400 text-xs">
+                  👋 Vui lòng chọn một lớp học ở trên để tiến hành cấu hình!
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-50 border-t border-slate-200 p-3.5 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setIsClassSettingsModalOpen(false)}
+                className="px-3.5 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveClassReminderSettings}
+                disabled={!selectedClassIdForSettings}
+                className="px-4 py-2 text-xs font-black text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-50 rounded-xl transition-all shadow-md flex items-center gap-1.5 active:scale-95 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Lưu & Áp Dụng Lớp</span>
               </button>
             </div>
           </div>

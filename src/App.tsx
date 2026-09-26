@@ -1031,6 +1031,19 @@ export default function App() {
     saveDocument('students', updatedStudent);
   };
 
+  const handleUpdateStudentBatch = (updatedStudents: Student[]) => {
+    setStudents((prev) => {
+      const updatedMap = new Map(updatedStudents.map((s) => [s.id, s]));
+      return prev.map((s) => updatedMap.get(s.id) || s);
+    });
+    updatedStudents.forEach((s) => saveDocument('students', s));
+  };
+
+  const handleUpdateCourse = (updatedCourse: CurriculumCourse) => {
+    setCourses((prev) => prev.map((c) => (c.id === updatedCourse.id ? updatedCourse : c)));
+    saveDocument('courses', updatedCourse);
+  };
+
   // Handler: Add Lead
   const handleAddLead = (newLead: LeadAdmission) => {
     setLeads((prev) => [newLead, ...prev]);
@@ -2367,6 +2380,9 @@ export default function App() {
                 students={students}
                 classes={classes}
                 onUpdateStudent={handleUpdateStudent}
+                onUpdateStudentBatch={handleUpdateStudentBatch}
+                onUpdateClass={handleUpdateClass}
+                onUpdateCourse={handleUpdateCourse}
                 currentUser={currentUser}
               />
             )}

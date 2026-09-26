@@ -23,7 +23,10 @@ interface CurriculumModuleProps {
   students?: Student[];
   classes?: ClassGroup[];
   onUpdateStudent?: (updatedStudent: Student) => void;
+  onUpdateStudentBatch?: (updatedStudents: Student[]) => void;
   onAddCourse?: (course: CurriculumCourse) => void;
+  onUpdateClass?: (updatedClass: ClassGroup) => void;
+  onUpdateCourse?: (course: CurriculumCourse) => void;
   currentUser?: AuthUser;
 }
 
@@ -32,6 +35,9 @@ export const CurriculumModule: React.FC<CurriculumModuleProps> = ({
   students = [],
   classes = [],
   onUpdateStudent,
+  onUpdateStudentBatch,
+  onUpdateClass,
+  onUpdateCourse,
   currentUser,
 }) => {
   const canAccess = !currentUser || currentUser.role === 'admin' || currentUser.role === 'assistant';
@@ -39,6 +45,76 @@ export const CurriculumModule: React.FC<CurriculumModuleProps> = ({
   const [selectedCourse, setSelectedCourse] = useState<CurriculumCourse>(courses[0]);
   const [activeSubTab, setActiveSubTab] = useState<'tuition' | 'syllabus'>('tuition');
   const [search, setSearch] = useState('');
+
+  const [editingTuitionFee, setEditingTuitionFee] = useState<number>(courses[0]?.tuitionFee || 0);
+  const [isApplyingTuition, setIsApplyingTuition] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Sync state when selected course changes
+  React.useEffect(() => {
+    if (selectedCourse) {
+      setEditingTuitionFee(selectedCourse.tuitionFee);
+    }
+  }, [selectedCourse]);
+
+  const handleUpdateCourseAndApplyStudents = async () => {
+    if (!selectedCourse) return;
+    setIsApplyingTuition(true);
+    setToastMessage(null);
+
+    try {
+      // 1. Update the course standard tuition fee
+      const updatedCourse = {
+        ...selectedCourse,
+        tuitionFee: editingTuitionFee,
+        description: selectedCourse.description.replace(/Học phí: [\d\.,\sđ]+/, `Học phí: ${new Intl.NumberFormat('vi-VN').format(editingTuitionFee)} đ`),
+      };
+
+      if (onUpdateCourse) {
+        onUpdateCourse(updatedCourse);
+      }
+      setSelectedCourse(updatedCourse);
+
+      // 2. Filter students matching this course name
+      const targetStudents = students.filter(
+        (st) =>
+          st.courseName === selectedCourse.name ||
+          (st.className && st.className.toLowerCase().includes(selectedCourse.name.toLowerCase()))
+      );
+
+      if (targetStudents.length > 0) {
+        const updatedStudents = targetStudents.map((st) => {
+          const customFee = editingTuitionFee;
+          const payable = customFee; 
+          const balance = Math.max(0, payable - (st.amountPaid || 0));
+
+          return {
+            ...st,
+            courseTuitionFee: editingTuitionFee,
+            customTuitionFee: customFee,
+            tuitionPayable: payable,
+            balanceOwed: balance,
+            tuitionStatus: balance === 0 ? 'Đã đóng đủ' as const : (st.amountPaid && st.amountPaid > 0 ? 'Đã đóng một phần' as const : 'Chưa đóng' as const),
+          };
+        });
+
+        if (onUpdateStudentBatch) {
+          onUpdateStudentBatch(updatedStudents);
+        } else if (onUpdateStudent) {
+          updatedStudents.forEach((st) => onUpdateStudent(st));
+        }
+      }
+
+      setToastMessage(`🎉 Đã cập nhật học phí chuẩn của khóa lên ${new Intl.NumberFormat('vi-VN').format(editingTuitionFee)} đ và áp dụng đồng bộ cho ${targetStudents.length} học sinh!`);
+      setTimeout(() => setToastMessage(null), 5000);
+    } catch (err) {
+      console.error(err);
+      setToastMessage('⚠️ Lỗi khi đồng bộ học phí, vui lòng thử lại.');
+      setTimeout(() => setToastMessage(null), 3000);
+    } finally {
+      setIsApplyingTuition(false);
+    }
+  };
 
   const formatVND = (num: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
@@ -121,136 +197,137 @@ export const CurriculumModule: React.FC<CurriculumModuleProps> = ({
         </button>
       </div>
 
-      {/* Main Grid: Left is Course List, Right is Syllabus Detail & Tuition Management */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Courses */}
-        <div className="space-y-3">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">
-            Chương trình đào tạo ({courses.length})
+      {/* Horizontal Course Selection Tabs Bar */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs space-y-2.5 animate-in fade-in">
+        <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest block">
+          Chọn Chương Trình Đào Tạo ({courses.length})
+        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {courses.map((c) => {
+            const isSelected = selectedCourse?.id === c.id;
+            const stdCount = students.filter(
+              (st) =>
+                st.courseName === c.name ||
+                (st.className && st.className.toLowerCase().includes(c.name.toLowerCase()))
+            ).length;
+
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedCourse(c)}
+                className={`px-4 py-2.5 rounded-2xl text-xs font-black transition-all flex items-center gap-2 border cursor-pointer active:scale-95 ${
+                  isSelected
+                    ? 'bg-purple-700 text-white border-purple-800 shadow-md scale-[1.02]'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <span>{c.name}</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  isSelected ? 'bg-purple-900 text-amber-300' : 'bg-slate-200 text-slate-500'
+                }`}>
+                  {stdCount} học sinh
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Full-width Details Syllabus & Student Tuition Management */}
+      <div className="space-y-4 animate-in fade-in duration-300">
+        {toastMessage && (
+          <div className="p-4 bg-emerald-50 border-2 border-emerald-400 text-emerald-900 text-xs font-bold rounded-2xl flex items-center gap-2 shadow-xs animate-in fade-in slide-in-from-top-4">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        {/* Course Overview Card */}
+        <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-slate-100">
+            <div>
+              <span className="font-mono text-xs font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
+                {selectedCourse.code}
+              </span>
+              <h3 className="text-xl font-extrabold text-slate-900 mt-1">{selectedCourse.name}</h3>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">{selectedCourse.description}</p>
+            </div>
+            <div className="text-left sm:text-right shrink-0 bg-purple-50/70 p-4 rounded-2xl border border-purple-100 flex flex-col items-stretch sm:items-end gap-1.5 min-w-[240px]">
+              <span className="text-[11px] font-bold text-slate-500 block">Học phí chuẩn của khóa (VND):</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  value={editingTuitionFee}
+                  onChange={(e) => setEditingTuitionFee(Number(e.target.value))}
+                  className="px-2.5 py-1.5 text-xs font-black bg-white border border-slate-300 rounded-xl max-w-[130px] text-right font-mono text-purple-950 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                />
+                <span className="text-xs font-bold text-slate-500">đ</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleUpdateCourseAndApplyStudents}
+                disabled={isApplyingTuition}
+                className="w-full sm:w-auto px-3 py-1.5 text-[10px] font-black bg-purple-700 hover:bg-purple-800 text-white rounded-lg transition-all cursor-pointer shadow-xs uppercase tracking-tight flex items-center justify-center gap-1 active:scale-95 disabled:opacity-50"
+                title="Cập nhật học phí chuẩn của khóa này và áp dụng đồng bộ học phí phải nộp cho toàn bộ học sinh đang theo học"
+              >
+                {isApplyingTuition ? 'Đang cập nhật...' : '💾 Cập nhật & Áp dụng'}
+              </button>
+            </div>
           </div>
 
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Tìm tên khóa, mã khóa..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-            />
-          </div>
+          {/* Sub-Tabs: Tuition & Syllabus */}
+          <div className="flex items-center gap-2 mt-4">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('tuition')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeSubTab === 'tuition'
+                  ? 'bg-purple-700 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <DollarSign className="w-4 h-4" />
+              <span>Danh Sách Học Sinh & Quản Lý Học Phí</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeSubTab === 'tuition' ? 'bg-purple-900 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {courseStudents.length}
+              </span>
+              {overdueCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+                  ⚠️ {overdueCount} quá hẹn
+                </span>
+              )}
+            </button>
 
-          <div className="space-y-2">
-            {filteredCourses.map((c) => {
-              const isSelected = selectedCourse?.id === c.id;
-              const stdCount = students.filter(
-                (st) =>
-                  st.courseName === c.name ||
-                  (st.className && st.className.toLowerCase().includes(c.name.toLowerCase()))
-              ).length;
-
-              return (
-                <div
-                  key={c.id}
-                  onClick={() => setSelectedCourse(c)}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-purple-50/70 border-purple-300 shadow-xs'
-                      : 'bg-white border-slate-200/80 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="font-mono text-[11px] font-bold text-purple-700 bg-white px-2 py-0.5 rounded border border-purple-100">
-                      {c.code}
-                    </span>
-                    <span className="text-xs font-bold text-emerald-700">{formatVND(c.tuitionFee)}</span>
-                  </div>
-
-                  <h4 className="font-bold text-sm text-slate-900 mt-1">{c.name}</h4>
-                  <p className="text-xs text-slate-500 mt-0.5">{c.level}</p>
-
-                  <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
-                    <span>{c.totalSessions} buổi ({c.durationHours}h)</span>
-                    <span className="font-semibold text-purple-700 flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" />
-                      {stdCount} học viên
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('syllabus')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeSubTab === 'syllabus'
+                  ? 'bg-purple-700 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>Khung Đào Tạo & Syllabus ({selectedCourse.syllabus?.length || 0} buổi)</span>
+            </button>
           </div>
         </div>
 
-        {/* Right Column: Detail Syllabus & Student Tuition Management */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Course Overview Card */}
-          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-4 border-b border-slate-100">
-              <div>
-                <span className="font-mono text-xs font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">
-                  {selectedCourse.code}
-                </span>
-                <h3 className="text-xl font-extrabold text-slate-900 mt-1">{selectedCourse.name}</h3>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">{selectedCourse.description}</p>
-              </div>
-              <div className="text-left sm:text-right shrink-0 bg-purple-50/70 p-3 rounded-2xl border border-purple-100">
-                <span className="text-[11px] font-bold text-slate-500 block">Học phí chuẩn của khóa:</span>
-                <span className="text-xl font-black text-purple-800">{formatVND(selectedCourse.tuitionFee)}</span>
-              </div>
-            </div>
-
-            {/* Sub-Tabs: Tuition & Syllabus */}
-            <div className="flex items-center gap-2 mt-4">
-              <button
-                type="button"
-                onClick={() => setActiveSubTab('tuition')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeSubTab === 'tuition'
-                    ? 'bg-purple-700 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                <DollarSign className="w-4 h-4" />
-                <span>Danh Sách Học Sinh & Quản Lý Học Phí</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                  activeSubTab === 'tuition' ? 'bg-purple-900 text-white' : 'bg-slate-200 text-slate-700'
-                }`}>
-                  {courseStudents.length}
-                </span>
-                {overdueCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
-                    ⚠️ {overdueCount} quá hẹn
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveSubTab('syllabus')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeSubTab === 'syllabus'
-                    ? 'bg-purple-700 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                <BookOpen className="w-4 h-4" />
-                <span>Khung Đào Tạo & Syllabus ({selectedCourse.syllabus?.length || 0} buổi)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Tab Content: Student Tuition Table */}
-          {activeSubTab === 'tuition' && (
-            <CourseTuitionTable
-              courseName={selectedCourse.name}
-              courseTuitionFee={selectedCourse.tuitionFee}
-              students={students}
-              classes={classes}
-              onUpdateStudent={onUpdateStudent || (() => {})}
-              currentUser={currentUser}
-            />
-          )}
+        {/* Tab Content: Student Tuition Table */}
+        {activeSubTab === 'tuition' && (
+          <CourseTuitionTable
+            courseName={selectedCourse.name}
+            courseTuitionFee={selectedCourse.tuitionFee}
+            students={students}
+            classes={classes}
+            onUpdateStudent={onUpdateStudent || (() => {})}
+            onUpdateClass={onUpdateClass}
+            currentUser={currentUser}
+          />
+        )}
 
           {/* Tab Content: Syllabus Breakdown */}
           {activeSubTab === 'syllabus' && (
@@ -309,6 +386,5 @@ export const CurriculumModule: React.FC<CurriculumModuleProps> = ({
           )}
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
