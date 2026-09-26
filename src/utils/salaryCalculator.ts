@@ -128,17 +128,19 @@ export function calculateTeacherSessionSalary(
     
     const defaults = getTeacherDefaultSalaryConfig(teacher.name);
 
-    if (lvl.includes('4') || lvl.includes('k4')) {
+    if (lvl.includes('4') || lvl.includes('k4') || lvl.includes('drill')) {
       pct = teacher.percentageK4 ?? defaults.percentageK4 ?? 30;
-    } else if (lvl.includes('3') || lvl.includes('k3')) {
+    } else if (lvl.includes('3') || lvl.includes('k3') || lvl.includes('desire')) {
       pct = teacher.percentageK3 ?? defaults.percentageK3 ?? 28;
-    } else if (lvl.includes('2') || lvl.includes('k2')) {
+    } else if (lvl.includes('2') || lvl.includes('k2') || lvl.includes('inspire')) {
       pct = teacher.percentageK2 ?? defaults.percentageK2 ?? 26;
     } else {
       pct = teacher.percentageK1 ?? defaults.percentageK1 ?? 24;
     }
 
-    return Math.round((pct / 100) * base);
+    // Formula: % defined * 150,000 * total class size (studentCount)
+    // Counts all students in class, regardless of daily absence
+    return Math.round((pct / 100) * 150000 * studentCount);
   }
 
   if (calcType === 'fixed_per_session') {
