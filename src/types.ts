@@ -51,6 +51,7 @@ export interface Student {
   tuitionStatus: 'Đã đóng đủ' | 'Còn nợ' | 'Chưa đóng';
   balanceOwed: number;
   studentCategory?: 'Thường' | 'Học lại' | 'Thêm mới' | 'Học sinh ngoài';
+  retakeStartSession?: number; // Buổi bắt đầu tính học lại (mặc định là 1)
   isExternalStudent?: boolean; // Đánh dấu học sinh ngoài (đăng ký thẳng Khóa 4, không học từ các khóa trước)
   customTuitionFee?: number; // Học phí tùy chỉnh khác mặc định của khóa
   droppedClassId?: string;

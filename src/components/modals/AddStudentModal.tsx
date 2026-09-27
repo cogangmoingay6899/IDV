@@ -39,6 +39,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
     endDate: initialClass?.endDate || '',
     tuitionPaidDate: new Date().toISOString().split('T')[0],
     isExternalStudent: initialIsK4,
+    isRetakeStudent: false,
+    retakeStartSession: 1,
   });
 
   const selectedClass = classes.find((c) => c.id === formData.classId);
@@ -90,7 +92,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
       tuitionAmountPaid: formData.paidAmount,
       balanceOwed: balance,
       isExternalStudent: formData.isExternalStudent,
-      studentCategory: formData.isExternalStudent ? 'Học sinh ngoài' : 'Thường',
+      studentCategory: formData.isRetakeStudent ? 'Học lại' : (formData.isExternalStudent ? 'Học sinh ngoài' : 'Thường'),
+      retakeStartSession: formData.isRetakeStudent ? formData.retakeStartSession : undefined,
       customTuitionFee: formData.tuitionFee,
       courseTuitionFee: formData.tuitionFee,
       tuitionPayable: formData.tuitionFee,
@@ -248,6 +251,37 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
             <p className="text-[10px] text-amber-800 ml-6 leading-relaxed">
               Học viên ngoài đăng ký thẳng Khóa 4 (hoặc nguồn ngoài, không học từ Khóa 1-3). Hệ thống cho phép nhập mức học phí thỏa thuận riêng biệt khác với mức mặc định của lớp.
             </p>
+          </div>
+
+          {/* Đánh dấu Học lại & Buổi bắt đầu học lại */}
+          <div className="p-3 bg-rose-50/90 border border-rose-200 rounded-xl space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isRetakeStudent}
+                onChange={(e) => setFormData({ ...formData, isRetakeStudent: e.target.checked })}
+                className="w-4 h-4 text-rose-600 rounded border-rose-300 focus:ring-rose-500"
+              />
+              <span className="text-xs font-bold text-rose-950 flex items-center gap-1.5">
+                <span>🎒 Đánh dấu "Học sinh Học lại"</span>
+              </span>
+            </label>
+            <p className="text-[10px] text-rose-800 ml-6 leading-relaxed">
+              Học sinh học lại sẽ được tính thù lao thấp hơn (75.000đ thay vì 150.000đ mỗi buổi) khi tính thù lao/lương giáo viên.
+            </p>
+            {formData.isRetakeStudent && (
+              <div className="flex items-center gap-2 ml-6 bg-white p-2 border border-rose-200 rounded-lg max-w-xs">
+                <span className="text-[11px] text-rose-950 font-bold">Bắt đầu học lại từ buổi:</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="33"
+                  value={formData.retakeStartSession}
+                  onChange={(e) => setFormData({ ...formData, retakeStartSession: Math.max(1, Number(e.target.value)) })}
+                  className="w-12 text-xs text-center font-bold text-rose-900 bg-rose-50 border border-rose-200 rounded p-1 focus:outline-none"
+                />
+              </div>
+            )}
           </div>
 
           {/* Ngày bắt đầu học riêng & Ngày kết thúc khóa riêng từng học viên */}

@@ -3237,6 +3237,11 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                                       🏷️ Học sinh ngoài
                                     </span>
                                   )}
+                                  {st.studentCategory === 'Học lại' && (
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-900 border border-rose-300 animate-pulse">
+                                      🎒 Học lại
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-[10px] text-purple-700 font-mono font-bold flex items-center gap-1.5 flex-wrap">
                                   <span>{st.code}</span>
@@ -3244,6 +3249,52 @@ ${writingPenaltyNote}${penaltyInfo}${feedbackText}━━━━━━━━━━
                                     <span className="text-[9px] font-sans font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
                                       HP riêng: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(st.customTuitionFee || st.courseTuitionFee || 0)}
                                     </span>
+                                  )}
+                                </div>
+                                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                  {/* Toggle Học lại */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (onUpdateStudent) {
+                                        const isRetake = st.studentCategory !== 'Học lại';
+                                        onUpdateStudent({
+                                          ...st,
+                                          studentCategory: isRetake ? 'Học lại' : 'Thường',
+                                          retakeStartSession: isRetake ? (st.retakeStartSession || 1) : undefined,
+                                        });
+                                      }
+                                    }}
+                                    className={`text-[8.5px] font-bold px-1.5 py-0.2 rounded border transition-colors cursor-pointer ${
+                                      st.studentCategory === 'Học lại'
+                                        ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
+                                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-800'
+                                    }`}
+                                    title="Gán Học lại cho học sinh để giảm đơn giá lương GV còn 75k"
+                                  >
+                                    {st.studentCategory === 'Học lại' ? '✓ Đang học lại' : '+ Gán Học lại'}
+                                  </button>
+
+                                  {st.studentCategory === 'Học lại' && (
+                                    <div className="flex items-center gap-1 bg-rose-50/50 border border-rose-200 rounded px-1 py-0.2">
+                                      <span className="text-[8.5px] text-rose-700 font-bold">Từ buổi:</span>
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max="33"
+                                        value={st.retakeStartSession || 1}
+                                        onChange={(e) => {
+                                          if (onUpdateStudent) {
+                                            const val = Math.max(1, Number(e.target.value));
+                                            onUpdateStudent({
+                                              ...st,
+                                              retakeStartSession: val,
+                                            });
+                                          }
+                                        }}
+                                        className="w-8 text-[8.5px] text-center font-bold text-rose-950 bg-white border border-rose-200 rounded focus:outline-none"
+                                      />
+                                    </div>
                                   )}
                                 </div>
                                 {k4Info.isK4 && (

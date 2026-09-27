@@ -1,4 +1,4 @@
-import { Teacher } from '../types';
+import { Teacher, Student } from '../types';
 
 /**
  * Returns default salary/payroll calculation configurations based on the teacher's name
@@ -115,7 +115,9 @@ export function getTeacherDefaultSalaryConfig(name: string): Partial<Teacher> {
 export function calculateTeacherSessionSalary(
   teacher: Teacher,
   courseLevel: string = 'Khóa 1',
-  studentCount: number = 20
+  studentCount: number = 20,
+  sessionNumber?: number,
+  classStudents: Student[] = []
 ): number {
   if (!teacher) return 500000;
 
@@ -138,8 +140,21 @@ export function calculateTeacherSessionSalary(
       pct = teacher.percentageK1 ?? defaults.percentageK1 ?? 24;
     }
 
-    // Formula: % defined * 150,000 * total class size (studentCount)
-    // Counts all students in class, regardless of daily absence
+    // Formula: % defined * rate * studentCount
+    // Normal rate is 150,000, but if student is marked as 'Học lại' (retake) and current sessionNumber >= retakeStartSession (default 1), the rate is 75,000
+    if (classStudents && classStudents.length > 0) {
+      let totalAmount = 0;
+      classStudents.forEach((st) => {
+        const isRetake = st.studentCategory === 'Học lại' && 
+          (!sessionNumber || !st.retakeStartSession || sessionNumber >= st.retakeStartSession);
+        
+        const studentRate = isRetake ? 75000 : 150000;
+        totalAmount += (pct / 100) * studentRate;
+      });
+      return Math.round(totalAmount);
+    }
+
+    // Fallback if classStudents list is empty
     return Math.round((pct / 100) * 150000 * studentCount);
   }
 

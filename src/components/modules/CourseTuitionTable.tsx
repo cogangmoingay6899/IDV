@@ -97,6 +97,13 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
   });
   const [batchDeadlineScope, setBatchDeadlineScope] = useState<'unpaid' | 'all'>('unpaid');
 
+  const [selectedClassIdFilter, setSelectedClassIdFilter] = useState<string>('all');
+
+  // Reset class filter when course changes
+  useEffect(() => {
+    setSelectedClassIdFilter('all');
+  }, [courseName]);
+
   // Class tuition reminder states
   const [isClassSettingsModalOpen, setIsClassSettingsModalOpen] = useState(false);
   const [selectedClassIdForSettings, setSelectedClassIdForSettings] = useState('');
@@ -362,16 +369,31 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
     };
   };
 
+  // Get classes for current course
+  const courseClasses = classes.filter(
+    (c) => c.courseName === courseName || (c.courseLevel && c.courseLevel === courseName)
+  );
+
   // Filter students based on class / course and search query
   const relevantStudents = students.filter((st) => {
-    // If a classId was passed, match classId
-    if (classId && st.classId !== classId) return false;
-    // Otherwise, match course name
-    if (!classId && courseName && st.courseName !== courseName && st.className && !st.className.includes(courseName)) {
-      // If courseName is specific, filter by courseName or className
-      const matchCourse = st.courseName?.toLowerCase().includes(courseName.toLowerCase()) ||
-                          st.className?.toLowerCase().includes(courseName.toLowerCase());
-      if (!matchCourse) return false;
+    // If selected a specific class, filter by it
+    if (selectedClassIdFilter && selectedClassIdFilter !== 'all') {
+      const targetClass = classes.find((c) => c.id === selectedClassIdFilter);
+      if (targetClass) {
+        const matchesClass = st.classId === targetClass.id || 
+                             (st.className && st.className.trim().toLowerCase() === targetClass.name.trim().toLowerCase());
+        if (!matchesClass) return false;
+      }
+    } else {
+      // If a classId was passed, match classId
+      if (classId && st.classId !== classId) return false;
+      // Otherwise, match course name
+      if (!classId && courseName && st.courseName !== courseName && st.className && !st.className.includes(courseName)) {
+        // If courseName is specific, filter by courseName or className
+        const matchCourse = st.courseName?.toLowerCase().includes(courseName.toLowerCase()) ||
+                            st.className?.toLowerCase().includes(courseName.toLowerCase());
+        if (!matchCourse) return false;
+      }
     }
     return true;
   });
@@ -1098,15 +1120,34 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
 
       {/* Search & Filter Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Tìm theo tên học viên, mã HV, SĐT..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 font-medium"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-2xl">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên học viên, mã HV, SĐT..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 font-medium"
+            />
+          </div>
+
+          {/* Lọc theo lớp học */}
+          <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Lớp:</span>
+            <select
+              value={selectedClassIdFilter}
+              onChange={(e) => setSelectedClassIdFilter(e.target.value)}
+              className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="all">⭐ Tất cả lớp ({courseClasses.length})</option>
+              {courseClasses.map((cls) => (
+                <option key={cls.id} value={cls.id}>
+                  🏫 {cls.name} ({cls.code})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="flex items-center flex-wrap gap-2">
@@ -1347,6 +1388,48 @@ export const CourseTuitionTable: React.FC<CourseTuitionTableProps> = ({
                             >
                               {st.isExternalStudent || st.studentCategory === 'Học sinh ngoài' ? '✓ Đã đánh dấu HS ngoài' : '+ Đánh dấu HS ngoài'}
                             </button>
+
+                            {/* Nút bật/tắt gán mác Học lại */}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const isRetake = st.studentCategory !== 'Học lại';
+                                  handleStudentFieldChange(st, {
+                                    studentCategory: isRetake ? 'Học lại' : 'Thường',
+                                    retakeStartSession: isRetake ? (st.retakeStartSession || 1) : undefined,
+                                  });
+                                }}
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition-colors cursor-pointer ${
+                                  st.studentCategory === 'Học lại'
+                                    ? 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200 font-extrabold'
+                                    : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-rose-100 hover:text-rose-800'
+                                }`}
+                                title="Gán mác Học lại để tính 75k/buổi khi tính lương giáo viên"
+                              >
+                                {st.studentCategory === 'Học lại' ? '🎒 Đang học lại' : '🎒 Gán Học lại'}
+                              </button>
+                              
+                              {st.studentCategory === 'Học lại' && (
+                                <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 rounded px-1.5 py-0.5">
+                                  <span className="text-[9px] text-rose-700 font-bold">Từ buổi:</span>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="33"
+                                    value={st.retakeStartSession || 1}
+                                    onChange={(e) => {
+                                      const val = Math.max(1, Number(e.target.value));
+                                      handleStudentFieldChange(st, {
+                                        retakeStartSession: val,
+                                      });
+                                    }}
+                                    className="w-8 text-[9px] text-center font-bold text-rose-950 bg-white border border-rose-200 rounded focus:outline-none focus:ring-1 focus:ring-rose-400"
+                                    title="Buổi học bắt đầu học lại. Trước buổi này tính 150k bình thường, từ buổi này trở đi tính 75k."
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           {/* Zalo PH (Phụ huynh) Button */}

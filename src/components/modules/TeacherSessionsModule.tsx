@@ -374,10 +374,11 @@ export const TeacherSessionsModule: React.FC<TeacherSessionsModuleProps> = ({
     return filteredSessions.reduce((sum, session) => {
       const cls = classes.find((c) => c.id === session.classId);
       const level = cls?.courseLevel || 'Khóa 1';
-      const rate = calculateTeacherSessionSalary(activeTeacher, level, session.studentTotalCount || 20);
+      const classStudents = students.filter((st) => st.classId === session.classId);
+      const rate = calculateTeacherSessionSalary(activeTeacher, level, session.studentTotalCount || 20, session.sessionNumber, classStudents);
       return sum + rate;
     }, 0);
-  }, [activeTeacher, filteredSessions, classes]);
+  }, [activeTeacher, filteredSessions, classes, students]);
 
   // Format date display (e.g., 21/09/2026 -> 21/09)
   const formatShortDate = (dateStr: string) => {
@@ -804,8 +805,9 @@ export const TeacherSessionsModule: React.FC<TeacherSessionsModuleProps> = ({
                       const sessionCls = classes.find((c) => c.id === sess.classId);
                       const level = sessionCls?.courseLevel || 'Khóa 1';
                       const sessTeacher = teachers.find(t => t.name === sess.teacherName) || activeTeacher;
+                      const classStudents = students.filter((st) => st.classId === sess.classId);
                       const sessionSalary = sessTeacher 
-                        ? calculateTeacherSessionSalary(sessTeacher, level, sess.studentTotalCount || 20)
+                        ? calculateTeacherSessionSalary(sessTeacher, level, sess.studentTotalCount || 20, sess.sessionNumber, classStudents)
                         : 0;
 
                       return (

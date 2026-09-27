@@ -261,7 +261,8 @@ export const HRModule: React.FC<HRModuleProps> = ({
         }
       } else {
         // Percentage or fixed session-based salary
-        const sessionRate = calculateTeacherSessionSalary(selectedTeacher, cls.courseLevel, studentCount);
+        const classStudents = (students || []).filter((st) => st.classId === cls.id);
+        const sessionRate = calculateTeacherSessionSalary(selectedTeacher, cls.courseLevel, studentCount, undefined, classStudents);
         const levelLabel = cls.courseLevel || 'Khóa 1';
         rows.push({
           id: `auto-${cls.id}-session`,
