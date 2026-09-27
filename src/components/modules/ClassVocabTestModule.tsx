@@ -911,12 +911,16 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
       });
 
       fallbackMeanings.forEach((m) => {
-        if (distractorsSet.size < 3 && m.toLowerCase() !== correctMeaning.toLowerCase()) {
+        if (m.toLowerCase() !== correctMeaning.toLowerCase()) {
           distractorsSet.add(m);
         }
       });
 
-      const distractors = Array.from(distractorsSet).slice(0, 3);
+      // Shuffle all available wrong options to ensure they change continuously every time
+      const allAvailableWrongOptions = Array.from(distractorsSet);
+      const shuffledWrongOptions = [...allAvailableWrongOptions].sort(() => Math.random() - 0.5);
+
+      const distractors = shuffledWrongOptions.slice(0, 3);
       while (distractors.length < 3) {
         distractors.push(`Phương án phụ ${distractors.length + 1}`);
       }
