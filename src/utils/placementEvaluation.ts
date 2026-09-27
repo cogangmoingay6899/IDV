@@ -162,8 +162,8 @@ export function evaluatePlacementResult(
     manualWritingErrorLevel || evaluateWritingErrorLevel(writingSentences);
 
   // 5. Apply user rules in exact order:
-  // Rule A: Nếu nghe sai 3 hoặc đọc sai 3 -> Báo Không Đạt
-  if (listeningWrong >= 3 || readingWrong >= 3) {
+  // Rule A: Nếu từ vựng 2 đổ xuống VÀ đồng thời bài đọc 2 đổ xuống -> Báo Không Đạt. Còn lại để quản lý quyết định.
+  if (vocabCorrect <= 2 && readingCorrect <= 2) {
     return {
       vocabCorrect,
       vocabTotal: 10,
@@ -178,7 +178,7 @@ export function evaluatePlacementResult(
       status: 'Không đạt',
       recommendedCourse: 'Không Đạt',
       comment: PRESET_COMMENTS.FAILED,
-      ruleExplanation: `Nghe sai ${listeningWrong}/5 câu, Đọc sai ${readingWrong}/5 câu (quy định: nghe sai ≥ 3 hoặc đọc sai ≥ 3 báo Không Đạt).`,
+      ruleExplanation: `Từ vựng đúng ${vocabCorrect}/10 VÀ bài Đọc đúng ${readingCorrect}/5 (quy định: từ vựng ≤ 2 đồng thời bài đọc ≤ 2 thì auto báo Không Đạt).`,
     };
   }
 

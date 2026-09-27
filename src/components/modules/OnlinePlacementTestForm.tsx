@@ -3953,9 +3953,13 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                       <span className="font-bold text-slate-800">1. Từ vựng (Vocabulary):</span>
                       <strong className="text-purple-700 font-mono text-sm">{evalRes.vocabCorrect}/10 câu</strong>
                     </div>
-                    <p className="text-[10px] text-slate-500">Quy định: Nếu từ vựng dưới 5 xếp Khóa 1.</p>
+                    <p className="text-[10px] text-slate-500">Quy định: Nếu từ vựng dưới 5 xếp Khóa 1. Đồng thời ≤ 2 với Đọc thì Không Đạt.</p>
                     <div className="pt-1">
-                      {evalRes.vocabCorrect < 5 ? (
+                      {evalRes.vocabCorrect <= 2 ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-300 px-2 py-0.5 rounded-md">
+                          ⚠️ Từ vựng ≤ 2 câu (Nguy cơ Không Đạt)
+                        </span>
+                      ) : evalRes.vocabCorrect < 5 ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md">
                           ⚠️ Dưới 5 câu (Xếp Khóa 1)
                         </span>
@@ -3975,11 +3979,11 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                         Đúng <strong className="text-blue-700 font-mono">{evalRes.listeningCorrect}/5</strong> (Sai <strong className="text-rose-600 font-mono">{evalRes.listeningWrong}</strong> câu)
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-500">Quy định: Nếu nghe sai 3 thì báo Không Đạt.</p>
+                    <p className="text-[10px] text-slate-500">Quy định: Kết quả tham chiếu để quản lý quyết định xếp lớp phù hợp.</p>
                     <div className="pt-1">
                       {evalRes.listeningWrong >= 3 ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-300 px-2 py-0.5 rounded-md">
-                          🔴 Nghe sai ≥ 3 câu (Không Đạt)
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-850 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md">
+                          ⚠️ Nghe sai ≥ 3 câu (Quản lý xem xét)
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-md">
@@ -3997,15 +4001,15 @@ export const OnlinePlacementTestForm: React.FC<OnlinePlacementTestFormProps> = (
                         Đúng <strong className="text-emerald-700 font-mono">{evalRes.readingCorrect}/5</strong> (Sai <strong className="text-rose-600 font-mono">{evalRes.readingWrong}</strong> câu)
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-500">Quy định: Nếu đọc sai 3 thì báo Không Đạt.</p>
+                    <p className="text-[10px] text-slate-500">Quy định: Nếu đúng ≤ 2 VÀ từ vựng ≤ 2 thì tự động báo Không Đạt.</p>
                     <div className="pt-1">
-                      {evalRes.readingWrong >= 3 ? (
+                      {evalRes.readingCorrect <= 2 ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-300 px-2 py-0.5 rounded-md">
-                          🔴 Đọc sai ≥ 3 câu (Không Đạt)
+                          ⚠️ Đọc đúng ≤ 2 câu (Nguy cơ Không Đạt)
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-md">
-                          ✅ Đạt kỹ năng đọc (Sai {evalRes.readingWrong}/5)
+                          ✅ Đạt kỹ năng đọc (Đúng {evalRes.readingCorrect}/5)
                         </span>
                       )}
                     </div>
