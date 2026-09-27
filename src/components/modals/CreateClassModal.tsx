@@ -44,13 +44,27 @@ interface CreateClassModalProps {
   onAddClass: (
     newClass: ClassGroup,
     selectedStudentIds?: string[],
-    newPastedStudents?: { name: string; phone?: string; note?: string }[]
+    newPastedStudents?: {
+      name: string;
+      phone?: string;
+      parentPhone?: string;
+      email?: string;
+      dob?: string;
+      note?: string;
+    }[]
   ) => void;
   onAddBatchClasses?: (classes: ClassGroup[]) => void;
   onSave?: (
     newClass: ClassGroup,
     selectedStudentIds?: string[],
-    newPastedStudents?: { name: string; phone?: string; note?: string }[]
+    newPastedStudents?: {
+      name: string;
+      phone?: string;
+      parentPhone?: string;
+      email?: string;
+      dob?: string;
+      note?: string;
+    }[]
   ) => void;
 }
 
@@ -161,44 +175,115 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
   // Parse batch pasted students text
   const parsedPastedStudents = useMemo(() => {
     if (!pastedStudentsRawText.trim()) return [];
-    const lines = pastedStudentsRawText.split(/[\n;]/).map((l) => l.trim()).filter(Boolean);
-    const result: { name: string; phone?: string; note?: string; originalIndex: number }[] = [];
+    
+    // Split by line breaks to get each row
+    const lines = pastedStudentsRawText.split('\n').map((l) => l.trim()).filter(Boolean);
+    const result: {
+      name: string;
+      phone?: string;
+      parentPhone?: string;
+      email?: string;
+      dob?: string;
+      note?: string;
+      originalIndex: number;
+    }[] = [];
 
     lines.forEach((line, idx) => {
-      // Clean leading bullet points, numbers e.g. "1.", "1/", "1 -", "-", "+"
-      let clean = line.replace(/^[\d]+[\.\)\/\-\:\s]+/, '').replace(/^[\-\+\*•]\s*/, '').trim();
-      if (!clean) return;
+      // Clean leading bullet points or STT
+      let cleanLine = line.replace(/^[\d]+[\.\)\/\-\:\s]+/, '').replace(/^[\-\+\*•]\s*/, '').trim();
+      if (!cleanLine) return;
 
-      // Skip common table headers if user copied them
-      const lower = clean.toLowerCase();
+      // Skip headers
+      const lower = cleanLine.toLowerCase();
       if (
-        lower.startsWith('họ và tên') ||
         lower.startsWith('họ tên') ||
+        lower.startsWith('họ và tên') ||
         lower.startsWith('tên học sinh') ||
+        lower.includes('sdt hs') ||
+        lower.includes('sđt ph') ||
+        lower.includes('ngày sinh') ||
         lower.startsWith('stt') ||
         lower.startsWith('danh sách')
       ) {
         return;
       }
 
-      // Detect phone number if included in line (e.g. "0912345678", "(0988776655)", "+84912345678")
-      let phone = '';
-      const phoneMatch = clean.match(/(?:(?:\+84|0)[1-9][0-9]{8,9})/);
-      if (phoneMatch) {
-        phone = phoneMatch[0];
-        clean = clean.replace(phone, '').replace(/[\(\)\-\:\,]/g, ' ').trim();
-      }
+      // Check if it's Excel copy/paste (tab-separated)
+      const cols = line.split('\t');
+      if (cols.length >= 2) {
+        // Formats: Column 0: Name, Column 1: SDT HS, Column 2: SĐT PH, Column 3: Email, Column 4: Ngày sinh
+        const name = cols[0]?.replace(/^[\d]+[\.\)\/\-\:\s]+/, '').replace(/^[\-\+\*•]\s*/, '').replace(/\s+/g, ' ').trim();
+        let phone = cols[1]?.trim() || '';
+        let parentPhone = cols[2]?.trim() || '';
+        let email = cols[3]?.trim() || '';
+        let dobStr = cols[4]?.trim() || '';
 
-      // Remove extra multiple spaces
-      clean = clean.replace(/\s+/g, ' ').trim();
+        // Clean values
+        if (phone === '-' || phone.toLowerCase() === 'n/a') phone = '';
+        if (parentPhone === '-' || parentPhone.toLowerCase() === 'n/a') parentPhone = '';
+        if (email === '-' || email.toLowerCase() === 'n/a') email = '';
+        if (dobStr === '-' || dobStr.toLowerCase() === 'n/a') dobStr = '';
 
-      if (clean.length >= 2) {
-        result.push({
-          name: clean,
-          phone: phone || undefined,
-          note: 'Tạo nhanh từ danh sách dán hàng loạt',
-          originalIndex: idx,
-        });
+        // Normalize email if it's just a username
+        if (email && !email.includes('@')) {
+          email = `${email.toLowerCase()}@gmail.com`;
+        }
+
+        // Parse date of birth to standard YYYY-MM-DD
+        let formattedDob = '2008-01-01';
+        if (dobStr) {
+          const parts = dobStr.split(/[\/\-\.]/);
+          if (parts.length === 3) {
+            let p1 = parseInt(parts[0]);
+            let p2 = parseInt(parts[1]);
+            let year = parseInt(parts[2]);
+            if (year < 100) year += 2000;
+            
+            let month = p1;
+            let day = p2;
+            
+            // If the first part is larger than 12, then it's Day/Month/Year
+            if (p1 > 12) {
+              day = p1;
+              month = p2;
+            }
+            
+            const mm = month.toString().padStart(2, '0');
+            const dd = day.toString().padStart(2, '0');
+            formattedDob = `${year}-${mm}-${dd}`;
+          }
+        }
+
+        if (name && name.length >= 2) {
+          result.push({
+            name,
+            phone: phone || undefined,
+            parentPhone: parentPhone || undefined,
+            email: email || undefined,
+            dob: formattedDob,
+            note: 'Nhập tự động từ Excel mẫu',
+            originalIndex: idx,
+          });
+        }
+      } else {
+        // Fallback: Free-form parser for single column/plain text line
+        let name = cleanLine;
+        let phone = '';
+        const phoneMatch = cleanLine.match(/(?:(?:\+84|0)[1-9][0-9]{8,9})/);
+        if (phoneMatch) {
+          phone = phoneMatch[0];
+          name = cleanLine.replace(phone, '').replace(/[\(\)\-\:\,]/g, ' ').trim();
+        }
+        name = name.replace(/\s+/g, ' ').trim();
+
+        if (name.length >= 2) {
+          result.push({
+            name,
+            phone: phone || undefined,
+            note: 'Tạo nhanh từ danh sách dán',
+            originalIndex: idx,
+          });
+        }
       }
     });
 
@@ -1024,18 +1109,18 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
 
             <div>
               <textarea
-                rows={4}
+                rows={5}
                 value={pastedStudentsRawText}
                 onChange={(e) => {
                   setPastedStudentsRawText(e.target.value);
                   setExcludedPastedIndices([]);
                 }}
-                placeholder="Dán danh sách tên học sinh vào đây (mỗi học sinh 1 dòng hoặc cách nhau bởi dấu phẩy, có thể kèm SĐT)...&#10;Ví dụ:&#10;1. Nguyễn Minh Anh&#10;2. Trần Quốc Bảo - 0987654321&#10;3. Lê Thu Hà&#10;4. Phạm Đức Minh"
-                className="w-full text-xs font-medium bg-white border border-indigo-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 leading-relaxed placeholder:text-slate-400"
+                placeholder="Dán (Paste) trực tiếp 5 cột từ file Excel của bạn vào đây:&#10;Họ tên học sinh  |  SDT HS  |  SĐT PH  |  Email  |  Ngày sinh&#10;&#10;Ví dụ:&#10;Nguyễn Sỹ Đăng Huy	0984035848	094739986	danghuycte2209	2/20/2011&#10;Phạm Minh Châu	0352376630	0987687319	pmc121008@gmail.com	10/12/2008"
+                className="w-full text-xs font-mono bg-white border border-indigo-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 leading-relaxed placeholder:text-slate-400"
               />
-              <div className="flex items-center justify-between text-[11px] text-indigo-700 mt-1">
-                <span>💡 Tự động lọc bỏ số thứ tự (1, 2, 3..), dấu gạch đầu dòng và trích xuất số điện thoại nếu có.</span>
-                <span className="text-slate-500">Thông tin chi tiết (ngày sinh, phụ huynh, học phí) có thể cập nhật sau.</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-indigo-700 mt-1.5 gap-1 bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100">
+                <span>💡 <strong>Hỗ trợ cực mạnh:</strong> Copy-paste trực tiếp từ Excel mẫu 5 cột (Tên, SĐT Học viên, SĐT Phụ huynh, Email, Ngày sinh) sẽ được tách dữ liệu hoàn toàn tự động!</span>
+                <span className="text-emerald-700 font-bold shrink-0">✓ Nhận dạng chuẩn mẫu của bạn</span>
               </div>
             </div>
 
@@ -1044,34 +1129,55 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({
               <div className="space-y-2 pt-2 border-t border-indigo-200/60 animate-in fade-in">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-slate-700">
-                    Danh sách học viên sẽ được tạo mới & ghi danh vào lớp ({parsedPastedStudents.length}):
+                    Danh sách học viên nhận diện thành công ({parsedPastedStudents.length}):
                   </span>
                   <span className="text-[10px] text-slate-400 italic">Bấm dấu × để bỏ bớt nếu dán nhầm</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 bg-white/80 rounded-xl border border-indigo-100">
+                <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto p-1 bg-white/80 rounded-xl border border-indigo-100">
                   {parsedPastedStudents.map((st, i) => (
-                    <span
+                    <div
                       key={i}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 border border-indigo-200/80 text-indigo-900 rounded-lg text-xs font-semibold group hover:bg-indigo-100 transition-colors"
+                      className="flex flex-wrap items-center justify-between gap-2 p-1.5 px-2.5 bg-indigo-50/50 border border-indigo-100 text-indigo-950 rounded-lg text-xs font-semibold group hover:bg-indigo-100/70 transition-colors"
                     >
-                      <span className="w-4 h-4 rounded-full bg-indigo-200 text-indigo-800 text-[10px] font-black flex items-center justify-center">
-                        {i + 1}
-                      </span>
-                      <span>{st.name}</span>
-                      {st.phone && (
-                        <span className="text-[10px] font-mono text-indigo-600 bg-white px-1 rounded">
-                          {st.phone}
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="w-4.5 h-4.5 rounded-full bg-indigo-200 text-indigo-800 text-[10px] font-black flex items-center justify-center shrink-0">
+                          {i + 1}
                         </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setExcludedPastedIndices([...excludedPastedIndices, i])}
-                        className="text-indigo-400 hover:text-rose-600 ml-0.5 p-0.5 rounded cursor-pointer transition-colors"
-                        title="Bỏ học sinh này khỏi danh sách"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
+                        <span className="font-extrabold text-slate-800 truncate">{st.name}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                        {st.phone && (
+                          <span className="px-1.5 py-0.2 bg-white text-indigo-700 border border-indigo-200 rounded font-mono" title="SĐT Học sinh">
+                            📱 {st.phone}
+                          </span>
+                        )}
+                        {st.parentPhone && (
+                          <span className="px-1.5 py-0.2 bg-white text-indigo-700 border border-indigo-200 rounded font-mono" title="SĐT Phụ huynh">
+                            👨‍👩‍👦 PH: {st.parentPhone}
+                          </span>
+                        )}
+                        {st.email && (
+                          <span className="px-1.5 py-0.2 bg-white text-indigo-700 border border-indigo-200 rounded font-mono truncate max-w-[120px]" title={st.email}>
+                            ✉️ {st.email}
+                          </span>
+                        )}
+                        {st.dob && st.dob !== '2008-01-01' && (
+                          <span className="px-1.5 py-0.2 bg-purple-100 text-purple-700 border border-purple-200 rounded font-mono" title="Ngày sinh">
+                            🎂 {st.dob}
+                          </span>
+                        )}
+                        
+                        <button
+                          type="button"
+                          onClick={() => setExcludedPastedIndices([...excludedPastedIndices, i])}
+                          className="text-indigo-400 hover:text-rose-600 ml-1 p-0.5 rounded cursor-pointer transition-colors shrink-0"
+                          title="Bỏ học sinh này khỏi danh sách"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>

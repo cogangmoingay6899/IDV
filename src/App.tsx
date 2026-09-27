@@ -738,7 +738,14 @@ export default function App() {
   const handleCreateClass = (
     newClass: ClassGroup,
     selectedStudentIds?: string[],
-    newPastedStudents?: { name: string; phone?: string; note?: string }[]
+    newPastedStudents?: {
+      name: string;
+      phone?: string;
+      parentPhone?: string;
+      email?: string;
+      dob?: string;
+      note?: string;
+    }[]
   ) => {
     let studentCount = 0;
     if (selectedStudentIds && selectedStudentIds.length > 0) {
@@ -773,12 +780,12 @@ export default function App() {
           id: randId,
           code: studentCode,
           name: cleanName,
-          dob: '2008-01-01',
+          dob: item.dob || '2008-01-01',
           gender: 'Nam' as const,
           phone: item.phone || '',
-          email: `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'hocvien'}${codeNum}@gmail.com`,
+          email: item.email || `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'hocvien'}${codeNum}@gmail.com`,
           parentName: '',
-          parentPhone: item.phone || '',
+          parentPhone: item.parentPhone || item.phone || '',
           address: newClass.branch || 'Hải Phòng',
           classId: newClass.id,
           className: newClass.name,

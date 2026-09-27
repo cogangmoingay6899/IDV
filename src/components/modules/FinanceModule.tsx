@@ -947,7 +947,7 @@ export const FinanceModule: React.FC<FinanceModuleProps> = ({
               </div>
 
               {/* Summary Stats Table */}
-              <div className="grid grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
                 <div>
                   <span className="text-[10px] text-slate-500 block">Tổng mức học phí quy định:</span>
                   <strong className="text-sm font-black text-slate-900">

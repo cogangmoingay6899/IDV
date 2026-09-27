@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+/* Hide scrollbar utility for smooth horizontal touch swiping */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* Ensure smooth touch inertial scrolling on iOS devices */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
