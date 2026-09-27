@@ -40,6 +40,7 @@ interface ModuleGridProps {
     unpaidCount: number;
     placementCount: number;
   };
+  onCleanAndRecountStudents?: () => void;
 }
 
 interface ModuleCardItem {
@@ -58,6 +59,7 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
   onExportExcel,
   currentUser,
   stats,
+  onCleanAndRecountStudents,
 }) => {
   const isTeacher = currentUser.role === 'teacher';
   const isAssistant = currentUser.role === 'assistant';
@@ -240,8 +242,33 @@ export const ModuleGrid: React.FC<ModuleGridProps> = ({
               <div className="text-xl sm:text-2xl font-bold text-white mt-0.5">{stats.activeClasses}</div>
               <span className="text-[10px] text-purple-300 font-medium">CS1 Tô Hiệu & CS2 Kiến An</span>
             </div>
-            <div className="bg-white/5 backdrop-blur-xs rounded-2xl p-3 border border-white/10">
-              <span className="text-xs text-slate-300 block">Tổng học viên</span>
+             <div className="bg-white/5 backdrop-blur-xs rounded-2xl p-3 border border-white/10 relative group">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-300 block">Tổng học viên</span>
+                {onCleanAndRecountStudents && (
+                  <button
+                    type="button"
+                    onClick={onCleanAndRecountStudents}
+                    className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all cursor-pointer flex items-center justify-center"
+                    title="Dọn dẹp học viên trùng lặp & đếm chính xác số lượng"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-3.5 h-3.5 hover:rotate-185 duration-500 transition-transform"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15.07M20 20v-5h-.581m0 0a8.003 8.003 0 01-15.357-2"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
               <div className="text-xl sm:text-2xl font-bold text-white mt-0.5">{stats.totalStudents}</div>
               <span className="text-[10px] text-emerald-400 font-medium">Đang theo học</span>
             </div>

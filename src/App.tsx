@@ -977,6 +977,88 @@ export default function App() {
     showToast(msg);
   };
 
+  // Utility to clean up duplicate student accounts (same name/phone/email) and count accurately
+  const handleCleanAndRecountStudents = async () => {
+    if (students.length === 0) {
+      showToast("✨ Danh sách học viên trống.");
+      return;
+    }
+
+    // 1. Group students by clean trimmed name (lowercase) or phone
+    const nameGroups = new Map<string, Student[]>();
+    students.forEach((s) => {
+      const key = s.name.trim().toLowerCase();
+      if (!nameGroups.has(key)) {
+        nameGroups.set(key, []);
+      }
+      nameGroups.get(key)!.push(s);
+    });
+
+    let mergedCount = 0;
+    const studentsToKeep: Student[] = [];
+    const studentsToDeleteIds: string[] = [];
+
+    for (const [nameKey, list] of nameGroups.entries()) {
+      if (list.length === 1) {
+        studentsToKeep.push(list[0]);
+        continue;
+      }
+
+      // We have duplicates! Let's choose the best student record to keep
+      const sorted = [...list].sort((a, b) => {
+        // Has active classId
+        const aHasClass = (a.classId && a.classId !== 'waiting_list') ? 1 : 0;
+        const bHasClass = (b.classId && b.classId !== 'waiting_list') ? 1 : 0;
+        if (aHasClass !== bHasClass) return bHasClass - aHasClass;
+
+        // Tuition status
+        const aHasPaid = a.tuitionStatus === 'Đã đóng đủ' ? 1 : 0;
+        const bHasPaid = b.tuitionStatus === 'Đã đóng đủ' ? 1 : 0;
+        if (aHasPaid !== bHasPaid) return bHasPaid - aHasPaid;
+
+        // Has phone
+        const aHasPhone = a.phone ? 1 : 0;
+        const bHasPhone = b.phone ? 1 : 0;
+        if (aHasPhone !== bHasPhone) return bHasPhone - aHasPhone;
+
+        return b.id.localeCompare(a.id); // fallback
+      });
+
+      const bestStudent = sorted[0];
+      studentsToKeep.push(bestStudent);
+
+      // The rest of the records are duplicates to delete
+      for (let i = 1; i < sorted.length; i++) {
+        studentsToDeleteIds.push(sorted[i].id);
+        mergedCount++;
+      }
+    }
+
+    if (studentsToDeleteIds.length > 0) {
+      // Update local state
+      setStudents(studentsToKeep);
+      
+      // Delete duplicates from Firestore/localStorage blacklist
+      for (const id of studentsToDeleteIds) {
+        // Add to local blacklist to prevent resurrecting
+        try {
+          const existingDeleted: string[] = JSON.parse(localStorage.getItem('idv_deleted_student_ids') || '[]');
+          if (!existingDeleted.includes(id)) {
+            existingDeleted.push(id);
+            localStorage.setItem('idv_deleted_student_ids', JSON.stringify(existingDeleted));
+          }
+        } catch (e) {
+          console.warn('LocalStorage student clean error:', e);
+        }
+        await deleteDocument('students', id);
+      }
+      
+      showToast(`🎉 Đã dọn dẹp và hợp nhất thành công ${mergedCount} học viên trùng lặp! Tổng học viên thực tế hiện tại là ${studentsToKeep.filter(s => s.status === 'Đang học').length} học viên.`);
+    } else {
+      showToast(`✨ Không phát hiện học viên trùng lặp nào! Tổng số học viên hiện tại (${studentsToKeep.filter(s => s.status === 'Đang học').length} học viên) đã hoàn toàn chính xác.`);
+    }
+  };
+
   // Handler: Add Student
   const handleAddStudent = (newStudent: Student) => {
     setStudents((prev) => [newStudent, ...prev]);
@@ -2225,6 +2307,7 @@ export default function App() {
             onExportExcel={() => exportCenterDataToExcel({ classes: effectiveClasses, students, teachers, transactions })}
             currentUser={currentUser}
             stats={stats}
+            onCleanAndRecountStudents={handleCleanAndRecountStudents}
           />
         )}
 
