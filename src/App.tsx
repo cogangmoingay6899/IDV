@@ -691,7 +691,7 @@ export default function App() {
 
   // Computed KPI stats for dashboard
   const stats = useMemo(() => {
-    const totalStudents = students.length;
+    const totalStudents = students.filter((s) => s.status === 'Đang học').length;
     const activeClasses = classes.filter((c) => c.status === 'Đang diễn ra').length;
     const monthlyRevenue = transactions.reduce((acc, t) => acc + t.amount, 0);
     const pendingLeads = leads.filter(
@@ -829,7 +829,15 @@ export default function App() {
   const handleUpdateClass = (
     updatedClass: ClassGroup,
     modifiedStudents?: Student[],
-    newPastedStudents?: { name: string; phone?: string; note?: string; customTuitionFee?: number }[]
+    newPastedStudents?: {
+      name: string;
+      phone?: string;
+      parentPhone?: string;
+      email?: string;
+      dob?: string;
+      note?: string;
+      customTuitionFee?: number;
+    }[]
   ) => {
     let newCreatedCount = 0;
     let modifiedCount = 0;
@@ -849,12 +857,12 @@ export default function App() {
           id: randId,
           code: studentCode,
           name: cleanName,
-          dob: '2008-01-01',
+          dob: item.dob || '2008-01-01',
           gender: 'Nam' as const,
           phone: item.phone || '',
-          email: `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'hocvien'}${codeNum}@gmail.com`,
+          email: item.email || `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'hocvien'}${codeNum}@gmail.com`,
           parentName: '',
-          parentPhone: item.phone || '',
+          parentPhone: item.parentPhone || item.phone || '',
           address: updatedClass.branch || 'Hải Phòng',
           classId: updatedClass.id,
           className: updatedClass.name,
@@ -1502,6 +1510,7 @@ export default function App() {
               ...s,
               classId: '',
               className: 'Chưa xếp lớp (Lớp đã xóa)',
+              status: 'Chờ xếp lớp' as const,
             }
           : s
       );
@@ -1524,6 +1533,7 @@ export default function App() {
         ...s,
         classId: '',
         className: 'Chưa xếp lớp',
+        status: 'Chờ xếp lớp' as const,
       }));
       saveBatchDocuments('students', updated);
       return updated;
