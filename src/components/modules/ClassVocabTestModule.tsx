@@ -351,7 +351,8 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     if (q.timeLimitSeconds) return q.timeLimitSeconds;
     const type = q.questionType || 'multiple_choice';
     if (type === 'multiple_choice') return 10;
-    return 20; // matching & type_input get 20s
+    if (type === 'matching') return 20;
+    return 30; // type_input (điền từ) gets 30s by default
   };
 
   const [activeTestType, setActiveTestType] = useState<'vocab' | 'review'>('vocab');
@@ -982,7 +983,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
         options: [item.meaning, '', '', ''],
         correctOptionIndex: 0,
         questionType: 'type_input',
-        timeLimitSeconds: 20,
+        timeLimitSeconds: 30,
       });
     }
 
@@ -1263,17 +1264,41 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
     );
 
     const allClassOptions = classes.length > 0 ? classes : (classGroup ? [classGroup] : []);
-    const matchedClass = allClassOptions.find((c) => {
-      const cName = c.name.toLowerCase();
-      const cId = c.id.toLowerCase();
-      const inputName = cleanClassName.toLowerCase();
-      if (!inputName) return false;
-      if (cName.includes(inputName) || inputName.includes(cName) || cId.includes(inputName)) return true;
-      if (classDigits) {
-        if (cName.includes(classDigits) || cId.includes(classDigits)) return true;
-      }
-      return false;
-    });
+    
+    // Step 1: Try exact match (case-insensitive, trimmed)
+    let matchedClass = allClassOptions.find(
+      (c) => c.name.trim().toLowerCase() === cleanClassName.toLowerCase()
+    );
+
+    // Step 2: Try exact match with "Lớp " prefix added or removed
+    if (!matchedClass) {
+      const cleanInputLower = cleanClassName.toLowerCase();
+      matchedClass = allClassOptions.find((c) => {
+        const cNameLower = c.name.trim().toLowerCase();
+        const normInput = cleanInputLower.replace(/^lớp\s+/g, '');
+        const normClass = cNameLower.replace(/^lớp\s+/g, '');
+        return normInput === normClass;
+      });
+    }
+
+    // Step 3: Try contains match (without being overly broad)
+    if (!matchedClass) {
+      matchedClass = allClassOptions.find((c) => {
+        const cName = c.name.toLowerCase();
+        const inputName = cleanClassName.toLowerCase();
+        if (!inputName) return false;
+        return cName.includes(inputName) || inputName.includes(cName);
+      });
+    }
+
+    // Step 4: Try digit match ONLY as a last resort if classDigits exists and no matches were found so far
+    if (!matchedClass && classDigits) {
+      matchedClass = allClassOptions.find((c) => {
+        const cName = c.name.toLowerCase();
+        const cDigits = cName.match(/\d+/g)?.[0];
+        return cDigits === classDigits;
+      });
+    }
 
     const targetClassId = matchedClass ? matchedClass.id : (classDigits ? `class-ielts-${classDigits}` : (classGroup?.id || 'class-vocab-auto'));
     const targetClassName = matchedClass?.name || (classDigits ? `Lớp ${classDigits}` : (cleanClassName || classGroup?.name || 'Lớp Học IELTS'));
@@ -2455,7 +2480,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                   {customizedQuestions.map((q, idx) => (
                     <div key={idx} className="bg-white p-3 rounded-2xl border border-slate-200 space-y-2.5 shadow-xs relative group">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-950 font-black text-[10px] flex items-center justify-center">
                             #{idx + 1}
                           </span>
@@ -2463,7 +2488,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                             value={q.questionType || 'multiple_choice'}
                             onChange={(e) => {
                               const newType = e.target.value as 'multiple_choice' | 'matching' | 'type_input';
-                              const newLimit = newType === 'multiple_choice' ? 10 : 20;
+                              const newLimit = newType === 'multiple_choice' ? 10 : (newType === 'matching' ? 20 : 30);
                               const updated = [...customizedQuestions];
                               updated[idx] = {
                                 ...q,
@@ -2474,10 +2499,32 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                             }}
                             className="bg-purple-50 border border-purple-200 text-purple-900 rounded-lg py-1 px-2 font-bold text-[10px] outline-none cursor-pointer"
                           >
-                            <option value="multiple_choice">🎯 Trắc nghiệm (10s)</option>
-                            <option value="matching">🧩 Ghép nối từ & nghĩa (20s)</option>
-                            <option value="type_input">⌨️ Nhập đáp án / Sửa lỗi sai / Điền từ (20s)</option>
+                            <option value="multiple_choice">🎯 Trắc nghiệm</option>
+                            <option value="matching">🧩 Ghép nối từ & nghĩa</option>
+                            <option value="type_input">⌨️ Nhập đáp án / Sửa lỗi sai / Điền từ</option>
                           </select>
+
+                          {/* Time limit adjustment input */}
+                          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5 shrink-0">
+                            <span className="text-[10px] font-bold text-slate-600">⏳ Giới hạn:</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={600}
+                              value={q.timeLimitSeconds || 10}
+                              onChange={(e) => {
+                                const newSec = parseInt(e.target.value) || 10;
+                                const updated = [...customizedQuestions];
+                                updated[idx] = {
+                                  ...q,
+                                  timeLimitSeconds: newSec,
+                                };
+                                setCustomizedQuestions(updated);
+                              }}
+                              className="w-12 text-center bg-white border border-slate-300 rounded px-1 text-[10px] font-bold focus:outline-none text-purple-950"
+                            />
+                            <span className="text-[9px] text-slate-500 font-bold">giây</span>
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -2485,7 +2532,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                             const updated = customizedQuestions.filter((_, i) => i !== idx);
                             setCustomizedQuestions(updated);
                           }}
-                          className="text-red-500 hover:text-red-700 p-1 text-xs font-bold rounded-lg hover:bg-red-50 transition-all"
+                          className="text-red-500 hover:text-red-700 p-1 text-xs font-bold rounded-lg hover:bg-red-50 transition-all shrink-0"
                           title="Xóa câu hỏi này"
                         >
                           🗑️ Xóa
@@ -2793,7 +2840,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                         <div className="space-y-2">
                           <div className="text-center">
                             <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[8.5px] sm:text-[9px] font-black rounded-full uppercase tracking-widest border border-amber-300">
-                              🧩 NỐI TỪ (MATCHING) - 20 Giây
+                              🧩 NỐI TỪ (MATCHING) - {currentQ.timeLimitSeconds || 20} Giây
                             </span>
                           </div>
                           
@@ -2824,11 +2871,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                                           : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
                                       }`}
                                     >
-                                      <span className="flex items-center gap-1.5 truncate">
-                                        <span className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center font-mono text-[9px] text-slate-500 shrink-0">
+                                      <span className="flex items-start gap-1.5 text-left flex-1 min-w-0">
+                                        <span className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center font-mono text-[9px] text-slate-500 shrink-0 mt-0.5">
                                           {String.fromCharCode(65 + optIdx)}
                                         </span>
-                                        <span className="truncate">{optionText}</span>
+                                        <span className="whitespace-normal break-words text-left flex-1">{optionText}</span>
                                       </span>
                                       {isMatched && <CheckCircle2 className="w-3.5 h-3.5 text-purple-950 shrink-0" />}
                                     </button>
@@ -2853,7 +2900,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                         <div className="space-y-2">
                           <div className="text-center">
                             <span className="px-2 py-0.5 bg-purple-100 text-purple-900 text-[8.5px] sm:text-[9px] font-black rounded-full uppercase tracking-widest border border-purple-300">
-                              ⌨️ NHẬP ĐÁP ÁN / ĐIỀN TỪ / SỬA LỖI
+                              ⌨️ NHẬP ĐÁP ÁN / ĐIỀN TỪ - {currentQ.timeLimitSeconds || 30} Giây
                             </span>
                           </div>
 
@@ -2905,7 +2952,7 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                       <div className="space-y-2">
                         <div className="text-center">
                           <span className="px-2 py-0.5 bg-sky-100 text-sky-900 text-[8.5px] sm:text-[9px] font-black rounded-full uppercase tracking-widest border border-sky-300">
-                            🎯 TRẮC NGHIỆM - 10 Giây
+                            🎯 TRẮC NGHIỆM - {currentQ.timeLimitSeconds || 10} Giây
                           </span>
                         </div>
 
@@ -2935,11 +2982,11 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                                     : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
                                 }`}
                               >
-                                <span className="break-words pr-1 flex items-center gap-1.5">
-                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center font-mono text-[9px] shrink-0 ${isSelected ? 'bg-white/20 text-white font-bold' : 'bg-slate-200 text-slate-600'}`}>
+                                <span className="break-words pr-1 flex items-start gap-1.5 w-full text-left flex-1 min-w-0">
+                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center font-mono text-[9px] shrink-0 mt-0.5 ${isSelected ? 'bg-white/20 text-white font-bold' : 'bg-slate-200 text-slate-600'}`}>
                                     {String.fromCharCode(65 + optIdx)}
                                   </span>
-                                  <span>{optionText}</span>
+                                  <span className="whitespace-normal break-words text-left flex-1">{optionText}</span>
                                 </span>
                                 {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-amber-300 shrink-0" />}
                               </button>
@@ -3182,13 +3229,13 @@ export const ClassVocabTestModule: React.FC<ClassVocabTestModuleProps> = ({
                                     return (
                                       <div
                                         key={optIdx}
-                                        className={`p-1.5 rounded-lg border text-[10px] sm:text-[10.5px] flex items-center justify-between gap-1.5 ${cardStyle}`}
+                                        className={`p-1.5 rounded-lg border text-[10px] sm:text-[10.5px] flex items-start justify-between gap-1.5 ${cardStyle}`}
                                       >
-                                        <div className="flex items-center gap-1.5 truncate">
-                                          <span className="w-3.5 h-3.5 rounded bg-black/5 flex items-center justify-center text-[8px] font-bold shrink-0">
+                                        <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                                          <span className="w-3.5 h-3.5 rounded bg-black/5 flex items-center justify-center text-[8px] font-bold shrink-0 mt-0.5">
                                             {String.fromCharCode(65 + optIdx)}
                                           </span>
-                                          <span className="truncate">{opt}</span>
+                                          <span className="whitespace-normal break-words flex-1 text-left">{opt}</span>
                                         </div>
                                         {badgeText}
                                       </div>
